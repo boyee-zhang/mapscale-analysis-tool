@@ -1,4 +1,7 @@
 # MapScale Analysis Tool 
+
+![Project Demo](./docs/ScreenshotDriving.png)
+![Project Demo](./docs/ScreenshotWalking.png)
 A professional-grade geographic analysis tool built for urban accessibility and POI (Point of Interest) density studies. This project demonstrates the integration of complex spatial data with a modern reactive web stack.
 
 ## Tech Stack

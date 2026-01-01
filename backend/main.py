@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 load_dotenv()
 app = FastAPI()
 
-# 允许 React 前端跨域访问
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,7 +18,6 @@ ORS_API_KEY = os.getenv("ORS_API_KEY") #  OpenRouteService Key
 
 @app.get("/api/isochrone")
 async def get_isochrone(lng: float, lat: float, minutes: int = 10, profile: str = "walking"):
-    # 1. 建立映射关系：前端 profile -> ORS 的路径
     # walking -> foot-walking, cycling -> cycling-regular, driving -> driving-car
     profile_map = {
         "walking": "foot-walking",
@@ -75,8 +73,6 @@ async def get_analysis(lng: float, lat: float, minutes: int = 10, profile: str =
     }
     radius = minutes * speeds.get(profile, 80)
 
-    # 2. 构建动态 Overpass 查询
-    # 这样当你选 "driving" 时，能查到的 POI 范围会大得多
     query = f"""
     [out:json];
     (
@@ -85,9 +81,6 @@ async def get_analysis(lng: float, lat: float, minutes: int = 10, profile: str =
     );
     out body;
     """
-    
-    # 3. 获取等时线 (这通常需要调用专门的路由服务)
-    # 这里我们简化逻辑，依然返回一个 GeoJSON
     iso_geojson = await fetch_isochrone_from_provider(lng, lat, minutes, profile)
 
     return {

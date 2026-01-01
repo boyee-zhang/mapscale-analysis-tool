@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@turf/turf": "^7.3.1",
+    "opening_hours": "^3.10.0"
+  }
+}

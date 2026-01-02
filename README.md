@@ -2,6 +2,7 @@
 
 ![Project Demo](./docs/ScreenshotDriving.png)
 ![Project Demo](./docs/ScreenshotWalking.png)
+![Project Demo](./docs/ScreenshotPathing.png)
 A professional-grade geographic analysis tool built for urban accessibility and POI (Point of Interest) density studies. This project demonstrates the integration of complex spatial data with a modern reactive web stack.
 
 ## Tech Stack
@@ -80,6 +81,9 @@ pip install -r requirements.txt
 echo "ORS_API_KEY=your_key_here" > .env
 uvicorn main:app --reload
 ```
+## 📝 License
+
+Distributed under the Apache License 2.0. See `LICENSE` for more information.
 
 The application will be available at http://localhost:5173.
 

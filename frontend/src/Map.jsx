@@ -248,20 +248,20 @@ const SearchBar = ({ onSearch }) => {
   );
 };
 
-const handleAddressSearch = async (address) => {
-  try {
-    const res = await axios.get(`https://nominatim.openstreetmap.org/search`, {
-      params: { q: address, format: 'json', limit: 1, countrycodes: 'nl' }
-    });
-    if (res.data.length > 0) {
-      const { lon, lat } = res.data[0];
-      const newLng = parseFloat(lon);
-      const newLat = parseFloat(lat);
-      mapInstance.current.flyTo({ center: [newLng, newLat], zoom: 15 });
-      fetchData(newLng, newLat);
-    }
-  } catch (err) { console.error(err); }
-};
+// const handleAddressSearch = async (address) => {
+//   try {
+//     const res = await axios.get(`https://nominatim.openstreetmap.org/search`, {
+//       params: { q: address, format: 'json', limit: 1, countrycodes: 'nl' }
+//     });
+//     if (res.data.length > 0) {
+//       const { lon, lat } = res.data[0];
+//       const newLng = parseFloat(lon);
+//       const newLat = parseFloat(lat);
+//       mapInstance.current.flyTo({ center: [newLng, newLat], zoom: 15 });
+//       fetchData(newLng, newLat);
+//     }
+//   } catch (err) { console.error(err); }
+// };
 
 const Map = () => {
   const mapContainer = useRef(null);

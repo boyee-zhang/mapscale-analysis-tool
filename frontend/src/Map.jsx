@@ -248,20 +248,6 @@ const SearchBar = ({ onSearch }) => {
   );
 };
 
-// const handleAddressSearch = async (address) => {
-//   try {
-//     const res = await axios.get(`https://nominatim.openstreetmap.org/search`, {
-//       params: { q: address, format: 'json', limit: 1, countrycodes: 'nl' }
-//     });
-//     if (res.data.length > 0) {
-//       const { lon, lat } = res.data[0];
-//       const newLng = parseFloat(lon);
-//       const newLat = parseFloat(lat);
-//       mapInstance.current.flyTo({ center: [newLng, newLat], zoom: 15 });
-//       fetchData(newLng, newLat);
-//     }
-//   } catch (err) { console.error(err); }
-// };
 
 const Map = () => {
   const mapContainer = useRef(null);
@@ -274,6 +260,9 @@ const Map = () => {
   const [minutes, setMinutes] = useState(10);
   const [mode, setMode] = useState('walking');
   const [hoveredRoute, setHoveredRoute] = useState(null);
+  
+  // 新增：控制全城瓦片层显隐
+  const [showGlobalTiles, setShowGlobalTiles] = useState(true);
 
   const MODE_STYLE = {
     walking: { color: '#6a0dad' },
@@ -281,50 +270,7 @@ const Map = () => {
     driving: { color: '#3498db' }
   };
 
-  const fetchData = async (lng, lat) => {
-    setCenterLoc({ lng, lat });
-    setLoading(true);
-    
-    try {
-      const [isoResp, poiResp] = await Promise.all([
-        axios.get(`http://localhost:8000/api/isochrone`, { 
-          params: { lng, lat, minutes, profile: mode } 
-        }),
-        axios.get(`http://localhost:8000/api/pois`, { 
-          params: { lng, lat, minutes, profile: mode } 
-        })
-      ]);
-
-      setIsoData(isoResp.data);
-      setPoiData(poiResp.data.elements || []);
-    } catch (err) {
-      console.error("Fetch Data Error:", err);
-      setPoiData([]);
-      setIsoData(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAddressSearch = async (address) => {
-    try {
-      const res = await axios.get(`https://nominatim.openstreetmap.org/search`, {
-        params: { q: address, format: 'json', limit: 1, countrycodes: 'nl' }
-      });
-      if (res.data.length > 0) {
-        const { lon, lat } = res.data[0];
-        const newLng = parseFloat(lon);
-        const newLat = parseFloat(lat);
-        
-        mapInstance.current?.flyTo({ center: [newLng, newLat], zoom: 14 });
-        
-        fetchData(newLng, newLat);
-      }
-    } catch (err) {
-      console.error("Geocoding Error:", err);
-    }
-  };
-
+  // 1. 初始化地图与 Martin 瓦片层
   useEffect(() => {
     if (mapInstance.current) return;
     
@@ -335,12 +281,15 @@ const Map = () => {
       zoom: 12
     });
 
-    mapInstance.current.on('load', () => {
-      mapInstance.current.addSource('route-preview', {
+    const map = mapInstance.current;
+
+    map.on('load', () => {
+      // A. 注册路径预览 Source
+      map.addSource('route-preview', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] }
       });
-      mapInstance.current.addLayer({
+      map.addLayer({
         id: 'route-preview-layer',
         type: 'line',
         source: 'route-preview',
@@ -351,26 +300,84 @@ const Map = () => {
           'line-dasharray': [2, 1] 
         }
       });
+
+      // B. 【核心：工业级瓦片接入】注册 Martin 数据源
+      map.addSource('martin-tiles-source', {
+        type: 'vector',
+        // 确保你的 Martin 容器已启动且解决了 CORS 问题
+        tiles: ['http://localhost:3000/cafes/{z}/{x}/{y}'],
+        minzoom: 0,
+        maxzoom: 20
+      });
+
+      // C. 添加全城瓦片渲染层
+      map.addLayer({
+        id: 'martin-tiles-layer',
+        type: 'circle',
+        source: 'martin-tiles-source',
+        'source-layer': 'cafes', // 必须匹配数据库表名
+        paint: {
+          'circle-radius': [
+            'interpolate', ['linear'], ['zoom'],
+            12, 2, // 缩放 12 级时半径 2
+            16, 6  // 缩放 16 级时半径 6
+          ],
+          'circle-color': '#ff9800', // 工业级规范：底图层通常使用暖色调
+          'circle-opacity': 0.5,     // 透明度降低，作为背景参考
+          'circle-stroke-width': 1,
+          'circle-stroke-color': '#ffffff'
+        }
+      });
+
+      // D. 瓦片层简单交互
+      map.on('mouseenter', 'martin-tiles-layer', () => {
+        map.getCanvas().style.cursor = 'help';
+      });
+      map.on('mouseleave', 'martin-tiles-layer', () => {
+        map.getCanvas().style.cursor = '';
+      });
     });
 
-    mapInstance.current.on('click', (e) => {
+    map.on('click', (e) => {
       fetchData(e.lngLat.lng, e.lngLat.lat);
     });
   }, []);
 
-  const filteredPois = useMemo(() => {
-    if (!isoData || !isoData.features || isoData.features.length === 0 || poiData.length === 0) {
-      return [];
+  // 2. 数据获取逻辑 (保持不变)
+  const fetchData = async (lng, lat) => {
+    setCenterLoc({ lng, lat });
+    setLoading(true);
+    try {
+      const [isoResp, poiResp] = await Promise.all([
+        axios.get(`http://localhost:8000/api/isochrone`, { 
+          params: { lng, lat, minutes, profile: mode } 
+        }),
+        axios.get(`http://localhost:8000/api/pois`, { 
+          params: { lng, lat, minutes, profile: mode } 
+        })
+      ]);
+      setIsoData(isoResp.data);
+      setPoiData(poiResp.data.elements || []);
+    } catch (err) {
+      console.error("Fetch Data Error:", err);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  // 3. 等时线过滤与渲染 (保持不变)
+  const filteredPois = useMemo(() => {
+    if (!isoData?.features?.length || poiData.length === 0) return [];
     const polygon = isoData.features[0];
     return poiData.filter(poi => 
       turf.booleanPointInPolygon(turf.point([poi.lon, poi.lat]), polygon)
     );
   }, [poiData, isoData]);
 
+  // 4. 等时线几何层更新
   useEffect(() => {
     const map = mapInstance.current;
-    if (!map || !isoData) return;
+    if (!map?.isStyleLoaded() || !isoData) return;
 
     const source = map.getSource('iso');
     if (source) {
@@ -387,35 +394,29 @@ const Map = () => {
           'fill-opacity': 0.15,
           'fill-outline-color': MODE_STYLE[mode].color
         }
-      }, 'route-preview-layer'); 
+      }, 'martin-tiles-layer'); // 确保等时线在瓦片层之下，不遮挡点
     }
   }, [isoData, mode]);
 
+  // 5. 瓦片层显隐控制
   useEffect(() => {
-    const source = mapInstance.current?.getSource('route-preview');
-    if (source) {
-      source.setData(hoveredRoute || { type: 'FeatureCollection', features: [] });
-    }
-  }, [hoveredRoute]);
-
-  useEffect(() => {
-    if (centerLoc) {
-      fetchData(centerLoc.lng, centerLoc.lat);
-    }
-  }, [minutes, mode]);
+    if (!mapInstance.current?.getLayer('martin-tiles-layer')) return;
+    mapInstance.current.setLayoutProperty(
+      'martin-tiles-layer', 
+      'visibility', 
+      showGlobalTiles ? 'visible' : 'none'
+    );
+  }, [showGlobalTiles]);
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100vh', backgroundColor: '#eee' }}>
-      {/* Map engine container */}
       <div ref={mapContainer} style={{ width: '100%', height: '100%' }} />
       
-      {/* Geocoding search bar */}
-      <SearchBar onSearch={handleAddressSearch} />
+      <SearchBar onSearch={(addr) => handleAddressSearch(addr)} />
       
-      {/* Active center location marker */}
       {centerLoc && <CenterMarker loc={centerLoc} mapInstance={mapInstance.current} />}
       
-      {/* Render POIs within the isochrone boundary */}
+      {/* 应用层：渲染选中的 POIs (Overpass 数据) */}
       {mapInstance.current && filteredPois.slice(0, 40).map(poi => (
         <PoiMarker 
           key={poi.id} 
@@ -427,30 +428,33 @@ const Map = () => {
         />
       ))}
 
-      {/* Floating analysis control panel */}
       <div style={{ 
-        position: 'absolute', 
-        top: '20px', 
-        left: '20px', 
-        backgroundColor: 'white', 
-        padding: '20px', 
-        borderRadius: '12px', 
-        boxShadow: '0 4px 12px rgba(0,0,0,0.1)', 
-        zIndex: 10, 
-        width: '220px' 
+        position: 'absolute', top: '20px', left: '20px', 
+        backgroundColor: 'white', padding: '20px', 
+        borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', 
+        zIndex: 10, width: '220px' 
       }}>
         <h3 style={{ marginTop: 0 }}>MapScale Analysis</h3>
+        
+        {/* 新增：瓦片开关 */}
+        <div style={{ marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <input 
+            type="checkbox" 
+            checked={showGlobalTiles} 
+            onChange={(e) => setShowGlobalTiles(e.target.checked)} 
+          />
+          <label style={{ fontSize: '12px', color: '#666' }}>Show All Cafes (Tiles)</label>
+        </div>
+
         <AnalysisPanel 
-          minutes={minutes} 
-          setMinutes={setMinutes} 
-          mode={mode} 
-          setMode={setMode} 
+          minutes={minutes} setMinutes={setMinutes} 
+          mode={mode} setMode={setMode} 
           modeStyle={MODE_STYLE} 
         />
         {loading ? (
-          <p style={{ color: '#6a0dad', fontWeight: 'bold' }}>Analyzing Area...</p>
+          <p style={{ color: '#6a0dad', fontWeight: 'bold' }}>Analyzing...</p>
         ) : (
-          <p>Found <b>{filteredPois.length}</b> locations.</p>
+          <p>Within reach: <b>{filteredPois.length}</b></p>
         )}
       </div>
     </div>

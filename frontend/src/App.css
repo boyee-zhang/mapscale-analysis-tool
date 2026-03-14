@@ -1,0 +1,19 @@
+/* 1. 强制修改气泡外壳的圆角和阴影 */
+.maplibregl-popup-content {
+  border-radius: 16px !important; /* 这里决定了你最终看到的圆角 */
+  padding: 0 !important;         /* 设为0，由你的 PoiPopup 组件控制内部边距 */
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15) !important;
+  border: none !important;
+  overflow: hidden;               /* 确保内部内容不会超出圆角边框 */
+}
+
+/* 2. 修改气泡底部的小尖角 */
+.maplibregl-popup-tip {
+  border-top-color: white !important; /* 确保尖角颜色和背景一致 */
+  border-bottom-color: white !important;
+}
+
+/* 3. 如果你发现气泡背后有默认的关闭按钮挡住了文字 */
+.maplibregl-popup-close-button {
+  display: none; /* 因为你是 mouseenter 触发，通常不需要关闭按钮 */
+}

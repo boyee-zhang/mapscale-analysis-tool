@@ -20,7 +20,6 @@ const CenterMarker = ({ map, pos }) => {
       zIndex: '1000'
     });
 
-    // 也可以给它加一个小标签提示“Your Location”
     el.innerHTML = '<div style="position:absolute; top:-25px; left:-15px; background:black; color:white; padding:2px 6px; border-radius:4px; font-size:10px; white-space:nowrap;">Current Location</div>';
 
     const marker = new maplibregl.Marker({ element: el, anchor: 'center' })

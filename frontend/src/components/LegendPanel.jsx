@@ -3,7 +3,7 @@ import React from 'react';
 const LegendPanel = () => {
   const legendItems = [
     { label: 'Supermarket', color: '#FFCC00', type: 'dot' }, // 更柔和的 Apple 金
-    { label: 'Others', color: '#FF3B30', type: 'dot' },      // 典型的 iOS 红
+    { label: 'Gym', color: '#FF3B30', type: 'dot' },      // 典型的 iOS 红
     { label: 'Reachable', color: '#AF52DE', type: 'area' }   // 典型的 iOS 紫
   ];
 

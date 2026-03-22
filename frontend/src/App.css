@@ -17,3 +17,16 @@
 .maplibregl-popup-close-button {
   display: none; /* 因为你是 mouseenter 触发，通常不需要关闭按钮 */
 }
+
+/* 定义淡入淡出动画 */
+@keyframes popupFadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 应用到地图气泡 */
+.maplibregl-popup {
+  animation: popupFadeIn 0.2s ease-out;
+  /* 增加一个过渡，让 remove 时稍微平滑一点点（虽然 remove 是销毁节点，但延迟期间会保持） */
+  transition: opacity 0.3s ease;
+}

@@ -4,13 +4,15 @@ import { useMap } from '../hooks/useMap';
 import { api } from '../api.js';
 import PoiMarker from './PoiMarker';
 import CenterMarker from './CenterMarker.jsx';
-import AnalysisPanel from './AnalysisPanel';
+import AnalysisPanel from './AnalysisPanel.jsx';
 import LegendPanel from './LegendPanel';
+import AnalysisResultPanel from './AnalysisResultPanel'; 
 
 const MapContainer = () => {
   const containerRef = useRef(null);
   const { map, isReady } = useMap(containerRef);
-  
+  const [analysisData, setAnalysisData] = useState(null);
+
   // 1. 统一状态
   const [data, setData] = useState({ iso: null, pois: [], loading: false });
   const [params, setParams] = useState({ 
@@ -104,6 +106,22 @@ const MapContainer = () => {
     });
   }, [data.iso, data.pois]);
 
+  const handleAIAnalysis = async () => {
+    try {
+      console.log('[MapContainer] fetching region for', params.center);
+      const { name, regionCode } = await api.fetchRegionCode(
+        params.center.lng,
+        params.center.lat
+      );
+      console.log('[MapContainer] region resolved:', name, regionCode);
+      const result = await api.analyzeArea(name, regionCode);
+      setAnalysisData(result);
+    } catch (err) {
+      console.error("AI Analysis Failed", err);
+      alert("Analysis failed. Please try again.");
+    }
+  };
+
   return (
     <div style={{ width: '100%', height: '100vh', position: 'relative', overflow: 'hidden' }}>
       {/* 地图舞台 */}
@@ -115,6 +133,12 @@ const MapContainer = () => {
         setParams={setParams} 
         poiCount={filteredPois.length}
         loading={data.loading}
+        onAIAnalysis={handleAIAnalysis}
+      />
+
+      <AnalysisResultPanel 
+        data={analysisData} 
+        onClose={() => setAnalysisData(null)} 
       />
     
       {/* 图例组件 */}

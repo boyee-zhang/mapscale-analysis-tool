@@ -77,8 +77,10 @@ npm run dev
 cd backend
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-echo "ORS_API_KEY=your_key_here" > .env
+pip install --upgrade pip
+pip install fastapi uvicorn httpx python-dotenv
+echo "ORS_API_KEY=your_real_key_here" > .env
+
 uvicorn main:app --reload
 ```
 ## 📝 License

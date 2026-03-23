@@ -7,6 +7,10 @@
       "destination": "https://mapscale-ai-service.vercel.app/api/:path*"
     },
     {
+      "source": "/api/main/:path*",
+      "destination": "/api/main/index"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }

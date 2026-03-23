@@ -1,10 +1,23 @@
 // src/components/AnalysisPanel.jsx
-import React from 'react';
+import React, { useState } from 'react';
 
-const AnalysisPanel = ({ params, setParams, poiCount, loading }) => {
+const AnalysisPanel = ({ params, setParams, poiCount, loading, onAIAnalysis }) => {
+  // AI 分析的内部加载状态
+  const [isAnalysing, setIsAnalysing] = useState(false);
+
+  const handleAIClick = async () => {
+    if (isAnalysing) return;
+    setIsAnalysing(true);
+    try {
+      // 执行传入的 AI 分析逻辑
+      await onAIAnalysis();
+    } finally {
+      setIsAnalysing(false);
+    }
+  };
+
   return (
     <div className="analysis-panel" style={applePanelStyle}>
-      {/* 顶部指示条：Apple 风格面板的标准特征 */}
       <div style={dragHandleStyle} />
       
       <h3 style={titleStyle}>Explore Area</h3>
@@ -37,6 +50,24 @@ const AnalysisPanel = ({ params, setParams, poiCount, loading }) => {
         />
       </div>
 
+      {/* --- 新增：AI 分析按钮 --- */}
+      <div style={{ marginBottom: '20px' }}>
+        <button 
+          onClick={handleAIClick}
+          disabled={loading || isAnalysing}
+          style={{
+            ...aiButtonStyle,
+            opacity: (loading || isAnalysing) ? 0.6 : 1,
+            transform: isAnalysing ? 'scale(0.98)' : 'scale(1)'
+          }}
+        >
+          <span style={{ fontSize: '16px' }}>{isAnalysing ? '⏳' : '✨'}</span>
+          <span style={{ marginLeft: '8px' }}>
+            {isAnalysing ? 'AI Analyzing...' : 'Investment Analysis'}
+          </span>
+        </button>
+      </div>
+
       {/* 统计信息 */}
       <div style={footerStyle}>
         <div style={statBoxStyle}>
@@ -44,9 +75,9 @@ const AnalysisPanel = ({ params, setParams, poiCount, loading }) => {
           <span style={{ fontSize: '10px', color: '#86868b', marginLeft: '5px' }}>LOCATIONS FOUND</span>
         </div>
         
-        {loading && (
+        {(loading || isAnalysing) && (
           <div className="fade-in" style={loadingStyle}>
-            <span style={spinnerStyle}>⌛</span> Updating...
+            <span style={spinnerStyle}>⚙️</span> Updating data...
           </div>
         )}
       </div>
@@ -54,101 +85,42 @@ const AnalysisPanel = ({ params, setParams, poiCount, loading }) => {
   );
 };
 
-// --- Apple 设计规范样式 ---
-
-const applePanelStyle = {
-  position: 'absolute', 
-  top: 20, 
-  left: 20, 
-  zIndex: 100,
-  width: '240px',
-  padding: '16px 20px 20px 20px',
-  
-  // 核心圆角与材质
-  borderRadius: '24px', 
-  backgroundColor: 'rgba(255, 255, 255, 0.72)',
-  backdropFilter: 'blur(20px) saturate(180%)',
-  WebkitBackdropFilter: 'blur(20px) saturate(180%)', // 兼容 Safari
-  
-  boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
-  border: '1px solid rgba(255, 255, 255, 0.4)',
-  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-};
-
-const dragHandleStyle = {
-  width: '36px', height: '4px',
-  backgroundColor: 'rgba(0,0,0,0.08)',
-  borderRadius: '2px',
-  margin: '0 auto 12px auto'
-};
-
-const titleStyle = { 
-  marginTop: 0, 
-  fontSize: '17px', 
-  fontWeight: '600', 
-  color: '#1d1d1f',
-  letterSpacing: '-0.02em',
-  marginBottom: '15px'
-};
-
-const sectionStyle = { marginBottom: '18px' };
-
-const labelStyle = { 
-  display: 'block', 
-  fontSize: '10px', 
+// --- 新增 AI 按钮样式 ---
+const aiButtonStyle = {
+  width: '100%',
+  padding: '12px',
+  borderRadius: '14px',
+  border: 'none',
+  background: 'linear-gradient(135deg, #007AFF 0%, #AF52DE 100%)', // Apple 风格渐变
+  color: 'white',
+  fontSize: '13px',
   fontWeight: '600',
-  color: '#86868b', 
-  marginBottom: '8px',
-  letterSpacing: '0.05em'
-};
-
-const inputStyle = { 
-  width: '100%', 
-  padding: '10px 12px', 
-  borderRadius: '12px', // 统一圆角
-  border: '1px solid rgba(0,0,0,0.1)',
-  backgroundColor: 'rgba(255,255,255,0.5)',
-  fontSize: '14px',
-  outline: 'none',
   cursor: 'pointer',
-  appearance: 'none', // 去掉默认箭头
-  backgroundImage: 'url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'%3E%3C/polyline%3E%3C/svg%3E")',
-  backgroundRepeat: 'no-repeat',
-  backgroundPosition: 'right 10px center',
-  backgroundSize: '14px'
-};
-
-const sliderStyle = { 
-  width: '100%', 
-  cursor: 'pointer',
-  accentColor: '#007AFF' // Apple 系统蓝
-};
-
-const footerStyle = { 
-  borderTop: '1px solid rgba(0,0,0,0.05)', 
-  paddingTop: '15px',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '8px'
-};
-
-const statBoxStyle = {
-  display: 'flex',
-  alignItems: 'baseline'
-};
-
-const loadingStyle = { 
-  color: '#007AFF', 
-  fontSize: '11px', 
-  fontWeight: '600',
   display: 'flex',
   alignItems: 'center',
-  gap: '4px'
+  justifyContent: 'center',
+  boxShadow: '0 4px 12px rgba(0, 122, 255, 0.3)',
+  transition: 'all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
 };
 
-const spinnerStyle = {
-  display: 'inline-block',
-  animation: 'spin 2s linear infinite'
+// --- 原有样式保持不变 ---
+const applePanelStyle = {
+  position: 'absolute', top: 20, left: 20, zIndex: 100, width: '240px',
+  padding: '16px 20px 20px 20px', borderRadius: '24px', 
+  backgroundColor: 'rgba(255, 255, 255, 0.72)', backdropFilter: 'blur(20px) saturate(180%)',
+  WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+  boxShadow: '0 8px 32px rgba(0,0,0,0.08)', border: '1px solid rgba(255, 255, 255, 0.4)',
+  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
 };
+const dragHandleStyle = { width: '36px', height: '4px', backgroundColor: 'rgba(0,0,0,0.08)', borderRadius: '2px', margin: '0 auto 12px auto' };
+const titleStyle = { marginTop: 0, fontSize: '17px', fontWeight: '600', color: '#1d1d1f', letterSpacing: '-0.02em', marginBottom: '15px' };
+const sectionStyle = { marginBottom: '18px' };
+const labelStyle = { display: 'block', fontSize: '10px', fontWeight: '600', color: '#86868b', marginBottom: '8px', letterSpacing: '0.05em' };
+const inputStyle = { width: '100%', padding: '10px 12px', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.1)', backgroundColor: 'rgba(255,255,255,0.5)', fontSize: '14px', outline: 'none', cursor: 'pointer', appearance: 'none', backgroundImage: 'url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'%3E%3C/polyline%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', backgroundSize: '14px' };
+const sliderStyle = { width: '100%', cursor: 'pointer', accentColor: '#007AFF' };
+const footerStyle = { borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: '15px', display: 'flex', flexDirection: 'column', gap: '8px' };
+const statBoxStyle = { display: 'flex', alignItems: 'baseline' };
+const loadingStyle = { color: '#007AFF', fontSize: '11px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' };
+const spinnerStyle = { display: 'inline-block' }; // 简单的图标
 
-export default AnalysisPanel;
+export { AnalysisPanel as default };

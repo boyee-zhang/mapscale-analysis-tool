@@ -11,6 +11,11 @@ services:
       - "5432:5432"
     volumes:
       - ./pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 5
+      timeout: 5s
 
   martin:
     image: ghcr.io/maplibre/martin:v0.14.0 
@@ -21,4 +26,5 @@ services:
     environment:
       - DATABASE_URL=postgres://postgres:password@db/db
     depends_on:
-      - db
+      db:
+        condition: service_healthy

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 
-// 注意这里必须有 export 关键字
 export const useMap = (containerRef) => {
   const mapInstance = useRef(null);
   const [isReady, setIsReady] = useState(false);

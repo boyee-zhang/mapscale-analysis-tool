@@ -15,6 +15,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+SUPPORTED_SCHEMA_VERSIONS = {"1.0", "1.1"}
+
 MODE_MAPPING = {
     "walking": "foot-walking",
     "cycling": "cycling-regular",
@@ -141,3 +143,35 @@ async def get_bulk_directions(start_lng: float, start_lat: float, targets: str, 
     results = await asyncio.gather(*tasks)
     
     return {f"{t[0]},{t[1]}": r for t, r in zip(target_list, results) if r}
+
+@app.get("/api/region")
+async def get_region(lng: float, lat: float):
+    """Reverse geocode coordinates to Dutch municipality CBS code via PDOK."""
+    url = "https://api.pdok.nl/bzk/locatieserver/search/v3_1/reverse"
+    params = {"lat": lat, "lon": lng, "type": "gemeente", "fl": "gemeentecode,gemeentenaam,id"}
+    print(f"[GET /api/region] lng={lng} lat={lat}")
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            resp = await client.get(url, params=params)
+            resp.raise_for_status()
+            docs = resp.json().get("response", {}).get("docs", [])
+            if not docs:
+                raise HTTPException(status_code=404, detail="No municipality found for these coordinates")
+            doc = docs[0]
+            result = {
+                "name": doc.get("gemeentenaam", ""),
+                "regionCode": f"GM{doc.get('gemeentecode', '')}"
+            }
+            print(f"[GET /api/region] OK: {result}")
+            return result
+        except httpx.TimeoutException:
+            print("[region] PDOK request timed out")
+            raise HTTPException(status_code=504, detail="PDOK timeout")
+        except httpx.RequestError as e:
+            print(f"[region] network error: {e}")
+            raise HTTPException(status_code=502, detail=f"PDOK network error: {e}")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

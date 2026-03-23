@@ -225,4 +225,5 @@ async def get_region(lng: float, lat: float):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True)
+    # run from backend/ directory: python main.py
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

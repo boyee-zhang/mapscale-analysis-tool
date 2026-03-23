@@ -6,11 +6,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      // 1. 转发普通地图业务到 8000
+      // 1. 转发普通地图业务到 8000（路径原样转发，FastAPI 路由含 /api/main/ 前缀）
       '/api/main': {
         target: 'http://localhost:8000',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/main/, '/api') // 把 /api/main 转回后端的 /api
       },
       // 2. 转发 AI 分析到 Vercel AI 服务
       '/api/ai': {

@@ -12,10 +12,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/main/, '/api') // 把 /api/main 转回后端的 /api
       },
-      // 2. 转发 AI 分析到 3000
+      // 2. 转发 AI 分析到 Vercel AI 服务
       '/api/ai': {
-        target: 'http://localhost:3000',
+        target: 'https://mapscale-ai-service.vercel.app',
         changeOrigin: true,
+        secure: true,
         rewrite: (path) => path.replace(/^\/api\/ai/, '/api') // 把 /api/ai 转回后端的 /api
       }
     }

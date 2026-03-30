@@ -10,7 +10,6 @@ export default defineConfig({
       '/api/main': {
         target: 'http://localhost:8000',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/main/, '/api') // 把 /api/main 转回后端的 /api
       },
       // 2. 转发 AI 分析到 Vercel AI 服务
       '/api/ai': {

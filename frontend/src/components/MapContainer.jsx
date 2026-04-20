@@ -54,7 +54,41 @@ const MapContainer = () => {
     return () => map.off('click', handleClick);
   }, [isReady]);
 
-  // 4. 等时线图层渲染 (Apple Style 修正版)
+  // 4. Traffic incidents 图层 (WebGL circle layer，随 isochrone bbox 更新)
+  useEffect(() => {
+    if (!isReady || !data.iso) return;
+
+    const bbox = data.iso.features[0]?.bbox;
+    if (!bbox) return; // ORS isochrone 返回的 FeatureCollection 带有 bbox
+
+    const [min_lng, min_lat, max_lng, max_lat] = bbox;
+
+    api.fetchTrafficIncidents({ min_lng, min_lat, max_lng, max_lat })
+      .then(geojson => {
+        console.log('[MapContainer] incidents loaded', geojson.features.length);
+        const source = map.getSource('incidents-source');
+        if (source) {
+          source.setData(geojson);
+        } else {
+          map.addSource('incidents-source', { type: 'geojson', data: geojson });
+          map.addLayer({
+            id: 'incidents-layer',
+            type: 'circle',
+            source: 'incidents-source',
+            paint: {
+              'circle-radius': 8,
+              'circle-color': '#FF3B30',
+              'circle-opacity': 0.85,
+              'circle-stroke-width': 2,
+              'circle-stroke-color': '#fff',
+            }
+          });
+        }
+      })
+      .catch(err => console.error('[MapContainer] incidents fetch failed', err));
+  }, [isReady, data.iso]);
+
+  // 5. 等时线图层渲染 (Apple Style 修正版)
   useEffect(() => {
     if (!isReady || !data.iso) return;
 
@@ -95,7 +129,7 @@ const MapContainer = () => {
     }
   }, [isReady, data.iso]);
 
-  // 5. 基于等时线过滤 POI
+  // 6. 基于等时线过滤 POI
   const filteredPois = useMemo(() => {
     if (!data.iso || !data.pois.length) return [];
     const polygon = data.iso.features[0];

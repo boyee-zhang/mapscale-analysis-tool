@@ -1,11 +1,19 @@
 from fastapi import APIRouter
 from ..cache import kv_get, kv_set
 from ..clients.tomtom import fetch_flow, fetch_incidents
+from ..config import TOMTOM_API_KEY
 from ..errors import ExternalServiceError, InternalError
 from ..observability.logger import get_logger
 
 router = APIRouter()
 logger = get_logger("router.traffic")
+
+
+@router.get("/api/main/traffic/tile-url")
+async def get_tile_url():
+    """Returns TomTom traffic flow tile URL template for MapLibre raster source."""
+    base = "https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png"
+    return {"flowTileUrl": f"{base}?key={TOMTOM_API_KEY}"}
 
 
 @router.get("/api/main/traffic/flow")
@@ -62,17 +70,20 @@ async def get_incidents(min_lng: float, min_lat: float, max_lng: float, max_lat:
 
         incidents = await fetch_incidents(min_lng, min_lat, max_lng, max_lat)
 
-        # Normalize to GeoJSON so frontend can use map.addSource directly
+        # Normalize to GeoJSON LineString features (TomTom returns coordinates without "type")
         geojson = {
             "type": "FeatureCollection",
             "features": [
                 {
                     "type": "Feature",
-                    "geometry": inc.get("geometry"),
+                    "geometry": {
+                        "type": "LineString",
+                        "coordinates": inc["geometry"]["coordinates"],
+                    },
                     "properties": inc.get("properties", {}),
                 }
                 for inc in incidents
-                if inc.get("geometry")
+                if inc.get("geometry", {}).get("coordinates")
             ],
         }
 

@@ -1,7 +1,7 @@
 // src/components/AnalysisPanel.jsx
 import React, { useState } from 'react';
 
-const AnalysisPanel = ({ params, setParams, poiCount, loading, onAIAnalysis }) => {
+const AnalysisPanel = ({ params, setParams, poiCount, loading, onAIAnalysis, showTraffic, onToggleTraffic }) => {
   // AI 分析的内部加载状态
   const [isAnalysing, setIsAnalysing] = useState(false);
 
@@ -50,7 +50,28 @@ const AnalysisPanel = ({ params, setParams, poiCount, loading, onAIAnalysis }) =
         />
       </div>
 
-      {/* --- 新增：AI 分析按钮 --- */}
+      {/* 实时交通按钮 */}
+      <div style={{ marginBottom: '12px' }}>
+        <button
+          onClick={onToggleTraffic}
+          disabled={loading}
+          style={{
+            ...trafficButtonStyle,
+            background: showTraffic
+              ? 'linear-gradient(135deg, #FF3B30 0%, #FF9500 100%)'
+              : 'rgba(0,0,0,0.06)',
+            color: showTraffic ? 'white' : '#1d1d1f',
+            boxShadow: showTraffic ? '0 4px 12px rgba(255,59,48,0.3)' : 'none',
+          }}
+        >
+          <span style={{ fontSize: '14px' }}>🚦</span>
+          <span style={{ marginLeft: '8px' }}>
+            {showTraffic ? 'Hide Traffic' : 'Live Traffic'}
+          </span>
+        </button>
+      </div>
+
+      {/* --- AI 分析按钮 --- */}
       <div style={{ marginBottom: '20px' }}>
         <button 
           onClick={handleAIClick}
@@ -85,7 +106,20 @@ const AnalysisPanel = ({ params, setParams, poiCount, loading, onAIAnalysis }) =
   );
 };
 
-// --- 新增 AI 按钮样式 ---
+const trafficButtonStyle = {
+  width: '100%',
+  padding: '10px 12px',
+  borderRadius: '14px',
+  border: 'none',
+  fontSize: '13px',
+  fontWeight: '600',
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  transition: 'all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+};
+
 const aiButtonStyle = {
   width: '100%',
   padding: '12px',

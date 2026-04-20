@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo, useEffect } from 'react';
+import React, { useRef, useState, useMemo, useEffect, useCallback } from 'react';
 import * as turf from '@turf/turf';
 import { useMap } from '../hooks/useMap';
 import { api } from '../api.js';
@@ -6,19 +6,33 @@ import PoiMarker from './PoiMarker';
 import CenterMarker from './CenterMarker.jsx';
 import AnalysisPanel from './AnalysisPanel.jsx';
 import LegendPanel from './LegendPanel';
-import AnalysisResultPanel from './AnalysisResultPanel'; 
+import AnalysisResultPanel from './AnalysisResultPanel';
+
+// TomTom iconCategory → color (https://developer.tomtom.com/traffic-api/documentation/product-information/introduction)
+const INCIDENT_COLORS = [
+  'match', ['get', 'iconCategory'],
+  1,  '#FF3B30',  // Accident
+  3,  '#FF9500',  // Dangerous Conditions
+  6,  '#FF3B30',  // Traffic Jam
+  7,  '#FF9500',  // Lane Closed
+  8,  '#FF3B30',  // Road Closed
+  9,  '#FFCC00',  // Road Works
+  11, '#007AFF',  // Flooding
+  '#8E8E93'       // default (fog, wind, unknown)
+];
 
 const MapContainer = () => {
   const containerRef = useRef(null);
   const { map, isReady } = useMap(containerRef);
   const [analysisData, setAnalysisData] = useState(null);
+  const [showTraffic, setShowTraffic] = useState(false);
 
   // 1. 统一状态
   const [data, setData] = useState({ iso: null, pois: [], loading: false });
-  const [params, setParams] = useState({ 
-    center: { lng: 4.936, lat: 52.338 }, 
-    minutes: 10, 
-    mode: 'walking' 
+  const [params, setParams] = useState({
+    center: { lng: 4.936, lat: 52.338 },
+    minutes: 10,
+    mode: 'walking'
   });
   const [hoveredRoute, setHoveredRoute] = useState(null);
 
@@ -54,87 +68,107 @@ const MapContainer = () => {
     return () => map.off('click', handleClick);
   }, [isReady]);
 
-  // 4. Traffic incidents 图层 (WebGL circle layer，随 isochrone bbox 更新)
+  // 4. 等时线图层渲染
   useEffect(() => {
     if (!isReady || !data.iso) return;
 
-    const bbox = data.iso.features[0]?.bbox;
-    if (!bbox) return; // ORS isochrone 返回的 FeatureCollection 带有 bbox
-
-    const [min_lng, min_lat, max_lng, max_lat] = bbox;
-
-    api.fetchTrafficIncidents({ min_lng, min_lat, max_lng, max_lat })
-      .then(geojson => {
-        console.log('[MapContainer] incidents loaded', geojson.features.length);
-        const source = map.getSource('incidents-source');
-        if (source) {
-          source.setData(geojson);
-        } else {
-          map.addSource('incidents-source', { type: 'geojson', data: geojson });
-          map.addLayer({
-            id: 'incidents-layer',
-            type: 'circle',
-            source: 'incidents-source',
-            paint: {
-              'circle-radius': 8,
-              'circle-color': '#FF3B30',
-              'circle-opacity': 0.85,
-              'circle-stroke-width': 2,
-              'circle-stroke-color': '#fff',
-            }
-          });
-        }
-      })
-      .catch(err => console.error('[MapContainer] incidents fetch failed', err));
-  }, [isReady, data.iso]);
-
-  // 5. 等时线图层渲染 (Apple Style 修正版)
-  useEffect(() => {
-    if (!isReady || !data.iso) return;
-
-    const sourceId = 'iso-source'; // 定义变量名
+    const sourceId = 'iso-source';
     const source = map.getSource(sourceId);
 
     if (source) {
       source.setData(data.iso);
     } else {
-      // 必须先添加 Source
-      map.addSource(sourceId, {
-        type: 'geojson',
-        data: data.iso
-      });
-
-      // 底层：填充层 (Apple 紫色薄雾感)
+      map.addSource(sourceId, { type: 'geojson', data: data.iso });
       map.addLayer({
         id: 'iso-layer',
         type: 'fill',
         source: sourceId,
-        paint: {
-          'fill-color': '#AF52DE',
-          'fill-opacity': 0.12     
-        }
+        paint: { 'fill-color': '#AF52DE', 'fill-opacity': 0.12 }
       });
-
-      // 上层：细致描边 (增加层次感)
       map.addLayer({
         id: 'iso-outline',
         type: 'line',
         source: sourceId,
-        paint: {
-          'line-color': '#cca5dfff',
-          'line-width': 2,
-          'line-opacity': 0.4
-        }
+        paint: { 'line-color': '#cca5dfff', 'line-width': 2, 'line-opacity': 0.4 }
       });
     }
   }, [isReady, data.iso]);
+
+  // 5. Traffic 图层 — 受按钮控制，showTraffic 变化时加载/移除
+  useEffect(() => {
+    if (!isReady || !data.iso) return;
+
+    const removeLayers = () => {
+      ['incidents-layer', 'flow-tile-layer'].forEach(id => {
+        if (map.getLayer(id)) map.removeLayer(id);
+      });
+      ['incidents-source', 'flow-tile-source'].forEach(id => {
+        if (map.getSource(id)) map.removeSource(id);
+      });
+    };
+
+    if (!showTraffic) {
+      removeLayers();
+      return;
+    }
+
+    const bbox = data.iso.features[0]?.bbox;
+    if (!bbox) return;
+    const [min_lng, min_lat, max_lng, max_lat] = bbox;
+
+    const loadTraffic = async () => {
+      try {
+        const [{ flowTileUrl }, incidents] = await Promise.all([
+          api.fetchTrafficTileUrl(),
+          api.fetchTrafficIncidents({ min_lng, min_lat, max_lng, max_lat }),
+        ]);
+        console.log('[MapContainer] traffic loaded — incidents:', incidents.features.length);
+
+        // Flow tile layer (raster — all roads colored green/yellow/red)
+        if (!map.getSource('flow-tile-source')) {
+          map.addSource('flow-tile-source', {
+            type: 'raster',
+            tiles: [flowTileUrl],
+            tileSize: 256,
+          });
+          map.addLayer({
+            id: 'flow-tile-layer',
+            type: 'raster',
+            source: 'flow-tile-source',
+            paint: { 'raster-opacity': 0.75 },
+          }, 'iso-layer'); // insert below isochrone fill so it doesn't cover POIs
+        }
+
+        // Incidents as colored LineStrings (accidents, road works, closures)
+        if (!map.getSource('incidents-source')) {
+          map.addSource('incidents-source', { type: 'geojson', data: incidents });
+          map.addLayer({
+            id: 'incidents-layer',
+            type: 'line',
+            source: 'incidents-source',
+            paint: {
+              'line-color': INCIDENT_COLORS,
+              'line-width': 4,
+              'line-opacity': 0.9,
+            },
+          });
+        } else {
+          map.getSource('incidents-source').setData(incidents);
+        }
+
+      } catch (err) {
+        console.error('[MapContainer] traffic load failed', err);
+      }
+    };
+
+    loadTraffic();
+  }, [isReady, showTraffic, data.iso]);
 
   // 6. 基于等时线过滤 POI
   const filteredPois = useMemo(() => {
     if (!data.iso || !data.pois.length) return [];
     const polygon = data.iso.features[0];
     return data.pois.filter(p => {
-      // 容错处理：确保坐标存在
       if (!p.lon || !p.lat) return false;
       return turf.booleanPointInPolygon(turf.point([p.lon, p.lat]), polygon);
     });
@@ -160,35 +194,37 @@ const MapContainer = () => {
     <div style={{ width: '100%', height: '100vh', position: 'relative', overflow: 'hidden' }}>
       {/* 地图舞台 */}
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
-      
+
       {/* 业务控制面板 */}
-      <AnalysisPanel 
-        params={params} 
-        setParams={setParams} 
+      <AnalysisPanel
+        params={params}
+        setParams={setParams}
         poiCount={filteredPois.length}
         loading={data.loading}
         onAIAnalysis={handleAIAnalysis}
+        showTraffic={showTraffic}
+        onToggleTraffic={() => setShowTraffic(v => !v)}
       />
 
-      <AnalysisResultPanel 
-        data={analysisData} 
-        onClose={() => setAnalysisData(null)} 
+      <AnalysisResultPanel
+        data={analysisData}
+        onClose={() => setAnalysisData(null)}
       />
-    
+
       {/* 图例组件 */}
       <LegendPanel />
 
       {/* 渲染 Markers */}
       {isReady && <CenterMarker map={map} pos={params.center} />}
-      
+
       {isReady && filteredPois.map(poi => (
-        <PoiMarker 
-          key={poi.id} 
-          poi={poi} 
-          map={map} 
-          centerLoc={params.center} 
+        <PoiMarker
+          key={poi.id}
+          poi={poi}
+          map={map}
+          centerLoc={params.center}
           mode={params.mode}
-          setHoveredRoute={setHoveredRoute} 
+          setHoveredRoute={setHoveredRoute}
         />
       ))}
     </div>

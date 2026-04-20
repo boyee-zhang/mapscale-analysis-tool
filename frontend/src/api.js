@@ -70,6 +70,10 @@ export const api = {
   fetchTrafficIncidents: (bbox) =>
     client.get('/api/main/traffic/incidents', { params: bbox }).then(res => res.data),
 
+  /** @returns {Promise<{ flowTileUrl: string }>} */
+  fetchTrafficTileUrl: () =>
+    client.get('/api/main/traffic/tile-url').then(res => res.data),
+
   // 走代理的 /api/ai 路径 -> 最终去 3000 端口
   analyzeArea: async (city, regionCode) => {
     try {

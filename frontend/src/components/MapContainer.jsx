@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
 import * as turf from '@turf/turf';
 import { useMap } from '../hooks/useMap';
 import { api } from '../api.js';
@@ -34,7 +34,7 @@ const MapContainer = () => {
     minutes: 10,
     mode: 'walking'
   });
-  const [hoveredRoute, setHoveredRoute] = useState(null);
+  const [, setHoveredRoute] = useState(null);
 
   // 2. 响应式数据同步
   useEffect(() => {
@@ -112,7 +112,7 @@ const MapContainer = () => {
       return;
     }
 
-    const bbox = data.iso.features[0]?.bbox;
+    const bbox = data.iso.bbox;
     if (!bbox) return;
     const [min_lng, min_lat, max_lng, max_lat] = bbox;
 

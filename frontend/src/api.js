@@ -55,21 +55,6 @@ export const api = {
     }
   },
 
-  /**
-   * @param {number} lng
-   * @param {number} lat
-   * @returns {Promise<{ currentSpeed: number, freeFlowSpeed: number, congestionFactor: number, confidence: number }>}
-   */
-  fetchTrafficFlow: (lng, lat) =>
-    client.get('/api/main/traffic/flow', { params: { lng, lat } }).then(res => res.data),
-
-  /**
-   * @param {{ min_lng: number, min_lat: number, max_lng: number, max_lat: number }} bbox
-   * @returns {Promise<GeoJSON.FeatureCollection>}
-   */
-  fetchTrafficIncidents: (bbox) =>
-    client.get('/api/main/traffic/incidents', { params: bbox }).then(res => res.data),
-
   // 走代理的 /api/ai 路径 -> 最终去 3000 端口
   analyzeArea: async (city, regionCode) => {
     try {

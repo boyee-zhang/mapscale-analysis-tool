@@ -7,7 +7,7 @@ from .middleware.logging import RequestLoggingMiddleware
 from .observability.logger import get_logger
 from .observability.tracing import setup_tracing
 from .observability.metrics import setup_metrics
-from .routers import isochrone, pois, directions, region, traffic
+from .routers import isochrone, pois, directions, region
 
 logger = get_logger("app")
 
@@ -54,7 +54,6 @@ app.include_router(isochrone.router)
 app.include_router(pois.router)
 app.include_router(directions.router)
 app.include_router(region.router)
-app.include_router(traffic.router)
 
 # ── Observability (after routes so /metrics is excluded from tracing noise) ──
 setup_tracing(app)

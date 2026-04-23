@@ -8,7 +8,10 @@ logger = get_logger("client.overpass")
 OVERPASS_ENDPOINTS = [
     "https://overpass.kumi.systems/api/interpreter",
     "https://overpass-api.de/api/interpreter",
+    "https://overpass.openstreetmap.fr/api/interpreter",
 ]
+
+_HEADERS = {"User-Agent": "mapscale/1.0 (https://github.com/mapscale)"}
 
 
 async def fetch_pois(lng: float, lat: float, minutes: int, profile: str) -> dict:
@@ -27,13 +30,13 @@ async def fetch_pois(lng: float, lat: float, minutes: int, profile: str) -> dict
     last_error = None
     for url in OVERPASS_ENDPOINTS:
         try:
-            async with httpx.AsyncClient(timeout=20.0) as client:
+            async with httpx.AsyncClient(timeout=8.0, headers=_HEADERS) as client:
                 resp = await client.post(url, data={"data": query})
                 resp.raise_for_status()
                 data = resp.json()
                 logger.info("← pois", extra={"elements": len(data.get("elements", [])), "endpoint": url})
                 return data
-        except httpx.ReadTimeout:
+        except httpx.TimeoutException:
             logger.warning("pois timeout", extra={"service": "overpass", "endpoint": url})
             last_error = ExternalServiceError("overpass", 504, "query timed out — try a smaller area")
         except httpx.HTTPStatusError as e:

@@ -74,6 +74,21 @@ export const api = {
   fetchTrafficTileUrl: () =>
     client.get('/api/main/traffic/tile-url').then(res => res.data),
 
+  /**
+   * @param {string} query  free-text address, e.g. "Jan Wolkerslaan 699"
+   * @returns {Promise<Array<{ label: string, lng: number, lat: number }>>}
+   */
+  searchAddress: async (query) => {
+    try {
+      const res = await client.get('/api/main/search', { params: { q: query } });
+      console.log('[api] searchAddress', { query, count: res.data.length });
+      return res.data;
+    } catch (err) {
+      console.error('[api] searchAddress failed', err);
+      throw err;
+    }
+  },
+
   // 走代理的 /api/ai 路径 -> 最终去 3000 端口
   analyzeArea: async (city, regionCode) => {
     try {

@@ -7,6 +7,7 @@ import CenterMarker from './CenterMarker.jsx';
 import AnalysisPanel from './AnalysisPanel.jsx';
 import LegendPanel from './LegendPanel';
 import AnalysisResultPanel from './AnalysisResultPanel';
+import SearchBar from './SearchBar';
 
 // TomTom iconCategory → color (https://developer.tomtom.com/traffic-api/documentation/product-information/introduction)
 const INCIDENT_COLORS = [
@@ -194,6 +195,14 @@ const MapContainer = () => {
     <div style={{ width: '100%', height: '100vh', position: 'relative', overflow: 'hidden' }}>
       {/* 地图舞台 */}
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+
+      {/* 地址搜索栏 */}
+      <SearchBar
+        onSelect={({ lng, lat }) => {
+          setParams(p => ({ ...p, center: { lng, lat } }));
+          map?.flyTo({ center: [lng, lat], zoom: 15, duration: 1200 });
+        }}
+      />
 
       {/* 业务控制面板 */}
       <AnalysisPanel

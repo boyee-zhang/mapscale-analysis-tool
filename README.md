@@ -17,7 +17,7 @@ A professional-grade geographic analysis tool built for urban accessibility and 
 
 * Reactive POI Analysis: Real-time filtering of supermarkets and gyms within the actual street-network boundary using the Turf.js spatial engine.
 
-* Smart Address Search: Locate any address (e.g., 1112XC Diemen) with smooth "FlyTo" animations and automatic re-calculation.
+* Smart Address Search: Locate any Dutch address (e.g., `Jan Wolkerslaan 699` or postcode `1112ZH`) with smooth "FlyTo" animations and automatic re-calculation. Search is powered by a three-layer fallback: Elasticsearch cache → PDOK (Dutch address registry) → Nominatim (OSM).
 
 * Operational Status: Integrated opening_hours logic to parse OSM data and display real-time status: Open Now, Closed, or Data Unknown.
 
@@ -51,6 +51,56 @@ The next phase of this project involves pushing into the Geo-AI space:
 * Auto-API Invocation: The Agent will parse intent, map it to our existing FastAPI endpoints, and visualize the results automatically.
 
 * Smart Routing: Adding one-click navigation from the user's center point to any filtered POI.
+
+## Address Search — Elasticsearch Setup (optional, local dev only)
+
+The search feature uses a three-layer architecture. Elasticsearch is the first layer (fastest, supports custom field weights), but it is **optional** — the app falls back gracefully to PDOK and Nominatim when `ES_URL` is not set.
+
+The live Vercel deployment runs without ES. To enable the full ES layer locally:
+
+### 1. Start Elasticsearch
+```bash
+docker compose up -d   # starts ES on localhost:9200
+```
+
+### 2. Seed the index with Dutch addresses
+```bash
+# index 1 000 addresses across 20 common Dutch street names
+python scripts/ingest_addresses.py
+
+# or target a specific street / city
+python scripts/ingest_addresses.py --terms "Jan Wolkerslaan" "Diemen" --rows 100
+```
+
+Data is sourced from the **PDOK Locatieserver** (Dutch government BAG address registry, free, no API key required). Subsequent searches automatically cache new results back into ES.
+
+### 3. Configure the backend
+Add to `backend/.env`:
+```
+ES_URL=http://localhost:9200
+```
+
+### Hosting ES in production
+To run the full ES layer in a deployed environment, host Elasticsearch externally and set `ES_URL` to the connection string:
+
+| Provider | Notes |
+|---|---|
+| **Elastic Cloud** | Official managed service. 14-day free trial, then from ~$16/month. |
+| **Railway** | Deploy the ES Docker image directly. New accounts get $5 free credit. |
+| **Self-hosted VPS** | Run `docker compose up -d` on any VPS (Hetzner, DigitalOcean, etc.). |
+
+Set `ES_URL=https://user:password@your-cluster` in your environment and the app will automatically use ES instead of falling back to PDOK.
+
+### Search field weights
+Weights are tunable per-request via query params — no code change needed:
+```
+GET /api/main/search?q=1112ZH&w_postcode=8&w_street=1
+GET /api/main/search?q=Hoofdstraat+Amsterdam&w_street=5&w_city=3
+```
+
+Default weights: `w_postcode=5`, `w_street=3`, `w_city=2`, `w_label=1`.
+
+---
 
 ## Getting Started
 

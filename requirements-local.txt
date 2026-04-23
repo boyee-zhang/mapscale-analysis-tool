@@ -1,0 +1,2 @@
+-r requirements.txt
+elasticsearch[async]==8.14.0

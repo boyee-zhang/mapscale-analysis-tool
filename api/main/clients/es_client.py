@@ -1,4 +1,4 @@
-from elasticsearch import AsyncElasticsearch
+from __future__ import annotations
 from ..config import ES_URL
 from ..logger import get_logger
 
@@ -38,11 +38,12 @@ INDEX_SETTINGS = {
 }
 
 
-def get_es() -> AsyncElasticsearch:
+def get_es():
+    from elasticsearch import AsyncElasticsearch
     return AsyncElasticsearch(ES_URL)
 
 
-async def ensure_index(es: AsyncElasticsearch) -> None:
+async def ensure_index(es) -> None:
     exists = await es.indices.exists(index=INDEX)
     if not exists:
         await es.indices.create(index=INDEX, body=INDEX_SETTINGS)

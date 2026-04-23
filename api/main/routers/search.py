@@ -4,7 +4,6 @@ import httpx
 from fastapi import APIRouter, Query
 from typing import List
 from pydantic import BaseModel
-from elasticsearch import helpers as es_helpers
 from ..clients.es_client import get_es, INDEX
 from ..config import ES_URL
 from ..logger import get_logger
@@ -156,6 +155,7 @@ async def _index_results(results: list[dict]) -> None:
     ]
     if not actions:
         return
+    from elasticsearch import helpers as es_helpers
     es = get_es()
     try:
         await es_helpers.async_bulk(es, actions, raise_on_error=False)

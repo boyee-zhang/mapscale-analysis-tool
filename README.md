@@ -54,11 +54,25 @@ The next phase of this project involves pushing into the Geo-AI space:
 
 * Smart Routing: Adding one-click navigation from the user's center point to any filtered POI.
 
-## Address Search — Elasticsearch Setup (optional, local dev only)
+## Address Search — Elasticsearch Setup (local dev only, not on Vercel)
 
-The search feature uses a three-layer architecture. Elasticsearch is the first layer (fastest, supports custom field weights), but it is **optional** — the app falls back gracefully to PDOK and Nominatim when `ES_URL` is not set.
+The search feature is designed as a three-layer fallback chain:
 
-The live Vercel deployment runs without ES. To enable the full ES layer locally:
+| Layer | Service | What it covers | Status |
+|---|---|---|---|
+| 1 | **Elasticsearch** | Previously searched addresses, custom field weights, fuzzy match | Local only |
+| 2 | **PDOK Locatieserver** | Full Dutch address registry (BAG) — street + house number + postcode | Always on |
+| 3 | **Nominatim (OSM)** | POIs, landmarks, place names not in BAG | Always on |
+
+Each layer only activates if the layer above returns no confident results:
+- ES results below a relevance score threshold (`min_score=15`) are discarded and fall through to PDOK
+- PDOK results where none of the query tokens appear in the returned labels are discarded and fall through to Nominatim
+- New results from PDOK/Nominatim are automatically written back into ES for future cache hits
+
+**Why ES is not available on the live Vercel deployment:**
+Vercel is a serverless platform — it cannot host stateful services like Elasticsearch. ES must be hosted externally (e.g. Elastic Cloud, Railway). We haven't set up a hosted instance yet, so the live deployment runs on layers 2 and 3 only. The code is fully ready; connecting ES requires only setting the `ES_URL` environment variable.
+
+To enable the full ES layer locally:
 
 ### 1. Start Elasticsearch
 ```bash

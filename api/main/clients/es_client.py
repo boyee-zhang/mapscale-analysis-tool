@@ -1,6 +1,6 @@
 from elasticsearch import AsyncElasticsearch
 from ..config import ES_URL
-from ..observability.logger import get_logger
+from ..logger import get_logger
 
 logger = get_logger("client.es")
 

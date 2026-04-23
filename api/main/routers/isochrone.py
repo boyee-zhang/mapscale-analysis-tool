@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from ..cache import kv_get, kv_set
 from ..clients.ors import fetch_isochrone
 from ..errors import ExternalServiceError, InternalError
-from ..observability.logger import get_logger
+from ..logger import get_logger
 
 router = APIRouter()
 logger = get_logger("router.isochrone")

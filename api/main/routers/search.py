@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from elasticsearch import helpers as es_helpers
 from ..clients.es_client import get_es, INDEX
 from ..config import ES_URL
-from ..observability.logger import get_logger
+from ..logger import get_logger
 
 logger = get_logger("router.search")
 router = APIRouter()

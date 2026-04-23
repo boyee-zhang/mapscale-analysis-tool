@@ -1,7 +1,7 @@
 import httpx
 from ..config import SPEED_MAP
 from ..errors import ExternalServiceError
-from ..observability.logger import get_logger
+from ..logger import get_logger
 
 logger = get_logger("client.overpass")
 

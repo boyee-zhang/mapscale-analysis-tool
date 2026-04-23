@@ -3,8 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .errors import ExternalServiceError, InternalError
-from .middleware.logging import RequestLoggingMiddleware
-from .observability.logger import get_logger
+from .logger import RequestLoggingMiddleware
+from .logger import get_logger
 from .routers import isochrone, pois, directions, region, traffic, search
 
 logger = get_logger("app")

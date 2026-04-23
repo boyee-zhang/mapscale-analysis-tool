@@ -36,7 +36,9 @@ During development, I focused heavily on understanding the Map Rendering Pipelin
 
 * Adaptive Radius Querying: Automatically scales the Overpass QL around radius based on the selected travel mode to ensure sufficient data coverage.
 
-* Resilience: Implemented custom HTTPX timeout and error handling for high-latency spatial queries.
+* Resilience: Implemented custom HTTPX timeout and multi-endpoint fallback for high-latency spatial queries (e.g. three Overpass mirrors tried in sequence).
+
+* Structured Logging: Every request is assigned a unique `X-Request-ID`. All log output is JSON (via `python-json-logger`), making it easy to trace a full request lifecycle across routers and external API clients.
 
 ### Frontend (React)
 * Declarative Logic: Used useEffect observers to trigger data fetching only when core parameters (minutes, mode, centerLoc) change.
@@ -75,7 +77,7 @@ python scripts/ingest_addresses.py --terms "Jan Wolkerslaan" "Diemen" --rows 100
 Data is sourced from the **PDOK Locatieserver** (Dutch government BAG address registry, free, no API key required). Subsequent searches automatically cache new results back into ES.
 
 ### 3. Configure the backend
-Add to `backend/.env`:
+Add to `.env` (project root):
 ```
 ES_URL=http://localhost:9200
 ```
@@ -124,14 +126,21 @@ npm run dev
 ```
 ### 4. Backend Setup:
 ```bash
-cd backend
+# from project root
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install --upgrade pip
-pip install fastapi uvicorn httpx python-dotenv
-echo "ORS_API_KEY=your_real_key_here" > .env
+pip install -r requirements.txt
+```
 
-uvicorn main:app --reload
+Create a `.env` file in the project root:
+```
+ORS_API_KEY=your_openrouteservice_key
+TOMTOM_API_KEY=your_tomtom_key
+```
+
+Start the backend:
+```bash
+uvicorn api.main.app:app --reload --port 8000
 ```
 ## 📝 License
 

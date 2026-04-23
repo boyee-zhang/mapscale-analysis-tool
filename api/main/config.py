@@ -1,8 +1,7 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
-load_dotenv(os.path.join(os.path.dirname(__file__), "../../backend/.env"))  # local dev
+load_dotenv()  # loads .env from project root
 
 ORS_API_KEY = os.getenv("ORS_API_KEY")
 ES_URL = os.getenv("ES_URL")  # optional — omit to disable ES and fall back to PDOK/Nominatim

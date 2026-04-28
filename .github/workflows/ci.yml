@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  # ── Job 1: Lint + Build (every push and PR) ──────────────────────────────────
+  # ── Lint + Build (every push and PR) ─────────────────────────────────────────
   ci:
     name: Lint & Build
     runs-on: ubuntu-latest
@@ -39,14 +39,15 @@ jobs:
         run: npm run build
         working-directory: frontend
 
-  # ── Job 2: API Contract Tests (push to main only) ────────────────────────────
-  # Waits for Vercel to finish deploying, then runs pytest against the live URL.
-  # Each test validates HTTP 200 + the exact response shape the frontend expects.
+  # ── API Contract Tests (PRs only) ────────────────────────────────────────────
+  # Runs against the Vercel preview deployment created for this PR.
+  # This is the gate — the PR cannot be merged until all tests pass.
+  # After merge, main is already verified — no need to re-test production.
   # Requires VERCEL_TOKEN secret in repo Settings → Secrets → Actions.
   contract:
     name: API Contract Tests
     needs: ci
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -58,13 +59,13 @@ jobs:
       - name: Install test deps
         run: pip install pytest==8.3.5 httpx==0.27.0
 
-      - name: Wait for Vercel deployment
+      - name: Wait for Vercel preview deployment
         id: vercel
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
-          SHA="${{ github.sha }}"
-          echo "Polling Vercel for commit $SHA..."
+          SHA="${{ github.event.pull_request.head.sha }}"
+          echo "Polling Vercel for PR preview (SHA=$SHA)..."
           for i in $(seq 1 24); do
             RESP=$(curl -sf -H "Authorization: Bearer $VERCEL_TOKEN" \
               "https://api.vercel.com/v6/deployments?meta-githubCommitSha=$SHA&limit=1")
@@ -73,7 +74,7 @@ jobs:
             echo "  attempt $i/24 — state=$STATE"
             if [ "$STATE" = "READY" ]; then
               echo "url=https://$URL" >> "$GITHUB_OUTPUT"
-              echo "Deployment ready: https://$URL"
+              echo "Preview ready: https://$URL"
               exit 0
             fi
             if [ "$STATE" = "ERROR" ] || [ "$STATE" = "CANCELED" ]; then
@@ -82,7 +83,7 @@ jobs:
             fi
             sleep 15
           done
-          echo "Timed out waiting for Vercel deployment (6 minutes)"
+          echo "Timed out waiting for Vercel preview (6 minutes)"
           exit 1
 
       - name: Run API contract tests

@@ -18,7 +18,9 @@ LAT = 52.3676
 def test_health(base_url):
     r = httpx.get(f"{base_url}/api/main/health", timeout=15)
     assert r.status_code == 200
-    assert r.json() == {"status": "ok"}
+    body = r.json()
+    assert body["status"] == "ok"
+    assert "timestamp" in body
 
 
 # ── /search ──────────────────────────────────────────────────────────────────

@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 from .errors import ExternalServiceError, InternalError
 from .logger import RequestLoggingMiddleware
 from .logger import get_logger
-from .routers import isochrone, pois, directions, region, traffic, search
+from .routers import isochrone, pois, directions, region, traffic, search, health
 
 logger = get_logger("app")
 
@@ -48,6 +48,7 @@ async def internal_error_handler(request: Request, exc: InternalError):
     })
 
 # ── Routers ──────────────────────────────────────────────────────────────────
+app.include_router(health.router)
 app.include_router(isochrone.router)
 app.include_router(pois.router)
 app.include_router(directions.router)

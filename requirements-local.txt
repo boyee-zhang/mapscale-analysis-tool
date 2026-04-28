@@ -1,2 +1,4 @@
 -r requirements.txt
 elasticsearch[async]==8.14.0
+pytest==8.3.5
+ruff==0.9.10

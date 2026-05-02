@@ -132,6 +132,16 @@ async def _nominatim_search(q: str, size: int) -> list[dict]:
     ]
 
 
+def _pdok_relevant(q: str, results: list[dict]) -> bool:
+    """Return True if all long query tokens appear somewhere in the PDOK result labels."""
+    q_tokens = [t.lower() for t in q.split() if len(t) > 3]
+    if not results or not q_tokens:
+        return bool(results)
+    labels_text = " ".join(r["label"].lower() for r in results)
+    matched = sum(1 for t in q_tokens if t in labels_text)
+    return matched == len(q_tokens)
+
+
 async def _index_results(results: list[dict]) -> None:
     """Store results back into ES for future cache hits. No-op if ES is not configured."""
     if not ES_URL:
@@ -205,17 +215,7 @@ async def search_address(
     logger.info("es miss, trying pdok", extra={"q": q, "max_score": max_score})
     pdok_results = await _pdok_search(q, size)
 
-    # Discard PDOK results if none of the non-trivial query tokens appear in any label.
-    # e.g. "OurCampus Diemen" → PDOK returns Diemen addresses but "OurCampus" is absent.
-    q_tokens = [t.lower() for t in q.split() if len(t) > 3]
-    def _pdok_relevant(results: list[dict]) -> bool:
-        if not results or not q_tokens:
-            return bool(results)
-        labels_text = " ".join(r["label"].lower() for r in results)
-        matched = sum(1 for t in q_tokens if t in labels_text)
-        return matched == len(q_tokens)
-
-    if pdok_results and _pdok_relevant(pdok_results):
+    if pdok_results and _pdok_relevant(q, pdok_results):
         asyncio.ensure_future(_index_results(pdok_results))
         logger.info("pdok hit", extra={"q": q, "count": len(pdok_results)})
         return [SearchResult(label=r["label"], lng=r["lng"], lat=r["lat"]) for r in pdok_results]

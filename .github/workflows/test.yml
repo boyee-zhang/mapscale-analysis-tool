@@ -40,17 +40,6 @@ jobs:
           done
           cat /tmp/uvicorn.log
 
-      - name: Check ORS API key
-        run: |
-          echo "ORS_API_KEY length: ${#ORS_API_KEY}"
-          HTTP=$(curl -s -o /tmp/ors_resp.json -w "%{http_code}" \
-            -H "Authorization: ${ORS_API_KEY}" \
-            -H "Content-Type: application/json" \
-            -X POST "https://api.openrouteservice.org/v2/isochrones/foot-walking" \
-            -d '{"locations":[[4.936,52.338]],"range":[600],"range_type":"time"}')
-          echo "ORS direct HTTP status: $HTTP"
-          cat /tmp/ors_resp.json
-
       - name: Run unit tests
         run: pytest tests/unit/ -v
 

@@ -26,18 +26,22 @@ jobs:
         run: pip install -r requirements.txt pytest httpx
 
       - name: Start backend
-        run: uvicorn api.main.app:app --port 8000 &
+        run: uvicorn api.main.app:app --port 8000 > /tmp/uvicorn.log 2>&1 &
 
       - name: Wait for backend to be ready
         run: |
-          for i in $(seq 1 15); do
-            curl -s http://localhost:8000/api/main/search?q=test && break
-            echo "Waiting... ($i)"
+          for i in $(seq 1 20); do
+            if curl -sf "http://localhost:8000/api/main/health"; then
+              echo "Backend is ready"
+              break
+            fi
+            echo "Waiting... ($i/20)"
             sleep 2
           done
+          cat /tmp/uvicorn.log
 
       - name: Run unit tests
         run: pytest tests/unit/ -v
 
       - name: Run integration tests
-        run: pytest tests/integration/ -v --timeout=40
+        run: pytest tests/integration/ -v --timeout=40 -p no:warnings

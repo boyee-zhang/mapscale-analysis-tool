@@ -8,6 +8,7 @@ ES_URL = os.getenv("ES_URL")  # optional — omit to disable ES and fall back to
 TOMTOM_API_KEY = os.getenv("TOMTOM_API_KEY")
 UPSTASH_URL = os.getenv("UPSTASH_REDIS_REST_URL")
 UPSTASH_TOKEN = os.getenv("UPSTASH_REDIS_REST_TOKEN")
+ETL_CRON_TOKEN = os.getenv("ETL_CRON_TOKEN")
 
 MODE_MAPPING = {
     "walking": "foot-walking",

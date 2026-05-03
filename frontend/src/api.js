@@ -89,6 +89,42 @@ export const api = {
     }
   },
 
+  /**
+   * @param {string} provider  e.g. 'h2s'
+   * @param {string[]} [cities]  optional city filter
+   * @param {number} [months]
+   * @param {'future'|'past'} [direction]  'future': available in next N months; 'past': released in last N months
+   * @returns {Promise<GeoJSON.FeatureCollection>}
+   */
+  fetchHousingListings: (provider = 'h2s', cities = null, months = 3, direction = 'future') => {
+    const params = { provider, months, direction };
+    if (cities?.length) params.cities = cities.join(',');
+    return client.get('/api/main/housing/listings', { params, timeout: 30000 }).then(r => r.data);
+  },
+
+  /**
+   * @param {string} provider
+   * @param {number} [months]
+   * @param {'future'|'past'} [direction]
+   * @returns {Promise<GeoJSON.FeatureCollection>}
+   */
+  fetchHousingHeatmap: (provider = 'h2s', months = 3, direction = 'future') =>
+    client.get('/api/main/housing/heatmap', { params: { provider, months, direction }, timeout: 30000 }).then(r => r.data),
+
+  /**
+   * Municipality polygons with listing_count per city, for choropleth rendering.
+   * @param {string} provider
+   * @param {number} [months]
+   * @param {'future'|'past'} [direction]
+   * @returns {Promise<GeoJSON.FeatureCollection>}
+   */
+  fetchHousingChoropleth: (provider = 'h2s', months = 3, direction = 'future') =>
+    client.get('/api/main/housing/choropleth', { params: { provider, months, direction }, timeout: 60000 }).then(r => r.data),
+
+  /** @returns {Promise<Array<{ id, name, listing_type, cities }>>} */
+  fetchHousingProviders: () =>
+    client.get('/api/main/housing/providers').then(r => r.data),
+
   // 走代理的 /api/ai 路径 -> 最终去 3000 端口
   analyzeArea: async (city, regionCode) => {
     try {

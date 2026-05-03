@@ -1,7 +1,7 @@
 // src/components/AnalysisPanel.jsx
 import React, { useState } from 'react';
 
-const AnalysisPanel = ({ params, setParams, poiCount, loading, onAIAnalysis, showTraffic, onToggleTraffic }) => {
+const AnalysisPanel = ({ params, setParams, poiCount, loading, onAIAnalysis, showTraffic, onToggleTraffic, showHousing, onToggleHousing, housingDirection, onSetHousingDirection }) => {
   // AI 分析的内部加载状态
   const [isAnalysing, setIsAnalysing] = useState(false);
 
@@ -71,6 +71,45 @@ const AnalysisPanel = ({ params, setParams, poiCount, loading, onAIAnalysis, sho
         </button>
       </div>
 
+      {/* 房源热力图按钮 */}
+      <div style={{ marginBottom: '12px' }}>
+        <button
+          onClick={onToggleHousing}
+          disabled={loading}
+          style={{
+            ...trafficButtonStyle,
+            background: showHousing
+              ? 'linear-gradient(135deg, #f97316 0%, #8b5cf6 100%)'
+              : 'rgba(0,0,0,0.06)',
+            color: showHousing ? 'white' : '#1d1d1f',
+            boxShadow: showHousing ? '0 4px 12px rgba(249,115,22,0.3)' : 'none',
+            marginBottom: showHousing ? '6px' : 0,
+          }}
+        >
+          <span style={{ fontSize: '14px' }}>🏠</span>
+          <span style={{ marginLeft: '8px' }}>
+            {showHousing ? 'Hide Housing' : 'Housing Map'}
+          </span>
+        </button>
+
+        {showHousing && (
+          <div style={directionToggleWrapStyle}>
+            <button
+              onClick={() => onSetHousingDirection('past')}
+              style={{ ...directionBtnStyle, ...(housingDirection === 'past' && directionBtnActiveStyle) }}
+            >
+              Past Month
+            </button>
+            <button
+              onClick={() => onSetHousingDirection('future')}
+              style={{ ...directionBtnStyle, ...(housingDirection === 'future' && directionBtnActiveStyle) }}
+            >
+              Next 3 Months
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* --- AI 分析按钮 --- */}
       <div style={{ marginBottom: '20px' }}>
         <button 
@@ -104,6 +143,30 @@ const AnalysisPanel = ({ params, setParams, poiCount, loading, onAIAnalysis, sho
       </div>
     </div>
   );
+};
+
+const directionToggleWrapStyle = {
+  display: 'flex',
+  gap: '6px',
+};
+
+const directionBtnStyle = {
+  flex: 1,
+  padding: '6px 0',
+  borderRadius: '10px',
+  border: '1px solid rgba(0,0,0,0.1)',
+  background: 'rgba(0,0,0,0.04)',
+  fontSize: '11px',
+  fontWeight: '600',
+  color: '#86868b',
+  cursor: 'pointer',
+  transition: 'all 0.15s ease',
+};
+
+const directionBtnActiveStyle = {
+  background: 'rgba(249,115,22,0.12)',
+  border: '1px solid rgba(249,115,22,0.4)',
+  color: '#c2410c',
 };
 
 const trafficButtonStyle = {

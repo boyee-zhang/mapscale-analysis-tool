@@ -9,9 +9,11 @@ PARAMS = {"lng": 4.936, "lat": 52.338, "minutes": 10, "profile": "walking"}
 def test_isochrone_returns_geojson():
     r = httpx.get(f"{BASE_URL}/api/main/isochrone", params=PARAMS, timeout=30)
     assert r.status_code == 200, f"Got {r.status_code}: {r.text}"
-    data = r.json()
-    assert data.get("type") == "FeatureCollection"
-    assert len(data["features"]) == 1
+    body = r.json()
+    assert body["type"] == "FeatureCollection"
+    geom = body["features"][0]["geometry"]
+    assert geom["type"] in ("Polygon", "MultiPolygon")
+    assert len(geom["coordinates"]) > 0
 
 
 @requires_ors

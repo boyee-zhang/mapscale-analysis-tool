@@ -113,5 +113,5 @@ async def enrich_batch(listings: list[HousingListing]) -> list[HousingListing]:
         if coords:
             listing.lat, listing.lng = coords
 
-    await asyncio.gather(*[_enrich(l) for l in listings], return_exceptions=True)
+    await asyncio.gather(*[_enrich(lst) for lst in listings], return_exceptions=True)
     return listings

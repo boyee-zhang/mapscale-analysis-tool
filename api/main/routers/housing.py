@@ -49,10 +49,10 @@ def _apply_time_filter(listings, months: int, direction: str):
     today = date.today().isoformat()
     if direction == "past":
         start = (date.today() - timedelta(days=30 * months)).isoformat()
-        return [l for l in listings if l.available_from is not None and start <= l.available_from <= today]
+        return [lst for lst in listings if lst.available_from is not None and start <= lst.available_from <= today]
     else:
         cutoff = (date.today() + timedelta(days=30 * months)).isoformat()
-        return [l for l in listings if l.available_from is None or today <= l.available_from <= cutoff]
+        return [lst for lst in listings if lst.available_from is None or today <= lst.available_from <= cutoff]
 
 
 @router.get("/listings")
@@ -85,7 +85,7 @@ async def get_listings(
     listings = _apply_time_filter(listings, months, direction)
     await enrich_batch(listings)
 
-    features = [l.to_geojson_feature() for l in listings if l.has_coords]
+    features = [lst.to_geojson_feature() for lst in listings if lst.has_coords]
     logger.info("housing listings ready", extra={"total": len(listings), "geocoded": len(features)})
 
     return {"type": "FeatureCollection", "features": features}
@@ -130,9 +130,9 @@ async def get_choropleth(
             raise InternalError(str(e)) from e
 
         listings = _apply_time_filter(listings, months, direction)
-        for l in listings:
-            if l.city in counts:
-                counts[l.city] += 1
+        for lst in listings:
+            if lst.city in counts:
+                counts[lst.city] += 1
 
     return await fetch_choropleth_geojson(counts)
 
@@ -167,7 +167,7 @@ async def get_heatmap(
     listings = _apply_time_filter(listings, months, direction)
     await enrich_batch(listings)
 
-    features = [l.to_geojson_feature() for l in listings if l.has_coords]
+    features = [lst.to_geojson_feature() for lst in listings if lst.has_coords]
     return {"type": "FeatureCollection", "features": features}
 
 

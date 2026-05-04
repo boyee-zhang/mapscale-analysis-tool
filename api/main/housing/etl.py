@@ -64,7 +64,7 @@ async def run(provider_id: str = "h2s") -> dict:
 
     # 1. Fetch live listings
     listings = await provider.fetch_listings()
-    new_ids = {l.id for l in listings}
+    new_ids = {listing.id for listing in listings}
     logger.info("etl fetched", extra={"count": len(listings)})
 
     # 2. Get currently active IDs from Redis

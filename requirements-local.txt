@@ -1,5 +1,4 @@
 -r requirements.txt
-curl_cffi>=0.7.0
 elasticsearch[async]==8.14.0
 pytest==8.3.5
 ruff==0.9.10

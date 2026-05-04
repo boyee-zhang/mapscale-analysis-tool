@@ -8,6 +8,7 @@ import AnalysisPanel from './AnalysisPanel.jsx';
 import LegendPanel from './LegendPanel';
 import AnalysisResultPanel from './AnalysisResultPanel';
 import SearchBar from './SearchBar';
+import HousingLayer from './HousingLayer';
 
 // TomTom iconCategory → color (https://developer.tomtom.com/traffic-api/documentation/product-information/introduction)
 const INCIDENT_COLORS = [
@@ -27,6 +28,8 @@ const MapContainer = () => {
   const { map, isReady } = useMap(containerRef);
   const [analysisData, setAnalysisData] = useState(null);
   const [showTraffic, setShowTraffic] = useState(false);
+  const [showHousing, setShowHousing] = useState(false);
+  const [housingDirection, setHousingDirection] = useState('future');
 
   // 1. 统一状态
   const [data, setData] = useState({ iso: null, pois: [], loading: false });
@@ -213,6 +216,10 @@ const MapContainer = () => {
         onAIAnalysis={handleAIAnalysis}
         showTraffic={showTraffic}
         onToggleTraffic={() => setShowTraffic(v => !v)}
+        showHousing={showHousing}
+        onToggleHousing={() => setShowHousing(v => !v)}
+        housingDirection={housingDirection}
+        onSetHousingDirection={setHousingDirection}
       />
 
       <AnalysisResultPanel
@@ -222,6 +229,9 @@ const MapContainer = () => {
 
       {/* 图例组件 */}
       <LegendPanel />
+
+      {/* Housing 热力图层 */}
+      {showHousing && <HousingLayer map={map} isReady={isReady} direction={housingDirection} />}
 
       {/* 渲染 Markers */}
       {isReady && <CenterMarker map={map} pos={params.center} />}

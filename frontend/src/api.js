@@ -125,6 +125,13 @@ export const api = {
   fetchHousingProviders: () =>
     client.get('/api/main/housing/providers').then(r => r.data),
 
+  /**
+   * @param {string} city  e.g. 'Amsterdam'
+   * @returns {Promise<{ stats: object, summary: string }>}
+   */
+  fetchCityReport: (city) =>
+    client.get('/api/main/housing/city-report', { params: { city }, timeout: 60000 }).then(r => r.data),
+
   // 走代理的 /api/ai 路径 -> 最终去 3000 端口
   analyzeArea: async (city, regionCode) => {
     try {

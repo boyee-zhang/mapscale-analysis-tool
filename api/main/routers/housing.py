@@ -18,6 +18,8 @@ from ..housing import registry
 from ..housing.boundaries import fetch_choropleth_geojson
 from ..housing.etl import run as run_etl
 from ..housing.geocoder import enrich_batch
+from ..housing.monitor import run_monitor
+from ..housing.stats import compute_city_stats, generate_city_narrative
 from ..housing.upstash import UpstashClient
 from ..logger import get_logger
 
@@ -180,3 +182,51 @@ async def trigger_etl(provider: str = Query("h2s")):
     except Exception as e:
         logger.error("etl run failed", exc_info=True, extra={"error": str(e)})
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/monitor/run", dependencies=[Depends(_verify_cron_token)])
+async def trigger_monitor(
+    cities: Optional[str] = Query(None, description="Comma-separated city names; omit for all"),
+    hours: int = Query(24, ge=1, le=168, description="Look-back window in hours"),
+):
+    """
+    Run the housing monitor agent.
+
+    Queries Upstash for new listings in the past N hours, then uses Claude
+    to generate a natural-language summary with market context.
+    """
+    city_list = [c.strip() for c in cities.split(",")] if cities else None
+    logger.info("monitor run", extra={"cities": city_list, "hours": hours})
+    try:
+        result = await run_monitor(city_list, hours)
+        return result
+    except Exception as e:
+        logger.error("monitor run failed", exc_info=True, extra={"error": str(e)})
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/city-report")
+async def get_city_report(city: str = Query(..., description="City name, e.g. Amsterdam")):
+    """
+    Full market report for a single city:
+    stats by property type (Studio / 1-bed / 2-bed+) + AI narrative.
+    Triggered when a user clicks a city polygon on the map.
+    """
+    p = registry.get("h2s")
+    if p is None:
+        raise HTTPException(status_code=404, detail="Provider h2s not registered.")
+
+    logger.info("city report", extra={"city": city})
+    try:
+        listings = await p.fetch_listings([city])
+    except ExternalServiceError:
+        raise
+    except Exception as e:
+        logger.error("city report fetch failed", exc_info=True, extra={"error": str(e)})
+        raise InternalError(str(e)) from e
+
+    await enrich_batch(listings)
+    stats = compute_city_stats(listings, city)
+    summary = await generate_city_narrative(city, stats)
+
+    return {"stats": stats, "summary": summary}

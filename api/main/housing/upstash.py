@@ -55,3 +55,58 @@ class UpstashClient:
             if city:
                 counts[city] = counts.get(city, 0) + 1
         return counts
+
+    async def get_new_listings(self, hours: int = 24) -> list[dict]:
+        """Return listings that first appeared within the last N hours."""
+        now = datetime.now(timezone.utc)
+        end_ts   = int(now.timestamp())
+        start_ts = int((now - timedelta(hours=hours)).timestamp())
+
+        [ids] = await self.pipeline([
+            ["ZRANGEBYSCORE", "h2s:timeline", str(start_ts), str(end_ts)],
+        ])
+        if not ids:
+            return []
+
+        hget_cmds = [["HGETALL", f"h2s:listing:{lid}"] for lid in ids]
+        hashes = await self.pipeline(hget_cmds)
+
+        listings = []
+        for flat in hashes:
+            if not flat:
+                continue
+            obj = dict(zip(flat[::2], flat[1::2]))
+            if obj.get("id"):
+                listings.append(obj)
+        return listings
+
+    async def get_active_city_stats(self, city: str) -> dict:
+        """Return active listing count and price stats for a city."""
+        active_ids = await self.execute("SMEMBERS", "h2s:active")
+        if not active_ids:
+            return {"city": city, "active_listings": 0, "avg_price": None}
+
+        hget_cmds = [["HGETALL", f"h2s:listing:{lid}"] for lid in active_ids]
+        hashes = await self.pipeline(hget_cmds)
+
+        prices = []
+        for flat in hashes:
+            if not flat:
+                continue
+            obj = dict(zip(flat[::2], flat[1::2]))
+            if obj.get("city") == city and obj.get("price"):
+                try:
+                    prices.append(float(obj["price"]))
+                except ValueError:
+                    pass
+
+        if not prices:
+            return {"city": city, "active_listings": 0, "avg_price": None}
+
+        return {
+            "city": city,
+            "active_listings": len(prices),
+            "avg_price": round(sum(prices) / len(prices)),
+            "min_price": round(min(prices)),
+            "max_price": round(max(prices)),
+        }

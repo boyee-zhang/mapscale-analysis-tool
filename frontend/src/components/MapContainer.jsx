@@ -9,6 +9,7 @@ import LegendPanel from './LegendPanel';
 import AnalysisResultPanel from './AnalysisResultPanel';
 import SearchBar from './SearchBar';
 import HousingLayer from './HousingLayer';
+import CityReportPanel from './CityReportPanel';
 
 // TomTom iconCategory → color (https://developer.tomtom.com/traffic-api/documentation/product-information/introduction)
 const INCIDENT_COLORS = [
@@ -30,6 +31,8 @@ const MapContainer = () => {
   const [showTraffic, setShowTraffic] = useState(false);
   const [showHousing, setShowHousing] = useState(false);
   const [housingDirection, setHousingDirection] = useState('future');
+  const [cityReport, setCityReport] = useState(null);
+  const [cityReportLoading, setCityReportLoading] = useState(false);
 
   // 1. 统一状态
   const [data, setData] = useState({ iso: null, pois: [], loading: false });
@@ -231,7 +234,31 @@ const MapContainer = () => {
       <LegendPanel />
 
       {/* Housing 热力图层 */}
-      {showHousing && <HousingLayer map={map} isReady={isReady} direction={housingDirection} />}
+      {showHousing && (
+        <HousingLayer
+          map={map}
+          isReady={isReady}
+          direction={housingDirection}
+          onCityClick={async (city) => {
+            setCityReport(null);
+            setCityReportLoading(true);
+            try {
+              const report = await api.fetchCityReport(city);
+              setCityReport(report);
+            } catch (err) {
+              console.error('[MapContainer] city report failed', err);
+            } finally {
+              setCityReportLoading(false);
+            }
+          }}
+        />
+      )}
+
+      <CityReportPanel
+        data={cityReport}
+        loading={cityReportLoading}
+        onClose={() => { setCityReport(null); setCityReportLoading(false); }}
+      />
 
       {/* 渲染 Markers */}
       {isReady && <CenterMarker map={map} pos={params.center} />}

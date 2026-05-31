@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import math
+from datetime import date, timedelta
 
 from openai import AsyncOpenAI
 
@@ -41,6 +42,30 @@ CENTRAL_STATIONS: dict[str, tuple[float, float]] = {
     "Zeist":                  (52.0878, 5.2336),
     "Zoetermeer":             (52.0633, 4.4953),
 }
+
+
+def apply_time_filter(
+    listings: list[HousingListing],
+    months: int = 3,
+    direction: str = "future",
+) -> list[HousingListing]:
+    """Keep only listings whose available_from falls within the requested window.
+
+    future: available_from is None (no date = immediately available) OR within next N months.
+    past:   available_from is set AND within the past N months.
+    """
+    today = date.today().isoformat()
+    if direction == "past":
+        start = (date.today() - timedelta(days=30 * months)).isoformat()
+        return [
+            lst for lst in listings
+            if lst.available_from is not None and start <= lst.available_from <= today
+        ]
+    cutoff = (date.today() + timedelta(days=30 * months)).isoformat()
+    return [
+        lst for lst in listings
+        if lst.available_from is None or today <= lst.available_from <= cutoff
+    ]
 
 
 def _classify_type(prop_type: str | None) -> str:

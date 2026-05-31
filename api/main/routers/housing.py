@@ -6,10 +6,10 @@ The router only knows about models, registry, and geocoder.
 """
 from __future__ import annotations
 
-from datetime import date, timedelta
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from pydantic import BaseModel
 
 from ..config import ETL_CRON_TOKEN, UPSTASH_TOKEN, UPSTASH_URL
 from ..errors import ExternalServiceError, InternalError
@@ -18,8 +18,9 @@ from ..housing import registry
 from ..housing.boundaries import fetch_choropleth_geojson
 from ..housing.etl import run as run_etl
 from ..housing.geocoder import enrich_batch
+from ..housing.chat_agent import run_chat
 from ..housing.monitor import run_monitor
-from ..housing.stats import compute_city_stats, generate_city_narrative
+from ..housing.stats import apply_time_filter, compute_city_stats, generate_city_narrative
 from ..housing.upstash import UpstashClient
 from ..logger import get_logger
 
@@ -46,15 +47,6 @@ async def list_providers():
         for p in registry.all_providers()
     ]
 
-
-def _apply_time_filter(listings, months: int, direction: str):
-    today = date.today().isoformat()
-    if direction == "past":
-        start = (date.today() - timedelta(days=30 * months)).isoformat()
-        return [lst for lst in listings if lst.available_from is not None and start <= lst.available_from <= today]
-    else:
-        cutoff = (date.today() + timedelta(days=30 * months)).isoformat()
-        return [lst for lst in listings if lst.available_from is None or today <= lst.available_from <= cutoff]
 
 
 @router.get("/listings")
@@ -84,7 +76,7 @@ async def get_listings(
         logger.error("fetch_listings failed", exc_info=True, extra={"error": str(e)})
         raise InternalError(str(e)) from e
 
-    listings = _apply_time_filter(listings, months, direction)
+    listings = apply_time_filter(listings, months, direction)
     await enrich_batch(listings)
 
     features = [lst.to_geojson_feature() for lst in listings if lst.has_coords]
@@ -131,7 +123,7 @@ async def get_choropleth(
             logger.error("choropleth fetch failed", exc_info=True, extra={"error": str(e)})
             raise InternalError(str(e)) from e
 
-        listings = _apply_time_filter(listings, months, direction)
+        listings = apply_time_filter(listings, months, direction)
         for lst in listings:
             if lst.city in counts:
                 counts[lst.city] += 1
@@ -166,7 +158,7 @@ async def get_heatmap(
         logger.error("heatmap fetch failed", exc_info=True, extra={"error": str(e)})
         raise InternalError(str(e)) from e
 
-    listings = _apply_time_filter(listings, months, direction)
+    listings = apply_time_filter(listings, months, direction)
     await enrich_batch(listings)
 
     features = [lst.to_geojson_feature() for lst in listings if lst.has_coords]
@@ -205,8 +197,35 @@ async def trigger_monitor(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class ChatRequest(BaseModel):
+    query: str
+
+
+@router.post("/chat")
+async def housing_chat(body: ChatRequest):
+    """
+    Natural-language housing search.
+    AI parses the query, fetches real stats for relevant cities,
+    and returns { cities: list[str], summary: str }.
+    """
+    p = registry.get("h2s")
+    if p is None:
+        raise HTTPException(status_code=404, detail="Provider h2s not registered.")
+    logger.info("housing chat", extra={"query": body.query})
+    try:
+        result = await run_chat(body.query, p)
+        return result
+    except Exception as e:
+        logger.error("housing chat failed", exc_info=True, extra={"error": str(e)})
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/city-report")
-async def get_city_report(city: str = Query(..., description="City name, e.g. Amsterdam")):
+async def get_city_report(
+    city: str = Query(..., description="City name, e.g. Amsterdam"),
+    months: int = Query(3, ge=1, le=12),
+    direction: Literal["past", "future"] = Query("future"),
+):
     """
     Full market report for a single city:
     stats by property type (Studio / 1-bed / 2-bed+) + AI narrative.
@@ -216,7 +235,7 @@ async def get_city_report(city: str = Query(..., description="City name, e.g. Am
     if p is None:
         raise HTTPException(status_code=404, detail="Provider h2s not registered.")
 
-    logger.info("city report", extra={"city": city})
+    logger.info("city report", extra={"city": city, "months": months, "direction": direction})
     try:
         listings = await p.fetch_listings([city])
     except ExternalServiceError:
@@ -225,6 +244,7 @@ async def get_city_report(city: str = Query(..., description="City name, e.g. Am
         logger.error("city report fetch failed", exc_info=True, extra={"error": str(e)})
         raise InternalError(str(e)) from e
 
+    listings = apply_time_filter(listings, months, direction)
     await enrich_batch(listings)
     stats = compute_city_stats(listings, city)
     summary = await generate_city_narrative(city, stats)

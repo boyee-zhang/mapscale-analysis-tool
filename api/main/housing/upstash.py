@@ -31,13 +31,13 @@ class UpstashClient:
         return results[0]
 
     async def get_past_city_counts(self, months: int = 3) -> dict[str, int]:
-        """Return city → booked-listing count for the past N months."""
+        """Return city → newly-listed count for the past N months (first_seen window)."""
         now = datetime.now(timezone.utc)
         end_ts   = int(now.timestamp())
         start_ts = int((now - timedelta(days=30 * months)).timestamp())
 
         [ids] = await self.pipeline([
-            ["ZRANGEBYSCORE", "h2s:booked", str(start_ts), str(end_ts)],
+            ["ZRANGEBYSCORE", "h2s:timeline", str(start_ts), str(end_ts)],
         ])
         if not ids:
             return {}

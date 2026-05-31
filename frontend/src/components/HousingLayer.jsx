@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 
 const SOURCE_ID    = 'housing-choropleth';
@@ -144,10 +144,19 @@ const countBarStyle = (n) => ({
   background: n === 0 ? '#dde4ea' : `linear-gradient(90deg,#c6dff3,#2980b9 ${Math.min(n / 50 * 100, 100)}%)`,
 });
 
-export default function HousingLayer({ map, isReady, provider = 'h2s', direction = 'future', onCityClick }) {
+export default function HousingLayer({ map, isReady, provider = 'h2s', direction = 'future', onCityClick, highlightCities }) {
   const months = direction === 'past' ? 1 : 3;
-  const [popup, setPopup]   = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [popup, setPopup]         = useState(null);
+  const [loading, setLoading]     = useState(false);
+  const fullChoroplethRef         = useRef(null);
+
+  function applyFilter(choropleth, cities) {
+    if (!cities?.length) return choropleth;
+    return {
+      ...choropleth,
+      features: choropleth.features.filter(f => cities.includes(f.properties.city)),
+    };
+  }
 
   useEffect(() => {
     if (!isReady || !map) return;
@@ -158,15 +167,16 @@ export default function HousingLayer({ map, isReady, provider = 'h2s', direction
       try {
         const choropleth = await api.fetchHousingChoropleth(provider, months, direction);
         if (!mounted) return;
+        fullChoroplethRef.current = choropleth;
 
         if (map.getSource(SOURCE_ID)) {
-          map.getSource(SOURCE_ID).setData(choropleth);
+          map.getSource(SOURCE_ID).setData(applyFilter(choropleth, highlightCities));
         } else {
           map.addImage('icon-house-studio', makeHouseIcon('#f97316', 28), { pixelRatio: 2 });
           map.addImage('icon-house-1bed',   makeHouseIcon('#2980b9', 28), { pixelRatio: 2 });
           map.addImage('icon-house-2bed',   makeHouseIcon('#27ae60', 28), { pixelRatio: 2 });
 
-          map.addSource(SOURCE_ID,    { type: 'geojson', data: choropleth });
+          map.addSource(SOURCE_ID,    { type: 'geojson', data: applyFilter(choropleth, highlightCities) });
           map.addSource(LISTINGS_SRC, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
           map.addSource(STATIONS_SRC, { type: 'geojson', data: STATIONS_GEOJSON });
 
@@ -194,14 +204,18 @@ export default function HousingLayer({ map, isReady, provider = 'h2s', direction
         if (mounted) setLoading(false);
       }
 
-      // Listings — non-blocking, fills in after choropleth is visible
-      try {
-        const listings = await api.fetchHousingListings(provider, null, months, direction);
-        if (!mounted) return;
-        map.getSource(LISTINGS_SRC)?.setData(listings);
-        console.log('[HousingLayer] listings loaded', listings.features.length);
-      } catch (err) {
-        console.error('[HousingLayer] listings failed (non-fatal)', err);
+      // Listings icons — only in future mode; past listings are gone from H2S once booked.
+      // Choropleth (Upstash ETL) is the authoritative source for past data.
+      if (direction === 'future') {
+        try {
+          const cities = highlightCities?.length ? highlightCities : null;
+          const listings = await api.fetchHousingListings(provider, cities, months, direction);
+          if (!mounted) return;
+          map.getSource(LISTINGS_SRC)?.setData(listings);
+          console.log('[HousingLayer] listings loaded', listings.features.length);
+        } catch (err) {
+          console.error('[HousingLayer] listings failed (non-fatal)', err);
+        }
       }
     }
 
@@ -222,6 +236,22 @@ export default function HousingLayer({ map, isReady, provider = 'h2s', direction
     };
   }, [isReady, map, provider, months, direction]);
 
+  // Re-filter choropleth and reload listings when highlightCities changes.
+  // direction/months/provider are included to avoid stale closure.
+  useEffect(() => {
+    if (!isReady || !map) return;
+    const src = map.getSource(SOURCE_ID);
+    if (src && fullChoroplethRef.current) {
+      src.setData(applyFilter(fullChoroplethRef.current, highlightCities));
+    }
+    if (direction === 'future') {
+      const cities = highlightCities?.length ? highlightCities : null;
+      api.fetchHousingListings(provider, cities, months, direction)
+        .then(listings => map.getSource(LISTINGS_SRC)?.setData(listings))
+        .catch(() => {});
+    }
+  }, [highlightCities, isReady, map, provider, months, direction]);
+
   return (
     <>
       {loading && (
@@ -240,7 +270,7 @@ export default function HousingLayer({ map, isReady, provider = 'h2s', direction
         <div style={{ ...popupStyle, left: popup.x + 12, top: popup.y - 72 }}>
           <div style={{ fontWeight: 700, fontSize: '14px', marginBottom: 2 }}>{popup.city}</div>
           <div style={{ color: popup.count > 0 ? '#2980b9' : '#94a3b8', fontWeight: 600 }}>
-            {popup.count} {direction === 'past' ? 'booked last month' : 'available next 3 months'}
+            {popup.count} {direction === 'past' ? 'new listings last month' : 'available next 3 months'}
           </div>
           <div style={countBarStyle(popup.count)} />
         </div>

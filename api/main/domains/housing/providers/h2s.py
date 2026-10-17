@@ -15,8 +15,8 @@ import time
 from functools import partial
 from typing import Optional
 
-from ...errors import ExternalServiceError
-from ...logger import get_logger
+from ....errors import ExternalServiceError
+from ....logger import get_logger
 from ..models import HousingListing, HousingProvider, ListingStatus
 from ..registry import register
 

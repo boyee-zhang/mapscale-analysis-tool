@@ -5,7 +5,7 @@ HousingListing is the single canonical shape all providers output.
 HousingProvider is the ABC every new data source must implement.
 
 To add a new source (e.g. Funda):
-    1. Create api/main/housing/providers/funda.py
+    1. Create api/main/domains/housing/providers/funda.py
     2. Subclass HousingProvider, implement the three abstract members
     3. Call registry.register(FundaProvider()) at module level
     4. Import the module in providers/__init__.py

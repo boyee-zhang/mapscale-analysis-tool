@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import httpx
 
-from ..logger import get_logger
+from ...logger import get_logger
 
 logger = get_logger("housing.boundaries")
 

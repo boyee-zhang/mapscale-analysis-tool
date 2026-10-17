@@ -12,7 +12,7 @@ from typing import Optional
 
 import httpx
 
-from ..logger import get_logger
+from ...logger import get_logger
 from .models import HousingListing
 
 logger = get_logger("housing.geocoder")

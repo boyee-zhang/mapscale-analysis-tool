@@ -1,9 +1,9 @@
 from fastapi import APIRouter
 from ..cache import kv_get, kv_set
-from ..clients.tomtom import fetch_flow, fetch_incidents
 from ..config import TOMTOM_API_KEY
 from ..errors import ExternalServiceError, InternalError
 from ..logger import get_logger
+from ..upstream.tomtom import fetch_flow, fetch_incidents
 
 router = APIRouter()
 logger = get_logger("router.traffic")

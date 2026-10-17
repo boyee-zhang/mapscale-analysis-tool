@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException
 from ..cache import kv_get, kv_set
-from ..clients.overpass import fetch_pois
 from ..errors import ExternalServiceError, InternalError
 from ..logger import get_logger
+from ..upstream.overpass import fetch_pois
 
 router = APIRouter()
 logger = get_logger("router.pois")

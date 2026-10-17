@@ -1,8 +1,8 @@
 import asyncio
 from fastapi import APIRouter, HTTPException
-from ..clients.ors import fetch_directions
 from ..errors import ExternalServiceError, InternalError
 from ..logger import get_logger
+from ..upstream.ors import fetch_directions
 
 router = APIRouter()
 logger = get_logger("router.directions")

@@ -2,10 +2,11 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from .domains.housing import router as housing
 from .errors import ExternalServiceError, InternalError
 from .logger import RequestLoggingMiddleware
 from .logger import get_logger
-from .routers import isochrone, pois, directions, region, traffic, search, health, housing
+from .routers import isochrone, pois, directions, region, traffic, search, health
 
 logger = get_logger("app")
 

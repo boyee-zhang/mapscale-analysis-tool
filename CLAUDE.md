@@ -68,9 +68,9 @@ DEEPSEEK_API_KEY=              # required for housing chat / monitor / city narr
 ```
 Browser → api.js → Vite proxy → FastAPI (api/main/app.py)
                                     ↓ middleware: RequestLogging → CORS
-                                    ↓ router (api/main/routers/)
+                                    ↓ router (api/main/routers/ or domains/<d>/router.py)
                                     ↓ cache check (Upstash)
-                                    ↓ client (api/main/clients/) or housing service
+                                    ↓ api/main/upstream/ or a domain service
                                     ↓ upstream API
 ```
 
@@ -93,10 +93,21 @@ api/main/
   errors.py       ExternalServiceError, InternalError
   cache.py        Upstash KV get/set
   logger.py       JSON logging + request-ID middleware
-  clients/        thin upstream wrappers: ors, overpass, pdok, tomtom, es_client
-  routers/        one module per feature area
-  housing/        housing-market subsystem (see below)
+  upstream/       transport only: ors, overpass, pdok, tomtom, es_client
+  domains/
+    housing/      housing-market domain, owns its own router.py (see below)
+  routers/        isochrone, pois, directions, region, traffic, search, health
+                  — not yet folded into domains/ (refactor phases B & C)
 ```
+
+**`upstream/` is a transport layer only.** It may not contain business rules, caching
+decisions, or domain types. Judgement call: if a function in `upstream/` needs to know what a
+"listing" or an "isochrone" is, it belongs in a domain instead. Organising it per upstream API
+is correct *because* the business semantics now live in `domains/`.
+
+A refactor is in progress — see `docs/architecture-refactor-plan.md` (structure) and
+`docs/postgres-refactor-plan.md` (persistence). Phase A (this layout) is done; `api/main/`
+stays the package root so no URL or deploy config changes.
 
 ### Endpoints
 
@@ -129,7 +140,7 @@ Mode constants live **only** in `config.py`:
 - `MODE_MAPPING`: `walking → foot-walking`, `cycling → cycling-regular`, `driving → driving-car`
 - `SPEED_MAP` (m/min): `walking 80`, `cycling 250`, `driving 800` — used to derive the Overpass search radius
 
-`clients/overpass.py` fails over across three mirrors (kumi.systems → overpass-api.de → openstreetmap.fr).
+`upstream/overpass.py` fails over across three mirrors (kumi.systems → overpass-api.de → openstreetmap.fr).
 
 ### Search waterfall (`routers/search.py`)
 1. **Elasticsearch** `nl_addresses` — `multi_match` with per-field weights (overridable via
@@ -146,10 +157,11 @@ autocomplete and Gaussian distance decay) lives only on the unmerged branch
 `feature/search-index-lab`. It is **not on main** and is not to be merged as-is — the valuable parts
 are to be folded into production `/search` during the refactor.
 
-### Housing subsystem (`api/main/housing/`)
+### Housing domain (`api/main/domains/housing/`)
 Provider-agnostic by design — the router only touches `models`, `registry`, and `geocoder`.
 
 ```
+router.py      /housing/* endpoints; registered in app.py as `domains.housing.router`
 models.py      HousingListing dataclass + HousingProvider ABC
 registry.py    get() / register() / all_providers()
 providers/
@@ -193,13 +205,13 @@ Components: `SearchBar`, `CenterMarker`, `PoiMarker`, `PoiPopup`, `LegendPanel`,
 ### 1. Async error handling
 Every async operation must be wrapped with meaningful error propagation. Silent failures are not acceptable.
 
-**Backend:** upstream calls live in `clients/` and must translate HTTPX failures into
+**Backend:** upstream calls live in `upstream/` and must translate HTTPX failures into
 `ExternalServiceError` (the app-level handler maps it to 502, or 504 for timeouts).
 Routers catch `ExternalServiceError`/`HTTPException` and re-raise, and wrap anything else in
 `InternalError` after logging with `exc_info=True`.
 
 ```python
-# clients/ — translate upstream failures
+# upstream/ — translate upstream failures
 try:
     resp = await client.get(url, params=params)
     resp.raise_for_status()
@@ -253,6 +265,9 @@ handler entry with key params and again before returning with the result shape. 
 `extra={}`, not interpolated into the message — the formatter emits JSON and the middleware injects
 `request_id` (also returned as the `X-Request-ID` header).
 
+The `upstream/` modules keep the `client.*` logger prefix even though the directory was renamed —
+changing it would alter log output, which the structural move deliberately avoided.
+
 ```python
 logger.info("isochrone", extra={"lng": lng, "lat": lat, "minutes": minutes, "profile": profile})
 logger.info("← isochrone", extra={"features": len(data.get("features", []))})
@@ -271,7 +286,15 @@ console.log('[api] fetchIsochrone response', { featureCount: data.features?.leng
 ## Known Issues
 
 - `api/main/cache.py:19,35` uses `print()` for cache failures instead of the structured logger.
-- `routers/housing.py:187` docstring says the monitor uses "Claude" — it uses DeepSeek.
+- `domains/housing/router.py:187` docstring says the monitor uses "Claude" — it uses DeepSeek.
+- `/housing/etl/run` and `/housing/monitor/run` return **422, not 401**, when the
+  `Authorization` header is absent: the header is a required `Header(...)` param, so FastAPI
+  rejects it as a validation error before `_verify_cron_token` ever runs.
+- `AnalysisPanel.jsx:35` sends mode `"driving-car"`, but `MODE_MAPPING`/`SPEED_MAP` are keyed on
+  `"driving"` — it silently falls back to foot-walking at 80 m/min. **Driving mode is broken.**
+- `MapContainer.jsx:46` is `const [, setHoveredRoute] = useState(null)` — the value is discarded,
+  so every POI hover spends an ORS `/directions` call that is never rendered.
+- `/traffic/flow` has an `api.js` method but no caller; `/bulk_directions` has no frontend method.
 - Traffic data in the AI service is a PV27 (North Holland) provincial proxy applied to **every**
   municipality; results for other provinces are not location-specific.
 - No test coverage for the housing subsystem, the DeepSeek agents, cron-token validation, or any

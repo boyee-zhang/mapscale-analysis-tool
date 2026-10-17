@@ -10,6 +10,7 @@ UPSTASH_URL = os.getenv("UPSTASH_REDIS_REST_URL")
 UPSTASH_TOKEN = os.getenv("UPSTASH_REDIS_REST_TOKEN")
 ETL_CRON_TOKEN = os.getenv("ETL_CRON_TOKEN")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+DATABASE_URL = os.getenv("DATABASE_URL")  # optional — omit to run without Postgres
 
 MODE_MAPPING = {
     "walking": "foot-walking",

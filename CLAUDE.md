@@ -11,6 +11,7 @@ address search, and a housing-market subsystem (rental listings, choropleth, AI 
 **Tech Stack:**
 - Frontend: React 18 + Vite 6, MapLibre GL 5, Turf.js, Axios, Recharts
 - Backend: FastAPI (Python 3.12), HTTPX (async), deployed as a single Vercel serverless function via Mangum
+- Database: PostgreSQL 16 + PostGIS 3.4, local Docker, `asyncpg` with hand-written SQL (no ORM)
 - Cache: Upstash Redis (REST API)
 - Search: Elasticsearch 8.14 (optional — local via Docker, falls back to PDOK/Nominatim)
 - AI: DeepSeek (`deepseek-chat`) via the OpenAI-compatible SDK
@@ -33,10 +34,28 @@ uvicorn api.main.app:app --reload   # http://localhost:8000
 
 Run from the repo root — `api/main/` is a package and imports are relative to it.
 
+### Postgres / PostGIS
+```bash
+docker compose up -d postgres               # :5432, db/user/pass all "mapscale"
+python scripts/migrate.py                   # apply pending migrations (idempotent)
+python scripts/migrate.py --status          # list applied / pending
+python scripts/seed_municipalities.py       # seed municipality from PDOK CBS WFS (~342 rows)
+```
+
+Migrations are numbered `.sql` files in `migrations/`, applied forward-only by a
+hand-written runner; there is no `down`. A file named `NNNN_x.noxact.sql` runs **outside**
+a transaction, which is required for `CREATE INDEX CONCURRENTLY`.
+
+The container's memory parameters are deliberately small (`shared_buffers=128MB`,
+`work_mem=4MB`) so that disk spills and autovacuum activity become observable at ~10M rows
+instead of ~1B. Do not "fix" them. The image is `imresamu/postgis` rather than
+`postgis/postgis` because the latter publishes amd64 only, and emulation on Apple Silicon
+makes every `EXPLAIN ANALYZE` timing meaningless.
+
 ### Elasticsearch (optional)
 ```bash
-docker-compose up -d    # Elasticsearch :9200, single-node, security disabled
-python scripts/ingest_addresses.py          # seed nl_addresses from PDOK
+docker compose up -d elasticsearch   # :9200, single-node, security disabled
+python scripts/ingest_addresses.py   # seed nl_addresses from PDOK
 ```
 
 ### Lint & Test
@@ -55,6 +74,7 @@ CI (`.github/workflows/`) runs `ruff check api/` + `npm run build`, and pytest w
 ```
 ORS_API_KEY=                   # required for isochrone + directions
 TOMTOM_API_KEY=                # required for traffic
+DATABASE_URL=                  # optional; omit to run without Postgres (see below)
 ES_URL=                        # optional; omit to disable ES and fall back to PDOK/Nominatim
 UPSTASH_REDIS_REST_URL=        # optional; omit to disable caching (degrades silently)
 UPSTASH_REDIS_REST_TOKEN=
@@ -92,6 +112,7 @@ api/main/
   config.py       env vars + MODE_MAPPING + SPEED_MAP
   errors.py       ExternalServiceError, InternalError
   cache.py        Upstash KV get/set
+  db.py           asyncpg pool (created in the app lifespan), acquire()/transaction()
   logger.py       JSON logging + request-ID middleware
   upstream/       transport only: ors, overpass, pdok, tomtom, es_client
   domains/
@@ -105,9 +126,15 @@ decisions, or domain types. Judgement call: if a function in `upstream/` needs t
 "listing" or an "isochrone" is, it belongs in a domain instead. Organising it per upstream API
 is correct *because* the business semantics now live in `domains/`.
 
+**Every Postgres-backed path must degrade, not fail, when `DATABASE_URL` is unset.**
+`db.enabled()` is the guard; the pre-Postgres code path stays in place behind it, exactly
+as `cache.py` degrades when Upstash is unconfigured. This keeps the Vercel deployment
+working while Postgres is local-only. Current tables: `geocode_cache`, `municipality`.
+
 A refactor is in progress — see `docs/architecture-refactor-plan.md` (structure) and
-`docs/postgres-refactor-plan.md` (persistence). Phase A (this layout) is done; `api/main/`
-stays the package root so no URL or deploy config changes.
+`docs/postgres-refactor-plan.md` (persistence). Phase A (this layout) is done, as is
+Postgres stage 0; `api/main/` stays the package root so no URL or deploy config changes.
+Raw `EXPLAIN` / lock / vacuum output from each stage is archived in `docs/pg-notes/`.
 
 ### Endpoints
 
@@ -126,8 +153,8 @@ All under the `/api/main` prefix.
 | `/traffic/incidents` | GET | TomTom Incidents | 5m |
 | `/search` | GET | ES → PDOK → Nominatim | — |
 | `/housing/providers` | GET | — | — |
-| `/housing/listings` | GET | provider + PDOK geocode | in-memory geocode cache |
-| `/housing/choropleth` | GET | provider/Upstash + PDOK WFS | — |
+| `/housing/listings` | GET | provider + PDOK geocode | `geocode_cache` table |
+| `/housing/choropleth` | GET | provider/Upstash + `municipality` table | — |
 | `/housing/heatmap` | GET | provider + PDOK geocode | — |
 | `/housing/etl/run` | POST | provider → Upstash | — |
 | `/housing/monitor/run` | POST | Upstash + DeepSeek | — |
@@ -166,14 +193,27 @@ models.py      HousingListing dataclass + HousingProvider ABC
 registry.py    get() / register() / all_providers()
 providers/
   h2s.py       Holland2Stay GraphQL; uses curl_cffi to pass Cloudflare TLS fingerprinting
-geocoder.py    PDOK address → (lat, lng), in-memory cache, city-centre fallback
+geocoder.py    PDOK address → (lat, lng), geocode_cache table, city-centre fallback
 upstash.py     Upstash REST client for listing snapshots (pipeline support)
 etl.py         snapshot listings; diffs new / disappeared / booked
 stats.py       per-city stats by property type + DeepSeek narrative
 chat_agent.py  DeepSeek tool calling: get_city_stats, get_market_overview, respond
 monitor.py     summarises listings new in the last N hours
-boundaries.py  PDOK CBS WFS → municipality polygons for choropleth
+boundaries.py  municipality polygons for choropleth (table, WFS as fallback)
 ```
+
+**Geocoding has two correctness traps, both guarded — do not remove the guards.**
+
+1. PDOK's free search is fuzzy and *always* returns its best match, so a malformed
+   address resolves to an arbitrary place in the country (house number `9999` matches
+   postcode `9999XJ` in Stitswerd). `_pdok_lookup` therefore rejects any result whose
+   `woonplaatsnaam` is not the expected city and falls back to the city centre.
+2. PDOK does not index the English/colloquial H2S city names. `_PDOK_CITY` translates
+   them before lookup — without it, every **The Hague** address geocodes to **Zwolle**.
+
+`geocode_cache.source` distinguishes `'pdok'` from `'city_centre'`. A `city_centre` row is
+retried against PDOK after 7 days, and the upsert's `WHERE` clause prevents a fallback
+from ever overwriting a precise coordinate.
 
 Adding a provider: implement `HousingProvider` in `providers/`, import it from
 `providers/__init__.py` (the import is what triggers self-registration).
@@ -285,6 +325,20 @@ console.log('[api] fetchIsochrone response', { featureCount: data.features?.leng
 
 ## Known Issues
 
+- **The Holland2Stay GraphQL endpoint now returns 403, and there is no fix.** Cloudflare
+  serves a *managed challenge* (`cf-mitigated: challenge`), which requires executing
+  JavaScript and returning a Turnstile token. `curl_cffi` only forges the TLS/JA3
+  ClientHello and has no JS engine, so all seven impersonation profiles return a
+  byte-identical 403 — the fingerprint is no longer the discriminator. `/housing/listings`,
+  `/heatmap`, `/city-report`, `/chat` and `/choropleth?direction=future` all fail.
+  This does **not** block Postgres stage 1 (an earlier note claiming so was wrong): stage 1
+  exercises idempotent upsert, the `etl_run` state machine and the sentinel check, none of
+  which depend on which provider supplies rows. Every other Dutch commercial rental source
+  is behind the same protection — see `docs/data-source-feasibility.md` for the measured
+  matrix and the open-government alternatives. Do not attempt challenge circumvention.
+- `providers/h2s.py:232` lets `curl_cffi.requests.exceptions.HTTPError` escape instead of
+  translating it to `ExternalServiceError`, so an upstream 403 surfaces as **500** rather
+  than 502. This violates the error-handling standard below — providers are upstream calls.
 - `api/main/cache.py:19,35` uses `print()` for cache failures instead of the structured logger.
 - `domains/housing/router.py:187` docstring says the monitor uses "Claude" — it uses DeepSeek.
 - `/housing/etl/run` and `/housing/monitor/run` return **422, not 401**, when the
@@ -297,7 +351,11 @@ console.log('[api] fetchIsochrone response', { featureCount: data.features?.leng
 - `/traffic/flow` has an `api.js` method but no caller; `/bulk_directions` has no frontend method.
 - Traffic data in the AI service is a PV27 (North Holland) provincial proxy applied to **every**
   municipality; results for other provinces are not location-specific.
+- `ruff check tests/` reports 3 pre-existing violations (two unused `pytest` imports in
+  `tests/integration/`, one `E741` in `test_search_logic.py`). CI only lints `api/`, so they
+  are invisible there.
 - No test coverage for the housing subsystem, the DeepSeek agents, cron-token validation, or any
-  error path (502/504 handling).
+  error path (502/504 handling). `tests/unit/test_geocode_key.py` covers only the geocode
+  cache-key normalisation.
 - No rate limiting; upstream quotas are the only backpressure.
 - Only one housing provider (`h2s`) is implemented.

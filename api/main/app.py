@@ -1,7 +1,10 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from . import db
 from .domains.housing import router as housing
 from .errors import ExternalServiceError, InternalError
 from .logger import RequestLoggingMiddleware
@@ -10,7 +13,15 @@ from .routers import isochrone, pois, directions, region, traffic, search, healt
 
 logger = get_logger("app")
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    await db.connect()
+    yield
+    await db.close()
+
+
+app = FastAPI(lifespan=lifespan)
 
 # ── Middleware (order matters: first added = outermost) ──────────────────────
 app.add_middleware(RequestLoggingMiddleware)

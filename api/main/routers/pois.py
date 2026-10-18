@@ -1,24 +1,30 @@
-from fastapi import APIRouter, HTTPException
-from ..cache import kv_get, kv_set
+from fastapi import APIRouter, HTTPException, Query
+from ..domains.geo import service
 from ..errors import ExternalServiceError, InternalError
 from ..logger import get_logger
-from ..upstream.overpass import fetch_pois
 
 router = APIRouter()
 logger = get_logger("router.pois")
 
 
 @router.get("/api/main/pois")
-async def get_pois(lng: float, lat: float, minutes: int = 10, profile: str = "walking"):
-    logger.info("handler called", extra={"lng": lng, "lat": lat, "minutes": minutes, "profile": profile})
+async def get_pois(
+    lng: float,
+    lat: float,
+    minutes: int = 10,
+    profile: str = "walking",
+    categories: list[str] | None = Query(
+        None,
+        description="poi_category keys; repeat the param. Defaults to the legacy "
+        "supermarket/convenience/gym set. Ignored when Postgres is unconfigured.",
+    ),
+):
+    logger.info(
+        "handler called",
+        extra={"lng": lng, "lat": lat, "minutes": minutes, "profile": profile, "categories": categories},
+    )
     try:
-        cache_key = f"pois:{lng:.3f}:{lat:.3f}:{minutes}:{profile}"
-        if cached := await kv_get(cache_key):
-            logger.info("cache hit", extra={"cache_key": cache_key})
-            return cached
-        data = await fetch_pois(lng, lat, minutes, profile)
-        await kv_set(cache_key, data, ttl_seconds=21600)
-        return data
+        return await service.get_pois(lng, lat, minutes, profile, categories)
     except (ExternalServiceError, HTTPException):
         raise
     except Exception as e:

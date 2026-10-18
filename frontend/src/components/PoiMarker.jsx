@@ -1,10 +1,13 @@
 import React, { useEffect } from 'react';
 import maplibregl from 'maplibre-gl';
-import { renderToStaticMarkup } from 'react-dom/server'; 
-import { api } from '../api';
-import PoiPopup from './PoiPopup'; 
+import { renderToStaticMarkup } from 'react-dom/server';
+import PoiPopup from './PoiPopup';
 
-const PoiMarker = ({ poi, map, centerLoc, mode, setHoveredRoute }) => {
+// Hover used to also fetch /directions from the centre to this POI and hand it to a
+// `setHoveredRoute` setter in MapContainer whose state value was destructured away —
+// so every hover spent one ORS call (free tier: 50/day/endpoint) on a route nothing
+// drew. Removed rather than wired up; drawing the route is a feature, not a fix.
+const PoiMarker = ({ poi, map }) => {
   useEffect(() => {
     if (!map) return;
 
@@ -44,11 +47,10 @@ const PoiMarker = ({ poi, map, centerLoc, mode, setHoveredRoute }) => {
     // 定义关闭逻辑
     const closePopup = () => {
       dot.style.transform = 'scale(1)';
-      setHoveredRoute(null);
       popup.remove();
     };
 
-    const onEnter = async () => {
+    const onEnter = () => {
       // 1. 如果还在倒计时准备关闭，立即取消关闭
       if (hideTimer) {
         clearTimeout(hideTimer);
@@ -71,17 +73,8 @@ const PoiMarker = ({ poi, map, centerLoc, mode, setHoveredRoute }) => {
         });
         popupElement.addEventListener('mouseleave', onLeave);
       }
-
-      if (centerLoc) {
-        try {
-          const route = await api.fetchDirections(centerLoc, { lng: lon, lat }, mode);
-          setHoveredRoute(route);
-        } catch (e) {
-          console.error("Route fetching failed:", e);
-        }
-      }
     };
-    
+
     const onLeave = () => {
       // 3. 设置延迟消失，给用户 300ms 的反应时间
       hideTimer = setTimeout(() => {
@@ -99,7 +92,7 @@ const PoiMarker = ({ poi, map, centerLoc, mode, setHoveredRoute }) => {
       marker.remove();
       popup.remove();
     };
-  }, [poi, map, centerLoc, mode, setHoveredRoute]);
+  }, [poi, map]);
 
   return null;
 };

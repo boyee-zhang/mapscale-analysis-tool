@@ -9,7 +9,7 @@ tool (travel-time isochrones + POI density) and has grown two more subsystems: a
 address search, and a housing-market subsystem (rental listings, choropleth, AI reports).
 
 **Tech Stack:**
-- Frontend: React 18 + Vite 6, MapLibre GL 5, Turf.js, Axios, Recharts
+- Frontend: React 18 + Vite 6, MapLibre GL 5, Axios, Recharts
 - Backend: FastAPI (Python 3.12), HTTPX (async), deployed as a single Vercel serverless function via Mangum
 - Database: PostgreSQL 16 + PostGIS 3.4, local Docker, `asyncpg` with hand-written SQL (no ORM)
 - Cache: Upstash Redis (REST API)
@@ -18,6 +18,15 @@ address search, and a housing-market subsystem (rental listings, choropleth, AI 
 - External APIs: OpenRouteService, Overpass, PDOK Locatieserver + WFS, Nominatim, TomTom Traffic, Holland2Stay GraphQL
 
 ## Development Commands
+
+### Everything at once
+```bash
+./scripts/dev.sh      # postgres (--wait) -> migrations -> uvicorn :8000 + vite :5173
+```
+Ctrl-C stops all of it. The two optional services are left out on purpose: `ors` because the
+first start builds routing graphs, and `elasticsearch` because `/search` already degrades to
+PDOK → Nominatim and the local `esdata` volume is empty. The individual commands below are
+still the reference; `dev.sh` only chains them.
 
 ### Frontend
 ```bash
@@ -40,7 +49,16 @@ docker compose up -d postgres               # :5432, db/user/pass all "mapscale"
 python scripts/migrate.py                   # apply pending migrations (idempotent)
 python scripts/migrate.py --status          # list applied / pending
 python scripts/seed_municipalities.py       # seed municipality from PDOK CBS WFS (~342 rows)
+python scripts/import_poi.py data/noord-holland-latest.osm.pbf   # OSM POI import
 ```
+
+`import_poi.py` needs `osmium` (pyosmium) from `requirements-local.txt` — a Python
+package, not `brew install osmium-tool`; nothing system-level is required. It takes a
+Geofabrik `.osm.pbf` extract, which is downloaded by hand into the gitignored `data/`
+(`https://download.geofabrik.de/europe/netherlands/`). The tag whitelist is read from
+`poi_category_rule`, so widening the import is an INSERT, not a code change. The run is
+named after the extract and the soft-delete pass is confined to the bounding box of what
+that run staged, so importing one province cannot delete another.
 
 Migrations are numbered `.sql` files in `migrations/`, applied forward-only by a
 hand-written runner; there is no `down`. A file named `NNNN_x.noxact.sql` runs **outside**
@@ -51,6 +69,19 @@ The container's memory parameters are deliberately small (`shared_buffers=128MB`
 instead of ~1B. Do not "fix" them. The image is `imresamu/postgis` rather than
 `postgis/postgis` because the latter publishes amd64 only, and emulation on Apple Silicon
 makes every `EXPLAIN ANALYZE` timing meaningless.
+
+### Self-hosted OpenRouteService (optional)
+```bash
+docker compose up -d ors          # :8080 — FIRST START BUILDS 3 ROUTING GRAPHS, tens of minutes
+curl localhost:8080/ors/v2/health
+```
+The service carries `profiles: ["ors"]`, which is what actually keeps it out of a bare
+`docker compose up -d` — an earlier comment claimed that without the profile, and
+`docker compose config --services` listed it. Naming the service activates its profile, so
+the command above is unaffected. Reads the same
+`data/*.osm.pbf` as `import_poi.py` (read-only), so coverage is Noord-Holland only. Point the
+backend at it with `ORS_BASE_URL=http://localhost:8080/ors/v2`. The why, the measured
+preconditions and the three things to measure after the build are in `docs/ors-self-host.md`.
 
 ### Elasticsearch (optional)
 ```bash
@@ -73,6 +104,7 @@ CI (`.github/workflows/`) runs `ruff check api/` + `npm run build`, and pytest w
 ### Environment variables (`.env` at repo root)
 ```
 ORS_API_KEY=                   # required for isochrone + directions
+ORS_BASE_URL=                  # optional; defaults to the public host. See docs/ors-self-host.md
 TOMTOM_API_KEY=                # required for traffic
 DATABASE_URL=                  # optional; omit to run without Postgres (see below)
 ES_URL=                        # optional; omit to disable ES and fall back to PDOK/Nominatim
@@ -117,8 +149,10 @@ api/main/
   upstream/       transport only: ors, overpass, pdok, tomtom, es_client
   domains/
     housing/      housing-market domain, owns its own router.py (see below)
+    geo/          spatial primitives: isochrone + POI-inside-a-shape (service.py)
   routers/        isochrone, pois, directions, region, traffic, search, health
-                  — not yet folded into domains/ (refactor phases B & C)
+                  — isochrone/pois are thin callers of domains/geo; the rest are
+                    not yet folded into domains/ (refactor phases B & C)
 ```
 
 **`upstream/` is a transport layer only.** It may not contain business rules, caching
@@ -129,7 +163,8 @@ is correct *because* the business semantics now live in `domains/`.
 **Every Postgres-backed path must degrade, not fail, when `DATABASE_URL` is unset.**
 `db.enabled()` is the guard; the pre-Postgres code path stays in place behind it, exactly
 as `cache.py` degrades when Upstash is unconfigured. This keeps the Vercel deployment
-working while Postgres is local-only. Current tables: `geocode_cache`, `municipality`.
+working while Postgres is local-only. Current tables: `geocode_cache`, `municipality`
+(stage 0); `etl_run`, `poi_category`, `poi_category_rule`, `poi`, `poi_import` (stage 1).
 
 A refactor is in progress — see `docs/architecture-refactor-plan.md` (structure) and
 `docs/postgres-refactor-plan.md` (persistence). Phase A (this layout) is done, as is
@@ -144,7 +179,7 @@ All under the `/api/main` prefix.
 |---|---|---|---|
 | `/health` | GET | — | — |
 | `/isochrone` | GET | ORS | 24h |
-| `/pois` | GET | Overpass | 6h |
+| `/pois` | GET | `poi` table (Overpass as fallback) | 6h on the Overpass path only |
 | `/region` | GET | PDOK reverse | 7d |
 | `/directions` | GET | ORS | — |
 | `/bulk_directions` | GET | ORS (`asyncio.gather`) | — |
@@ -162,6 +197,28 @@ All under the `/api/main` prefix.
 | `/housing/city-report` | GET | provider + DeepSeek | — |
 
 Cache keys are `{feature}:{param}:{param}:…`, e.g. `iso:{lng}:{lat}:{minutes}:{profile}`.
+The `(lng, lat, minutes, profile)` shape goes through `cache.geo_cache_key()` — `/pois` reads
+the isochrone `/isochrone` wrote, so the two keys must agree to the last decimal, and they
+did not (`iso:` at `.5f`, `pois:` at `.3f`). Do not re-inline the format.
+
+`domains/geo/service.py` also keeps an in-process **single-flight** map in front of the ORS
+isochrone call, keyed on that same cache key. The cache alone cannot deduplicate `/isochrone`
+and `/pois`: the browser issues them concurrently for identical parameters, so both miss
+before either writes — measured 38 ORS calls for 18 unique parameter sets. The free tier is
+**50 requests/day/endpoint**, so the amplifier, not the usage, is what exhausts the quota.
+Both awaits are `asyncio.shield`ed; without that, one client disconnecting cancels the shared
+task and fails the other request too. This is per-process, so it does not help across Vercel
+instances — see `docs/ors-self-host.md` for the structural fix.
+
+`/pois` answers from the `poi` table when `db.enabled()`, clipping to the real isochrone
+polygon with `ST_Contains`; it degrades to a geodesic-buffer circle (still Postgres) if ORS is
+unavailable, and to the old node-only Overpass circle if Postgres is not configured. It takes a
+repeatable `categories` param (keys from `poi_category`), defaulting to the legacy
+supermarket/convenience/gym set. **Multi-category queries are written as `unnest` + `CROSS JOIN
+LATERAL` with an inner `LIMIT`, not `category = ANY($1)`** — btree_gist cannot use a
+`ScalarArrayOpExpr` as an index condition, which costs 1708 buffers against 80. Likewise the
+radius is a buffer polygon, not `ST_DWithin(geom::geography, …)`, which is unindexable against a
+`geometry` GiST. Both are measured in `docs/pg-notes/stage1-poi-import.md`; do not "simplify".
 
 Mode constants live **only** in `config.py`:
 - `MODE_MAPPING`: `walking → foot-walking`, `cycling → cycling-regular`, `driving → driving-car`
@@ -231,8 +288,16 @@ they are driven externally by QStash.
 inside `useEffect` in child components that receive `map` as a prop. **Never mutate the map before
 `isReady === true`.**
 
-POIs are filtered to those inside the isochrone with Turf `booleanPointInPolygon` in a `useMemo` —
-raw Overpass results extend past the isochrone boundary.
+POIs are rendered as returned — `/pois` now clips to the isochrone in Postgres, so the
+`turf.booleanPointInPolygon` `useMemo` that used to do it in the browser is gone, and `@turf/turf`
+has been dropped from `package.json`. The React key is `${poi.type}/${poi.id}`, not `poi.id`:
+the endpoint returns ways as well as nodes now, and the two id spaces overlap.
+
+`PoiMarker` takes only `{ poi, map }`. It used to take `centerLoc`/`mode`/`setHoveredRoute` and
+fetch `/directions` on hover, but the state value behind that setter was destructured away in
+`MapContainer`, so each hover spent one of the 50 daily ORS calls on a route nothing drew. The
+fetch was removed rather than wired up — drawing the route is a feature, not a bug fix, and
+`api.fetchDirections` is still there if it is ever wanted.
 
 Components: `SearchBar`, `CenterMarker`, `PoiMarker`, `PoiPopup`, `LegendPanel`,
 `AnalysisPanel` + `AnalysisResultPanel` (AI service), `HousingLayer`, `HousingChatPanel`,
@@ -336,18 +401,39 @@ console.log('[api] fetchIsochrone response', { featureCount: data.features?.leng
   which depend on which provider supplies rows. Every other Dutch commercial rental source
   is behind the same protection — see `docs/data-source-feasibility.md` for the measured
   matrix and the open-government alternatives. Do not attempt challenge circumvention.
+- **ORS's `cycling-*` graphs are broken upstream and return HTTP 200, so `cycling` mode
+  silently under-reports.** All four cycling profiles answer a 600 s isochrone with the same
+  0.031 km² blob (`reachfactor` 0.0016 against foot's 1.0; a bike covers ~9x a walk, so this is
+  ~400x too small), and `/matrix/cycling-regular` returns `null` durations between points 800 m
+  apart. Because it is a 200 with a well-formed polygon, neither `raise_for_status()` nor the
+  `/pois` circle fallback can detect it. `MODE_MAPPING["cycling"]` is deliberately **not**
+  re-pointed — all four cycling graphs are equally broken, and substituting a foot or driving
+  graph for a bike request would be a worse lie. `foot-walking` was broken the same way but
+  louder (it black-holes the request entirely), and `walking` is therefore mapped to
+  `foot-hiking`, which is measured-equivalent. Both profiles are still current in the official
+  spec, so this is an outage, not a deprecation. Full evidence and the narrowing steps:
+  `docs/pg-notes/ors-profile-outage.md`. Revert the walking remap if upstream recovers.
+- The official ORS OpenAPI spec is at `https://docs.openrouteservice.org/openrouteservice/v2/docs`
+  (every `…/api-docs` URL 404s, and the `/dev/` docs page is a JS SPA that fetches it). It
+  declares `servers[0]` as **`https://api.heigit.org`** with paths prefixed
+  `/openrouteservice/v2/…`; the `ORS_BASE_URL` default is still the undocumented legacy
+  `https://api.openrouteservice.org/v2`. Measured identical behaviour, so migrating is now a
+  one-env-var decision rather than a bug.
+- **The ORS free tier is 50 requests/day/endpoint** (measured; the pricing page is JS-rendered
+  and the limit is not documented). When it is exhausted the Tyk gateway returns 403
+  `{"error":"Quota exceeded"}`, 429 and an nginx **502** HTML page interchangeably — three
+  status codes, one cause; do not debug them as three problems. Quota is counted per endpoint,
+  and **403 responses carry no `x-ratelimit-*` headers**, so reading the remaining quota
+  requires probing an endpoint that still works. `docs/ors-self-host.md` is the way out.
 - `providers/h2s.py:232` lets `curl_cffi.requests.exceptions.HTTPError` escape instead of
   translating it to `ExternalServiceError`, so an upstream 403 surfaces as **500** rather
   than 502. This violates the error-handling standard below — providers are upstream calls.
-- `api/main/cache.py:19,35` uses `print()` for cache failures instead of the structured logger.
 - `domains/housing/router.py:187` docstring says the monitor uses "Claude" — it uses DeepSeek.
 - `/housing/etl/run` and `/housing/monitor/run` return **422, not 401**, when the
   `Authorization` header is absent: the header is a required `Header(...)` param, so FastAPI
   rejects it as a validation error before `_verify_cron_token` ever runs.
 - `AnalysisPanel.jsx:35` sends mode `"driving-car"`, but `MODE_MAPPING`/`SPEED_MAP` are keyed on
   `"driving"` — it silently falls back to foot-walking at 80 m/min. **Driving mode is broken.**
-- `MapContainer.jsx:46` is `const [, setHoveredRoute] = useState(null)` — the value is discarded,
-  so every POI hover spends an ORS `/directions` call that is never rendered.
 - `/traffic/flow` has an `api.js` method but no caller; `/bulk_directions` has no frontend method.
 - Traffic data in the AI service is a PV27 (North Holland) provincial proxy applied to **every**
   municipality; results for other provinces are not location-specific.

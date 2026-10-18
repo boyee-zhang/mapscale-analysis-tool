@@ -11,3 +11,9 @@ dist/
 
 # database data
 pg_data/
+
+# OSM extracts for scripts/import_poi.py — hundreds of MB, re-downloadable from Geofabrik
+data/
+
+# local working notes, not part of the deliverable
+reports/

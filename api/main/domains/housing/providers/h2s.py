@@ -24,6 +24,7 @@ logger = get_logger("housing.provider.h2s")
 
 try:
     import curl_cffi.requests as _cffi
+    from curl_cffi.requests import exceptions as _cffi_exc
     _AVAILABLE = True
 except ImportError:
     _AVAILABLE = False
@@ -210,41 +211,62 @@ def _scrape_all_sync(city_tasks: list[tuple[str, str]], all_statuses: bool = Fal
     _avail_ids = ", ".join(f'"{a}"' for a in _AVAILABILITY_IDS)
     avail_filter = "" if all_statuses else f"available_to_book: {{ in: [{_avail_ids}] }}"
 
-    with _cffi.Session(impersonate="chrome110") as session:
-        listings: list[HousingListing] = []
-        page = 1
+    # Every curl_cffi failure is translated here, not left to escape: this function runs in
+    # an executor, so an untranslated exception crosses the await and the router's blanket
+    # `except Exception` turns an upstream fault into a 500. curl_cffi mirrors requests'
+    # hierarchy (Timeout, HTTPError and JSONDecodeError all derive from RequestException),
+    # so the order of the handlers below is load-bearing.
+    try:
+        with _cffi.Session(impersonate="chrome110") as session:
+            listings: list[HousingListing] = []
+            page = 1
 
-        while True:
-            query = _GQL_QUERY.format(
-                category_uid=_CATEGORY_UID,
-                city_in=city_in,
-                avail_filter=avail_filter,
-                page=page,
-            )
-            # Retry up to 3 times on 429 with exponential backoff
-            for attempt in range(3):
-                resp = session.post(_GQL_URL, json={"query": query}, headers=_HEADERS, timeout=30)
-                if resp.status_code != 429:
+            while True:
+                query = _GQL_QUERY.format(
+                    category_uid=_CATEGORY_UID,
+                    city_in=city_in,
+                    avail_filter=avail_filter,
+                    page=page,
+                )
+                # Retry up to 3 times on 429 with exponential backoff
+                for attempt in range(3):
+                    resp = session.post(_GQL_URL, json={"query": query}, headers=_HEADERS, timeout=30)
+                    if resp.status_code != 429:
+                        break
+                    wait = int(resp.headers.get("Retry-After", 10 * (2 ** attempt)))
+                    logger.warning("h2s 429 rate limited", extra={"page": page, "wait_s": wait})
+                    time.sleep(wait)
+                resp.raise_for_status()
+                data = resp.json()
+
+                products = data.get("data", {}).get("products", {})
+                for item in products.get("items") or []:
+                    listing = _to_listing(item)  # city resolved from response attrs
+                    if listing:
+                        listings.append(listing)
+
+                page_info = products.get("page_info", {})
+                if page >= page_info.get("total_pages", 1):
                     break
-                wait = int(resp.headers.get("Retry-After", 10 * (2 ** attempt)))
-                logger.warning("h2s 429 rate limited", extra={"page": page, "wait_s": wait})
-                time.sleep(wait)
-            resp.raise_for_status()
-            data = resp.json()
+                page += 1
 
-            products = data.get("data", {}).get("products", {})
-            for item in products.get("items") or []:
-                listing = _to_listing(item)  # city resolved from response attrs
-                if listing:
-                    listings.append(listing)
-
-            page_info = products.get("page_info", {})
-            if page >= page_info.get("total_pages", 1):
-                break
-            page += 1
-
-        logger.info("h2s batch scraped", extra={"cities": len(city_tasks), "total": len(listings)})
-        return listings
+            logger.info("h2s batch scraped", extra={"cities": len(city_tasks), "total": len(listings)})
+            return listings
+    except _cffi_exc.Timeout as e:
+        logger.warning("h2s timeout", extra={"service": "h2s", "error": str(e)})
+        raise ExternalServiceError("h2s", 504, f"request timed out: {e}") from e
+    except _cffi_exc.HTTPError as e:
+        # raise_for_status() passes the Response through; Cloudflare's managed challenge
+        # (403 + `cf-mitigated: challenge`) is the case this normally carries.
+        status = getattr(e.response, "status_code", None) or 502
+        body = (getattr(e.response, "text", "") or str(e))[:200]
+        logger.warning("h2s http error", extra={"service": "h2s", "upstream_status": status})
+        raise ExternalServiceError("h2s", status, body) from e
+    except _cffi_exc.RequestException as e:
+        # Covers connection/DNS/SSL/impersonate failures and a non-JSON body
+        # (JSONDecodeError derives from RequestException) — all upstream faults.
+        logger.warning("h2s network error", extra={"service": "h2s", "error": str(e)})
+        raise ExternalServiceError("h2s", 502, f"network error: {e}") from e
 
 
 class H2SProvider(HousingProvider):

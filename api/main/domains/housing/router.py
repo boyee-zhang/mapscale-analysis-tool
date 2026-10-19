@@ -28,7 +28,10 @@ router = APIRouter(prefix="/api/main/housing")
 logger = get_logger("router.housing")
 
 
-def _verify_cron_token(authorization: str = Header(...)):
+def _verify_cron_token(authorization: Optional[str] = Header(None)):
+    # Header(None), not Header(...): a required header makes FastAPI reject a missing
+    # Authorization with 422 before this body runs, which reads as "bad request" when
+    # the truth is "unauthenticated". Optional here, 401 below.
     expected = f"Bearer {ETL_CRON_TOKEN}"
     if not ETL_CRON_TOKEN or authorization != expected:
         raise HTTPException(status_code=401, detail="Invalid cron token")

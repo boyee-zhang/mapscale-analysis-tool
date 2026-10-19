@@ -32,7 +32,7 @@ const AnalysisPanel = ({ params, setParams, poiCount, loading, onAIAnalysis, sho
         >
           <option value="walking">🚶 Walking</option>
           <option value="cycling">🚴 Cycling</option>
-          <option value="driving-car">🚗 Driving</option>
+          <option value="driving">🚗 Driving</option>
         </select>
       </div>
 

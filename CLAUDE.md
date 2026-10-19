@@ -214,14 +214,18 @@ instances — see `docs/ors-self-host.md` for the structural fix.
 polygon with `ST_Contains`; it degrades to a geodesic-buffer circle (still Postgres) if ORS is
 unavailable, and to the old node-only Overpass circle if Postgres is not configured. It takes a
 repeatable `categories` param (keys from `poi_category`), defaulting to the legacy
-supermarket/convenience/gym set. **Multi-category queries are written as `unnest` + `CROSS JOIN
-LATERAL` with an inner `LIMIT`, not `category = ANY($1)`** — btree_gist cannot use a
-`ScalarArrayOpExpr` as an index condition, which costs 1708 buffers against 80. Likewise the
+supermarket/convenience/gym set. Multi-category queries are written as `unnest` + `CROSS JOIN
+LATERAL` with an inner `LIMIT`. **That rewrite's advantage is scale-bound and has already
+inverted**: at 82,259 rows btree_gist could not use a `ScalarArrayOpExpr` as an index condition
+and `unnest` was 21x better (1708 buffers against 80), but at 512,844 rows the planner picks a
+*Bitmap* Index Scan, which loops the array in the executor, so `category = ANY($1)` is back
+inside the `Index Cond` and is now slightly ahead (91 buffers against 98). The inner `LIMIT` is
+still load-bearing. Re-measure before quoting either number. Likewise the
 radius is a buffer polygon, not `ST_DWithin(geom::geography, …)`, which is unindexable against a
 `geometry` GiST. Both are measured in `docs/pg-notes/stage1-poi-import.md`; do not "simplify".
 
 Mode constants live **only** in `config.py`:
-- `MODE_MAPPING`: `walking → foot-walking`, `cycling → cycling-regular`, `driving → driving-car`
+- `MODE_MAPPING`: `walking → foot-hiking`, `cycling → cycling-regular`, `driving → driving-car`
 - `SPEED_MAP` (m/min): `walking 80`, `cycling 250`, `driving 800` — used to derive the Overpass search radius
 
 `upstream/overpass.py` fails over across three mirrors (kumi.systems → overpass-api.de → openstreetmap.fr).
@@ -395,7 +399,8 @@ console.log('[api] fetchIsochrone response', { featureCount: data.features?.leng
   JavaScript and returning a Turnstile token. `curl_cffi` only forges the TLS/JA3
   ClientHello and has no JS engine, so all seven impersonation profiles return a
   byte-identical 403 — the fingerprint is no longer the discriminator. `/housing/listings`,
-  `/heatmap`, `/city-report`, `/chat` and `/choropleth?direction=future` all fail.
+  `/heatmap`, `/city-report`, `/chat` and `/choropleth?direction=future` all fail; the
+  provider translates the 403 into `ExternalServiceError`, so they answer 502, not 500.
   This does **not** block Postgres stage 1 (an earlier note claiming so was wrong): stage 1
   exercises idempotent upsert, the `etl_run` state machine and the sentinel check, none of
   which depend on which provider supplies rows. Every other Dutch commercial rental source
@@ -425,15 +430,7 @@ console.log('[api] fetchIsochrone response', { featureCount: data.features?.leng
   status codes, one cause; do not debug them as three problems. Quota is counted per endpoint,
   and **403 responses carry no `x-ratelimit-*` headers**, so reading the remaining quota
   requires probing an endpoint that still works. `docs/ors-self-host.md` is the way out.
-- `providers/h2s.py:232` lets `curl_cffi.requests.exceptions.HTTPError` escape instead of
-  translating it to `ExternalServiceError`, so an upstream 403 surfaces as **500** rather
-  than 502. This violates the error-handling standard below — providers are upstream calls.
-- `domains/housing/router.py:187` docstring says the monitor uses "Claude" — it uses DeepSeek.
-- `/housing/etl/run` and `/housing/monitor/run` return **422, not 401**, when the
-  `Authorization` header is absent: the header is a required `Header(...)` param, so FastAPI
-  rejects it as a validation error before `_verify_cron_token` ever runs.
-- `AnalysisPanel.jsx:35` sends mode `"driving-car"`, but `MODE_MAPPING`/`SPEED_MAP` are keyed on
-  `"driving"` — it silently falls back to foot-walking at 80 m/min. **Driving mode is broken.**
+- `domains/housing/router.py:190` docstring says the monitor uses "Claude" — it uses DeepSeek.
 - `/traffic/flow` has an `api.js` method but no caller; `/bulk_directions` has no frontend method.
 - Traffic data in the AI service is a PV27 (North Holland) provincial proxy applied to **every**
   municipality; results for other provinces are not location-specific.

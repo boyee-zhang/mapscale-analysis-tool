@@ -4,9 +4,9 @@ import httpx
 from fastapi import APIRouter, Query
 from typing import List
 from pydantic import BaseModel
-from ..clients.es_client import get_es, INDEX
 from ..config import ES_URL
 from ..logger import get_logger
+from ..upstream.es_client import get_es, INDEX
 
 logger = get_logger("router.search")
 router = APIRouter()

@@ -10,8 +10,8 @@ import json
 
 from openai import AsyncOpenAI
 
-from ..config import DEEPSEEK_API_KEY, UPSTASH_TOKEN, UPSTASH_URL
-from ..logger import get_logger
+from ...config import DEEPSEEK_API_KEY, UPSTASH_TOKEN, UPSTASH_URL
+from ...logger import get_logger
 from .upstash import UpstashClient
 
 logger = get_logger("housing.monitor")

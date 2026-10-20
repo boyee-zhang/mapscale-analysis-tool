@@ -2,7 +2,7 @@
 Housing ETL — snapshots H2S listings into Upstash Redis.
 
 Run manually:
-    python -m api.main.housing.etl
+    python -m api.main.domains.housing.etl
 
 Or schedule via cron / Upstash QStash (POST to /api/main/housing/etl/run).
 
@@ -18,8 +18,8 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 
-from ..config import UPSTASH_TOKEN, UPSTASH_URL
-from ..logger import get_logger
+from ...config import UPSTASH_TOKEN, UPSTASH_URL
+from ...logger import get_logger
 from . import registry
 from . import providers as _  # noqa: F401 — triggers provider self-registration
 from .upstash import UpstashClient

@@ -10,8 +10,8 @@ import json
 
 from openai import AsyncOpenAI
 
-from ..config import DEEPSEEK_API_KEY
-from ..logger import get_logger
+from ...config import DEEPSEEK_API_KEY
+from ...logger import get_logger
 from .stats import CENTRAL_STATIONS, apply_time_filter, compute_city_stats
 
 logger = get_logger("housing.chat")

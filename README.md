@@ -1,167 +1,296 @@
-# MapScale Analysis Tool 
+# MapScale Analysis Tool
 
-![Project Demo](./docs/ScreenshotDriving.png)
-![Project Demo](./docs/ScreenshotWalking.png)
-![Project Demo](./docs/ScreenshotPathing.png)
-A professional-grade geographic analysis tool built for urban accessibility and POI (Point of Interest) density studies. This project demonstrates the integration of complex spatial data with a modern reactive web stack.
+A spatial data platform for the Netherlands. The user-facing part is a map — travel-time
+isochrones, POI density, address search, rental-market layers — but the work this repo is
+actually about is the layer underneath it: a PostgreSQL 16 / PostGIS 3.4 database with
+hand-written SQL, an offline OSM import pipeline, and index designs justified by measured
+`EXPLAIN (ANALYZE, BUFFERS)` output rather than by intuition.
 
-## Tech Stack
-* Frontend: React (Vite), MapLibre GL, Turf.js, Axios
+The project started as a front-end accessibility demo (isochrone + two POI categories,
+point-in-polygon computed in the browser with Turf.js). That framing is gone: the spatial work
+moved into Postgres, the POI table holds all 512,844 amenities in the Netherlands, and the
+front end renders what the database returns. Raw measurements from each step are archived in
+[`docs/pg-notes/`](docs/pg-notes/) — they are the actual deliverable of the current phase.
 
-* Backend: FastAPI (Python), HTTPX
-
-* Data Providers: OpenRouteService (Isochrones), OpenStreetMap/Overpass API (POIs), Nominatim (Geocoding)
-
-## Core Features
-* Dynamic Isochrones: Calculate travel boundaries based on time (5-30 mins) and mode (Walking, Cycling, Driving) using real-world road networks.
-
-* Reactive POI Analysis: Real-time filtering of supermarkets and gyms within the actual street-network boundary using the Turf.js spatial engine.
-
-* Smart Address Search: Locate any Dutch address (e.g., `Jan Wolkerslaan 699` or postcode `1112ZH`) with smooth "FlyTo" animations and automatic re-calculation. Search is powered by a three-layer fallback: Elasticsearch cache → PDOK (Dutch address registry) → Nominatim (OSM).
-
-* Operational Status: Integrated opening_hours logic to parse OSM data and display real-time status: Open Now, Closed, or Data Unknown.
-
-## Engineering Insights: Map Rendering Logic
-During development, I focused heavily on understanding the Map Rendering Pipeline. One of the major challenges was solving the "Marker Drifting" issue:
-
-* The "Floating Point" Challenge: Initially, markers appeared to "drift" or lag behind when the map was zoomed or panned.
-
-* Deep Understanding: I realized this was caused by a conflict between React's state-driven DOM updates and MapLibre's high-frequency coordinate-to-pixel projection.
-
-* The Solution: By decoupling the UI state from the raw coordinate updates and strictly managing the Marker lifecycle (properly mounting/unmounting DOM elements via MapLibre's internal setLngLat API), I achieved perfect synchronization where markers remain pinned to their geographic coordinates regardless of map movement.
-
-## System Architecture
-### Backend (FastAPI)
-* Parameterized Routing: Dynamically maps frontend profiles (walking/driving) to ORS routing engines.
-
-* Adaptive Radius Querying: Automatically scales the Overpass QL around radius based on the selected travel mode to ensure sufficient data coverage.
-
-* Resilience: Implemented custom HTTPX timeout and multi-endpoint fallback for high-latency spatial queries (e.g. three Overpass mirrors tried in sequence).
-
-* Structured Logging: Every request is assigned a unique `X-Request-ID`. All log output is JSON (via `python-json-logger`), making it easy to trace a full request lifecycle across routers and external API clients.
-
-### Frontend (React)
-* Declarative Logic: Used useEffect observers to trigger data fetching only when core parameters (minutes, mode, centerLoc) change.
-
-* Spatial Computing Layer: Utilizes useMemo to perform point-in-polygon collisions in the browser, ensuring the UI remains performant even with hundreds of POIs.
-
-## Future Roadmap: AI Agent Integration
-The next phase of this project involves pushing into the Geo-AI space:
-
-* Natural Language GIS: Integrating an AI Agent (e.g., GPT-4o) to allow users to use voice commands: "Find me all gyms within a 15-minute walk of Diemen Zuid that are open right now."
-
-* Auto-API Invocation: The Agent will parse intent, map it to our existing FastAPI endpoints, and visualize the results automatically.
-
-* Smart Routing: Adding one-click navigation from the user's center point to any filtered POI.
-
-## Address Search — Elasticsearch Setup (local dev only, not on Vercel)
-
-The search feature is designed as a three-layer fallback chain:
-
-| Layer | Service | What it covers | Status |
-|---|---|---|---|
-| 1 | **Elasticsearch** | Previously searched addresses, custom field weights, fuzzy match | Local only |
-| 2 | **PDOK Locatieserver** | Full Dutch address registry (BAG) — street + house number + postcode | Always on |
-| 3 | **Nominatim (OSM)** | POIs, landmarks, place names not in BAG | Always on |
-
-Each layer only activates if the layer above returns no confident results:
-- ES results below a relevance score threshold (`min_score=15`) are discarded and fall through to PDOK
-- PDOK results where none of the query tokens appear in the returned labels are discarded and fall through to Nominatim
-- New results from PDOK/Nominatim are automatically written back into ES for future cache hits
-
-**Why ES is not available on the live Vercel deployment:**
-Vercel is a serverless platform — it cannot host stateful services like Elasticsearch. ES must be hosted externally (e.g. Elastic Cloud, Railway). We haven't set up a hosted instance yet, so the live deployment runs on layers 2 and 3 only. The code is fully ready; connecting ES requires only setting the `ES_URL` environment variable.
-
-To enable the full ES layer locally:
-
-### 1. Start Elasticsearch
-```bash
-docker compose up -d   # starts ES on localhost:9200
-```
-
-### 2. Seed the index with Dutch addresses
-```bash
-# index 1 000 addresses across 20 common Dutch street names
-python scripts/ingest_addresses.py
-
-# or target a specific street / city
-python scripts/ingest_addresses.py --terms "Jan Wolkerslaan" "Diemen" --rows 100
-```
-
-Data is sourced from the **PDOK Locatieserver** (Dutch government BAG address registry, free, no API key required). Subsequent searches automatically cache new results back into ES.
-
-### 3. Configure the backend
-Add to `.env` (project root):
-```
-ES_URL=http://localhost:9200
-```
-
-### Hosting ES in production
-To run the full ES layer in a deployed environment, host Elasticsearch externally and set `ES_URL` to the connection string:
-
-| Provider | Notes |
-|---|---|
-| **Elastic Cloud** | Official managed service. 14-day free trial, then from ~$16/month. |
-| **Railway** | Deploy the ES Docker image directly. New accounts get $5 free credit. |
-| **Self-hosted VPS** | Run `docker compose up -d` on any VPS (Hetzner, DigitalOcean, etc.). |
-
-Set `ES_URL=https://user:password@your-cluster` in your environment and the app will automatically use ES instead of falling back to PDOK.
-
-### Search field weights
-Weights are tunable per-request via query params — no code change needed:
-```
-GET /api/main/search?q=1112ZH&w_postcode=8&w_street=1
-GET /api/main/search?q=Hoofdstraat+Amsterdam&w_street=5&w_city=3
-```
-
-Default weights: `w_postcode=5`, `w_street=3`, `w_city=2`, `w_label=1`.
+![Driving isochrone](./docs/ScreenshotDriving.png)
+![Walking isochrone](./docs/ScreenshotWalking.png)
 
 ---
 
-## Getting Started
+## What runs where — the live site is **not** this branch
 
-### 1. Prerequisites
-* Python 3.10+
+This matters before anything else, because the deployed app and a local checkout behave
+differently on purpose.
 
-* Node.js 18+
+| | Vercel (production) | Local (`./scripts/dev.sh`) |
+|---|---|---|
+| Code | `main` | `refactor/modular-architecture` (ahead of `main`) |
+| Backend | one Mangum-wrapped serverless function | `uvicorn --reload` on `:8000` |
+| Postgres / PostGIS | **none** | Docker `imresamu/postgis:16-3.4`, 512,844 POI |
+| `/pois` | Overpass, node-only circle | `poi` table, clipped to the real isochrone polygon |
+| Elasticsearch | none — `/search` is PDOK → Nominatim | optional, `docker compose up -d elasticsearch` |
+| OpenRouteService | public API, **50 req/day/endpoint** | same, or self-hosted on `:8080` |
+| AI service | `mapscale-ai-service.vercel.app` | same (proxied, not run locally) |
 
-* An API Key from OpenRouteService
+Two separate reasons for the gap:
 
-### 2. Clone the repo:
-``` git clone https://github.com/boyee-zhang/mapscale-analysis-tool.git
+1. **Branch.** Production serves `main`, which predates the `domains/` refactor and all of the
+   Postgres work. Nothing on the live site touches a database.
+2. **Infrastructure.** Even once that branch merges, Vercel is serverless and the Postgres
+   instance is a local Docker container with no public address. So `DATABASE_URL` stays unset in
+   production and every DB-backed path degrades instead of failing — `db.enabled()` is the guard,
+   and the pre-Postgres code path is deliberately kept alive behind it. Same contract as
+   `cache.py` when Upstash is unconfigured.
+
+A consequence worth naming: the in-process single-flight that protects the ORS quota is
+per-process, so it does nothing across Vercel instances. See
+[`docs/ors-self-host.md`](docs/ors-self-host.md).
+
+---
+
+## Stack
+
+- **Database** — PostgreSQL 16 + PostGIS 3.4, `asyncpg`, hand-written SQL, **no ORM**. Numbered
+  forward-only `.sql` migrations with a self-written runner (`scripts/migrate.py`).
+- **Backend** — FastAPI (Python 3.12), async HTTPX, JSON structured logging with a per-request
+  `X-Request-ID`. Deployed to Vercel through Mangum.
+- **Frontend** — React 18 + Vite 6, MapLibre GL 5, Recharts, Axios. No spatial library: Turf.js
+  was removed from the code *and* from `package.json` when `/pois` started clipping in Postgres.
+- **Cache** — Upstash Redis (REST), demoted to a pure TTL cache.
+- **Search** — Elasticsearch 8.14, optional.
+- **AI** — DeepSeek `deepseek-chat` via the OpenAI-compatible SDK.
+- **Upstreams** — OpenRouteService, Overpass, PDOK Locatieserver + WFS, Nominatim, TomTom
+  Traffic, Holland2Stay GraphQL.
+
+A sibling repo, [`mapscale-ai-service`](https://github.com/boyee-zhang/mapscale-ai-service),
+holds a Node serverless ETL over CBS OData and is proxied in as `/api/ai/*`.
+
+---
+
+## Layout
+
+```
+api/main/
+  app.py            FastAPI instance, middleware, exception handlers
+  index.py          re-export for Vercel
+  db.py             asyncpg pool on the app lifespan; db.enabled() is the degradation guard
+  cache.py          Upstash KV, degrades silently
+  upstream/         transport only — ors, overpass, pdok, tomtom, es_client. No business rules.
+  domains/
+    geo/            spatial primitives: isochrone, POI-inside-a-shape
+    housing/        rental-market domain, owns its own router + provider registry
+  routers/          isochrone, pois, directions, region, traffic, search, health
+migrations/         0001_init … 0004_poi_category_seed  (+ .noxact.sql for CREATE INDEX CONCURRENTLY)
+scripts/            dev.sh, migrate.py, import_poi.py, seed_municipalities.py, ingest_addresses.py
+docs/pg-notes/      raw EXPLAIN / lock / vacuum output per stage
+```
+
+The rule the refactor is built on: `upstream/` is transport, domain semantics live in
+`domains/<d>/service.py`. If a function in `upstream/` needs to know what a "listing" or an
+"isochrone" is, it is in the wrong directory. Full specs in
+[`docs/architecture-refactor-plan.md`](docs/architecture-refactor-plan.md) and
+[`docs/postgres-refactor-plan.md`](docs/postgres-refactor-plan.md).
+
+---
+
+## Data pipeline
+
+**POI import** (`scripts/import_poi.py`, pyosmium) reads a Geofabrik `.osm.pbf` extract and
+upserts into `poi`:
+
+- Full Netherlands: **512,844 POI in 2m53s**. A no-op re-run is `INSERT 0 0, UPDATE 0` in 1m58s.
+- Idempotent by `ON CONFLICT DO UPDATE … WHERE <row differs>` plus a staging anti-join. Without
+  the `WHERE`, a no-op re-import rewrote every row and doubled the heap.
+- Soft delete is confined to the bounding box of what the run staged, so importing one province
+  cannot delete another.
+- The tag whitelist lives in `poi_category_rule`, so widening the import is an `INSERT`, not a
+  code change.
+- `etl_run` is the state machine; its partial unique index is predicated on
+  `finished_at IS NULL`.
+
+**Municipality polygons** (`scripts/seed_municipalities.py`, ~342 rows from the PDOK CBS WFS)
+back the choropleth: **26 ms from Postgres against 534 ms through the WFS**.
+
+---
+
+## Measured findings
+
+These are the reason the project exists in its current form. Each one is reproducible from
+`docs/pg-notes/`.
+
+- **A composite `GIST (category, geom)`** (via `btree_gist`) replaced a separate `GIST (geom)`
+  and `btree (category)`.
+- **`ST_DWithin(geom::geography, …)` is unindexable** against a `geometry` GiST index. Rewriting
+  it as `ST_Buffer(pt::geography, r)::geometry` + `ST_Contains` took the query from **1445
+  buffers to 52**.
+- **A result has a scale of validity.** At 82,259 rows (Noord-Holland), `category = ANY($1)` fell
+  out of the index condition — btree_gist's `amsearcharray` is false — and an `unnest` +
+  `CROSS JOIN LATERAL` rewrite with an inner `LIMIT` was 21x better (1708 → 80 buffers). At
+  512,844 rows the planner switched to a **Bitmap** Index Scan, which loops the array in the
+  executor, and `= ANY` came back *ahead*: **91 buffers against 98**. Same query, same index,
+  opposite conclusion at 6x the data. The inner `LIMIT` is still load-bearing.
+- **Applying a rule is not the same as it applying.** The `etl_run` partial index was built to
+  make its UPDATEs HOT, and 3/3 of the `note`/`row_count` updates are. The terminal one is
+  0/1 — it is the UPDATE that writes `finished_at`, the column the index is predicated on.
+  (`pg_stat_force_next_flush()` is required between statements, or the counters read 0.)
+- **The planner chose GiST over a Seq Scan on a 342-row table** — not for I/O, but because
+  PostGIS declares `st_contains` with `procost` 20.66 against 4368.42 for the scan.
+- **Single-flight, not caching, is what saved the ORS quota.** The browser issues `/isochrone`
+  and `/pois` concurrently with identical parameters, so both miss the cache before either
+  writes: 38 ORS calls for 18 unique parameter sets. The free tier is 50 req/day/**endpoint**.
+  Both awaits are `asyncio.shield`ed, otherwise one client disconnecting cancels the shared task
+  and fails the other request.
+
+---
+
+## Endpoints
+
+All under `/api/main`.
+
+| Endpoint | Source | Cache |
+|---|---|---|
+| `/health` | — | — |
+| `/isochrone` | ORS | 24h |
+| `/pois` | `poi` table (Overpass fallback) | 6h on the Overpass path only |
+| `/region` | PDOK reverse | 7d |
+| `/directions`, `/bulk_directions` | ORS | — |
+| `/traffic/tile-url`, `/traffic/flow`, `/traffic/incidents` | TomTom | 5m |
+| `/search` | ES → PDOK → Nominatim | — |
+| `/housing/providers`, `/listings`, `/choropleth`, `/heatmap` | provider + PDOK + `municipality` | `geocode_cache` table |
+| `/housing/etl/run`, `/housing/monitor/run` | provider → Upstash (bearer token) | — |
+| `/housing/chat`, `/housing/city-report` | DeepSeek | — |
+
+**Search waterfall.** Elasticsearch `nl_addresses` (weights overridable per request via
+`w_street` / `w_city` / `w_postcode` / `w_label`, accepted only above `ES_MIN_SCORE=15`) → PDOK,
+filtered so every long query token must appear in the label → Nominatim. Tier 2–3 results are
+written back into ES, so the index self-enriches. Without `ES_URL` the chain simply starts at
+PDOK.
+
+**Geocoding has two traps, both guarded.** PDOK's free search always returns a best match, so a
+malformed address resolves to an arbitrary place in the country; a result whose
+`woonplaatsnaam` is not the expected city is rejected and falls back to the city centre. And
+PDOK does not index English city names — without the translation table, every **The Hague**
+address geocodes to **Zwolle**.
+
+---
+
+## Getting started
+
+Requirements: Python 3.12, Node 18+, Docker, an OpenRouteService API key.
+
+```bash
+git clone https://github.com/boyee-zhang/mapscale-analysis-tool.git
 cd mapscale-analysis-tool
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements-local.txt
+npm --prefix frontend install
 ```
 
-### 3. Frontend Setup:
+Create `.env` in the repo root:
+
+```
+ORS_API_KEY=                   # required for isochrone + directions
+ORS_BASE_URL=                  # optional; defaults to the public host
+TOMTOM_API_KEY=                # required for traffic
+DATABASE_URL=postgresql://mapscale:mapscale@localhost:5432/mapscale
+ES_URL=                        # optional; omit and /search starts at PDOK
+UPSTASH_REDIS_REST_URL=        # optional; omit to disable caching
+UPSTASH_REDIS_REST_TOKEN=
+ETL_CRON_TOKEN=                # guards the housing ETL/monitor endpoints
+DEEPSEEK_API_KEY=              # housing chat / monitor / city narrative
+```
+
+Then one command brings up the whole stack — port pre-check → Postgres (`--wait`) → migrations
+→ uvicorn `:8000` + Vite `:5173`, and Ctrl-C stops all of it:
+
 ```bash
-cd frontend
-npm install
-npm run dev
+./scripts/dev.sh
 ```
-### 4. Backend Setup:
+
+It deliberately leaves out two compose services: `ors` (the first start builds three routing
+graphs, tens of minutes and several GB) and `elasticsearch` (`/search` already degrades, and
+this repo's `esdata` volume is empty). Start either by name when you want it.
+
+### Load the POI table
+
 ```bash
-# from project root
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+# download a Geofabrik extract by hand into the gitignored data/
+#   https://download.geofabrik.de/europe/netherlands/
+python scripts/import_poi.py data/netherlands-latest.osm.pbf
+python scripts/seed_municipalities.py
 ```
 
-Create a `.env` file in the project root:
-```
-ORS_API_KEY=your_openrouteservice_key
-TOMTOM_API_KEY=your_tomtom_key
-```
+### Optional services
 
-Start the backend:
 ```bash
-uvicorn api.main.app:app --reload --port 8000
+docker compose up -d elasticsearch     # :9200, then: python scripts/ingest_addresses.py
+docker compose up -d ors               # :8080 — first start builds graphs. docs/ors-self-host.md
 ```
-## 📝 License
 
-Distributed under the Apache License 2.0. See `LICENSE` for more information.
+### Lint and test
 
-The application will be available at http://localhost:5173.
+```bash
+ruff check api/                        # line-length 120
+pytest tests/unit                      # no server needed
+BASE_URL=http://localhost:8000 pytest   # integration tests hit a live server
+```
 
-This is just the start. Let's keep building, keep learning, and keep discovering. 🚀
+The isochrone and directions tests are marked `requires_ors` and need `ORS_API_KEY` set,
+so they are skipped without one. Run them sparingly: the free tier is 50 requests per day
+per endpoint, and a full integration pass spends a visible fraction of it.
 
-**Happy New Year!** 🎇
+A note on the container: its memory parameters are deliberately small
+(`shared_buffers=128MB`, `work_mem=4MB`) so spills and autovacuum behaviour become observable at
+~10M rows instead of ~1B. Do not "fix" them. The image is `imresamu/postgis` rather than
+`postgis/postgis` because the latter is amd64-only, and emulating it on Apple Silicon makes
+every `EXPLAIN ANALYZE` timing meaningless.
+
+---
+
+## Current limitations
+
+Honest list; what remains is upstream, or missing work rather than a defect.
+
+- **Holland2Stay's GraphQL endpoint returns 403** behind a Cloudflare *managed challenge*, which
+  needs a JS engine and a Turnstile token. All seven `curl_cffi` impersonation profiles return a
+  byte-identical 403, so TLS fingerprinting is no longer the discriminator. `/housing/listings`,
+  `/heatmap`, `/city-report`, `/chat` and `/choropleth?direction=future` all fail — as a 502,
+  the provider having translated the upstream 403. Every other
+  Dutch commercial rental source sits behind the same protection — measured matrix in
+  [`docs/data-source-feasibility.md`](docs/data-source-feasibility.md). Circumvention is out of
+  scope. The ETL *exercises* are unaffected; the **data** is what's blocked, which is why
+  `housing_listing` does not exist yet.
+- **ORS's `cycling-*` graphs are broken upstream and return HTTP 200**, so cycling mode silently
+  under-reports — all four profiles answer a 600 s isochrone with the same 0.031 km² blob,
+  roughly 400x too small. `MODE_MAPPING["cycling"]` is deliberately *not* re-pointed; every
+  cycling graph is equally broken and serving a walking graph for a bike request would be a
+  worse lie. `walking` *is* remapped to `foot-hiking`, which is measured-equivalent, because
+  `foot-walking` black-holes the request. Evidence:
+  [`docs/pg-notes/ors-profile-outage.md`](docs/pg-notes/ors-profile-outage.md).
+- No test coverage for the housing subsystem, the DeepSeek agents, or any error path. No rate
+  limiting; upstream quotas are the only backpressure. Only one housing provider exists.
+- Traffic figures in the AI service are a PV27 (North Holland) provincial proxy applied to every
+  municipality, so other provinces are not location-specific.
+
+---
+
+## Roadmap
+
+Numbered by the stages in [`docs/postgres-refactor-plan.md`](docs/postgres-refactor-plan.md),
+which is authoritative.
+
+- **Stage 0 — done.** `geocode_cache`, `municipality`, the migration runner, the degradation guard.
+- **Stage 1 — done.** Offline OSM POI import, `etl_run`, `/pois` answered from PostGIS.
+- **Stage 1′ — shelved.** Listing-snapshot ETL, blocked on data rather than on code (see above).
+  History is the one thing that cannot be backfilled later, so this is the costliest thing to defer.
+- **Stage 2.** A transactional outbox plus a `FOR UPDATE SKIP LOCKED` worker. Needs a long-lived
+  process, so the backend has to leave Vercel first.
+- **Stage 3.** Synthetic snapshots at scale: partitioning, autovacuum and bloat behaviour, tuning.
+- **Stage 4.** Adding a geometry column online and backfilling it without blocking reads.
+- **Stage 5 — deferred.** PgBouncer and a read replica.
+
+Front-end state management is explicitly deferred: `MapContainer.jsx` is still the store.
+
+## License
+
+Apache 2.0 — see [`LICENSE`](LICENSE).

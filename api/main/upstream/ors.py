@@ -1,5 +1,5 @@
 import httpx
-from ..config import ORS_API_KEY, MODE_MAPPING
+from ..config import ORS_API_KEY, ORS_BASE_URL, MODE_MAPPING
 from ..errors import ExternalServiceError
 from ..logger import get_logger
 
@@ -8,7 +8,7 @@ logger = get_logger("client.ors")
 
 async def fetch_isochrone(lng: float, lat: float, minutes: int, profile: str) -> dict:
     ors_profile = MODE_MAPPING.get(profile, "foot-walking")
-    url = f"https://api.openrouteservice.org/v2/isochrones/{ors_profile}"
+    url = f"{ORS_BASE_URL}/isochrones/{ors_profile}"
     body = {"locations": [[lng, lat]], "range": [minutes * 60], "range_type": "time"}
 
     logger.info("→ isochrone", extra={"ors_profile": ors_profile, "lng": lng, "lat": lat, "minutes": minutes})
@@ -34,7 +34,7 @@ async def fetch_directions(
     start_lng: float, start_lat: float, end_lng: float, end_lat: float, mode: str
 ) -> dict:
     profile = MODE_MAPPING.get(mode, "foot-walking")
-    url = f"https://api.openrouteservice.org/v2/directions/{profile}"
+    url = f"{ORS_BASE_URL}/directions/{profile}"
     params = {"api_key": ORS_API_KEY, "start": f"{start_lng},{start_lat}", "end": f"{end_lng},{end_lat}"}
 
     logger.info("→ directions", extra={"profile": profile})

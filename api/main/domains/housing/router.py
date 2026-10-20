@@ -11,24 +11,27 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 
-from ..config import ETL_CRON_TOKEN, UPSTASH_TOKEN, UPSTASH_URL
-from ..errors import ExternalServiceError, InternalError
-from ..housing import providers as _  # noqa: F401 — triggers provider self-registration
-from ..housing import registry
-from ..housing.boundaries import fetch_choropleth_geojson
-from ..housing.etl import run as run_etl
-from ..housing.geocoder import enrich_batch
-from ..housing.chat_agent import run_chat
-from ..housing.monitor import run_monitor
-from ..housing.stats import apply_time_filter, compute_city_stats, generate_city_narrative
-from ..housing.upstash import UpstashClient
-from ..logger import get_logger
+from ...config import ETL_CRON_TOKEN, UPSTASH_TOKEN, UPSTASH_URL
+from ...errors import ExternalServiceError, InternalError
+from ...logger import get_logger
+from . import providers as _  # noqa: F401 — triggers provider self-registration
+from . import registry
+from .boundaries import fetch_choropleth_geojson
+from .chat_agent import run_chat
+from .etl import run as run_etl
+from .geocoder import enrich_batch
+from .monitor import run_monitor
+from .stats import apply_time_filter, compute_city_stats, generate_city_narrative
+from .upstash import UpstashClient
 
 router = APIRouter(prefix="/api/main/housing")
 logger = get_logger("router.housing")
 
 
-def _verify_cron_token(authorization: str = Header(...)):
+def _verify_cron_token(authorization: Optional[str] = Header(None)):
+    # Header(None), not Header(...): a required header makes FastAPI reject a missing
+    # Authorization with 422 before this body runs, which reads as "bad request" when
+    # the truth is "unauthenticated". Optional here, 401 below.
     expected = f"Bearer {ETL_CRON_TOKEN}"
     if not ETL_CRON_TOKEN or authorization != expected:
         raise HTTPException(status_code=401, detail="Invalid cron token")

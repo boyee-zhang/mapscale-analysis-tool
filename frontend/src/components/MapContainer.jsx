@@ -1,5 +1,4 @@
-import React, { useRef, useState, useMemo, useEffect } from 'react';
-import * as turf from '@turf/turf';
+import React, { useRef, useState, useEffect } from 'react';
 import { useMap } from '../hooks/useMap';
 import { api } from '../api.js';
 import PoiMarker from './PoiMarker';
@@ -43,7 +42,6 @@ const MapContainer = () => {
     minutes: 10,
     mode: 'walking'
   });
-  const [, setHoveredRoute] = useState(null);
 
   // 2. 响应式数据同步
   useEffect(() => {
@@ -173,16 +171,6 @@ const MapContainer = () => {
     loadTraffic();
   }, [isReady, showTraffic, data.iso]);
 
-  // 6. 基于等时线过滤 POI
-  const filteredPois = useMemo(() => {
-    if (!data.iso || !data.pois.length) return [];
-    const polygon = data.iso.features[0];
-    return data.pois.filter(p => {
-      if (!p.lon || !p.lat) return false;
-      return turf.booleanPointInPolygon(turf.point([p.lon, p.lat]), polygon);
-    });
-  }, [data.iso, data.pois]);
-
   const handleAIAnalysis = async () => {
     try {
       console.log('[MapContainer] fetching region for', params.center);
@@ -216,7 +204,7 @@ const MapContainer = () => {
       <AnalysisPanel
         params={params}
         setParams={setParams}
-        poiCount={filteredPois.length}
+        poiCount={data.pois.length}
         loading={data.loading}
         onAIAnalysis={handleAIAnalysis}
         showTraffic={showTraffic}
@@ -278,14 +266,13 @@ const MapContainer = () => {
       {/* 渲染 Markers */}
       {isReady && <CenterMarker map={map} pos={params.center} />}
 
-      {isReady && filteredPois.map(poi => (
+      {isReady && data.pois.map(poi => (
         <PoiMarker
-          key={poi.id}
+          // Not poi.id alone: a node and a way can share an id, and the backend now
+          // returns both. Overpass only ever returned nodes, which hid the collision.
+          key={`${poi.type}/${poi.id}`}
           poi={poi}
           map={map}
-          centerLoc={params.center}
-          mode={params.mode}
-          setHoveredRoute={setHoveredRoute}
         />
       ))}
     </div>

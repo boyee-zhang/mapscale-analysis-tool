@@ -10,7 +10,7 @@ from datetime import date, timedelta
 
 from openai import AsyncOpenAI
 
-from ..config import DEEPSEEK_API_KEY
+from ...config import DEEPSEEK_API_KEY
 from .models import HousingListing
 
 # Central train station coordinates for every H2S city

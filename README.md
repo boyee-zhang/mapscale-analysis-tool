@@ -24,7 +24,7 @@ differently on purpose.
 
 | | Vercel (production) | Local (`./scripts/dev.sh`) |
 |---|---|---|
-| Code | `main` | `refactor/modular-architecture` (9 commits ahead) |
+| Code | `main` | `refactor/modular-architecture` (ahead of `main`) |
 | Backend | one Mangum-wrapped serverless function | `uvicorn --reload` on `:8000` |
 | Postgres / PostGIS | **none** | Docker `imresamu/postgis:16-3.4`, 512,844 POI |
 | `/pois` | Overpass, node-only circle | `poi` table, clipped to the real isochrone polygon |
@@ -235,8 +235,9 @@ pytest tests/unit                      # no server needed
 BASE_URL=http://localhost:8000 pytest   # integration tests hit a live server
 ```
 
-CI runs `ruff check api/` and `npm run build`. Isochrone/directions tests are marked
-`requires_ors` and **skip in CI** — the ORS free tier blocks datacenter IPs.
+The isochrone and directions tests are marked `requires_ors` and need `ORS_API_KEY` set,
+so they are skipped without one. Run them sparingly: the free tier is 50 requests per day
+per endpoint, and a full integration pass spends a visible fraction of it.
 
 A note on the container: its memory parameters are deliberately small
 (`shared_buffers=128MB`, `work_mem=4MB`) so spills and autovacuum behaviour become observable at

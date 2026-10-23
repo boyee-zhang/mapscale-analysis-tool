@@ -97,9 +97,12 @@ BASE_URL=http://localhost:8000 pytest    # integration tests hit a live server
 pytest tests/unit                        # unit tests, no server needed
 ```
 
-CI (`.github/workflows/`) runs `ruff check api/` + `npm run build`, and pytest with
-`ORS_API_KEY`/`TOMTOM_API_KEY` secrets. Isochrone/directions tests are marked
-`requires_ors` and **skip in CI** — ORS's free tier blocks datacenter IPs.
+CI lives in two workflows: `ci.yml` runs `ruff check api/` + `npm run build`, and `test.yml`
+starts a uvicorn and runs unit + integration tests with the `ORS_API_KEY`/`TOMTOM_API_KEY`
+secrets. **Both trigger only on push/PR to `main`**, so pushing a feature branch runs nothing.
+Isochrone/directions tests are marked `requires_ors` and skip in CI — not because of an IP ban
+(that hypothesis was disproved; `docs/pg-notes/ors-profile-outage.md`) but because the free tier
+is 50 requests/day/endpoint and the `cycling-*` graphs answer 200 while being broken.
 
 ### Environment variables (`.env` at repo root)
 ```
@@ -430,7 +433,6 @@ console.log('[api] fetchIsochrone response', { featureCount: data.features?.leng
   status codes, one cause; do not debug them as three problems. Quota is counted per endpoint,
   and **403 responses carry no `x-ratelimit-*` headers**, so reading the remaining quota
   requires probing an endpoint that still works. `docs/ors-self-host.md` is the way out.
-- `domains/housing/router.py:190` docstring says the monitor uses "Claude" — it uses DeepSeek.
 - `/traffic/flow` has an `api.js` method but no caller; `/bulk_directions` has no frontend method.
 - Traffic data in the AI service is a PV27 (North Holland) provincial proxy applied to **every**
   municipality; results for other provinces are not location-specific.

@@ -414,3 +414,96 @@ a local table (0.3–0.4 ms), and a cached copy would only go stale the next tim
   country scale.
 - `poi_import` is 31 MB of staging for 22 MB of table and is left populated after a run.
   Harmless (UNLOGGED, truncated at the start of the next run) but it is not free disk.
+
+---
+
+# Re-measured at country scale, 2026-10-18
+
+`data/netherlands-latest.osm.pbf` (1.3 GB) replaces the province extract. Same cluster,
+same parameters, `ANALYZE poi` before measuring, second (warm) run reported.
+
+```
+staged 512844 objects, 0 without geometry
+merge INSERT 0 430707, soft delete UPDATE 17
+poi now has 512844 live rows
+       2m52.9s total
+```
+
+6.2x the rows for 8.5x the wall clock. The 17 soft deletes are the Noord-Holland rows whose
+OSM object disappeared between the two extracts, and they are the only evidence that the
+bbox-scoped delete pass works across two differently-shaped imports.
+
+Immediately re-running it is still a true no-op at this size:
+
+```
+merge INSERT 0 0, soft delete UPDATE 0      1m58.3s
+```
+
+Zero writes out of 512,844 rows. The second run is a minute faster than the first because the
+only difference is the writes it no longer does.
+
+## Index sizes now
+
+| index | size | idx_scan |
+|---|---|---|
+| `poi_cat_geom_gist` | 34 MB | 187 |
+| `poi_pkey` | 24 MB | 1,354,730 |
+| `poi_tags_gin` | 26 MB | 8 |
+
+`poi_tags_gin` is still the index nothing queries — 8 scans, all of them mine. 6.2x the rows
+grew it 3x (8648 kB -> 26 MB), so it is no longer the largest index, but it is still 26 MB
+maintained on every write for a query path that does not exist.
+
+## The `= ANY` finding does NOT survive the scale change
+
+This is the correction that matters. At 82,259 rows `category = ANY($1)` fell to a heap
+filter (1708 buffers) and the `unnest` + `LATERAL` rewrite was 21x better (80). At 512,844
+rows, same query, same index:
+
+| form | plan | buffers |
+|---|---|---|
+| `= ANY('{supermarket,convenience,gym}')` | **Bitmap** Index Scan, `Index Cond: ((category = ANY (...)) AND (geom @ box))` | **91** |
+| `unnest` + LATERAL + inner `LIMIT` | Nested Loop, 3x Bitmap Index Scan, `Index Cond: ((category = c.category) AND ...)` | 98 |
+
+The array is now **inside the Index Cond**, which the 82k measurement said was impossible.
+Both return the same 73 rows.
+
+The earlier explanation was half right. `pg_am.amsearcharray` is false for GiST, so a *plain*
+Index Scan cannot take a `ScalarArrayOpExpr`. But a **Bitmap** Index Scan does not need the
+AM to support arrays — the executor runs one index scan per array element and ORs the
+bitmaps together. At 82k rows the planner costed a plain Index Scan cheaper and the array
+fell out to a filter; at 512k it switches to a bitmap plan and the array is pushed back down.
+
+So the rewrite's win was **a property of the plan the planner happened to choose, not a
+property of GiST.** It is scale-dependent, and at the current size it is marginally *worse*
+(98 vs 91 — three bitmap scans instead of one). The `unnest` form is still what `geo/service.py`
+issues; it is not wrong, and it is immune to the planner flipping back at a different size,
+but the "21x" number must not be quoted as if it were a law. Recite this as: *measured it,
+believed the explanation, re-measured at 6x the data and the effect inverted.*
+
+## What did hold, and got stronger
+
+`ST_DWithin(geom::geography, …)` against a `geometry` GiST, 800 m radius, 3 categories:
+
+| form | buffers | time |
+|---|---|---|
+| `ST_DWithin(geom::geography, …)` | **6580** (1900 hit + 4680 **read**) | 247 ms |
+| `ST_Buffer(pt::geography, r)::geometry` + `ST_Contains` | **62** | 0.45 ms |
+
+106x the buffers and 550x the time, same 42 rows. At 82k it was 1445 vs 52 and everything was
+cached; at 512k the filtered-out candidate set (3074 rows removed per loop) no longer fits in
+`shared_buffers`, so 4680 of those buffers are real reads. **The bad predicate degrades
+superlinearly** — it loses cache residency before it loses anything else.
+
+## Single-category and polygon-only
+
+| query | 82k | 512k | note |
+|---|---|---|---|
+| polygon only (1.2 km circle) | 897 | 892 | now a Parallel Bitmap Heap Scan; index part 148 buffers for 2776 index rows |
+| `category='supermarket'` | 29 | 28 | plain Index Scan, 19 rows |
+| `category='car_parking'` | 65 | 99 | parallel bitmap, 205 index rows |
+
+Polygon-only did not move, because the bbox limits the candidate set and the country extract
+adds rows *outside* that bbox. This answers the open question left at 82k ("re-measure the
+composite-vs-pair conclusion at country scale"): a geom-only search on a composite GiST does
+not degrade at 6x the rows, so the decision to drop `GIST(geom)` still stands.

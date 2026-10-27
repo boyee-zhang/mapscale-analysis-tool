@@ -187,7 +187,7 @@ async def trigger_monitor(
     """
     Run the housing monitor agent.
 
-    Queries Upstash for new listings in the past N hours, then uses Claude
+    Queries Upstash for new listings in the past N hours, then uses DeepSeek
     to generate a natural-language summary with market context.
     """
     city_list = [c.strip() for c in cities.split(",")] if cities else None

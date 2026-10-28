@@ -240,12 +240,16 @@ every `EXPLAIN ANALYZE` timing meaningless.
 
 Honest list; what remains is upstream, or missing work rather than a defect.
 
-- **ORS's `cycling-*` graphs are broken upstream and return HTTP 200**, so cycling mode silently
-  under-reports — all four profiles answer a 600 s isochrone with the same 0.031 km² blob,
-  roughly 400x too small. `MODE_MAPPING["cycling"]` is deliberately *not* re-pointed; every
-  cycling graph is equally broken and serving a walking graph for a bike request would be a
-  worse lie. `walking` *is* remapped to `foot-hiking`, which is measured-equivalent, because
-  `foot-walking` black-holes the request. Evidence:
+- **An ORS `cycling-*` isochrone can come back ~400x too small with HTTP 200**, and nothing in
+  the stack can tell: the polygon is well-formed, so neither `raise_for_status()` nor the
+  `/pois` circle fallback fires, and cycling mode silently under-reports POI. This was first
+  read as "all four cycling graphs are broken upstream"; re-measuring on a self-hosted instance
+  showed it is a property of the *coordinate*, not the graph — the original test point returns
+  0.031 km², and 200 m away in any direction returns 10–15 km² with a healthy `reachfactor`.
+  What is still missing is the plausibility check, which is what would catch either version.
+  `walking` *is* remapped to `foot-hiking`, which is measured-equivalent, because the public
+  instance black-holes `foot-walking` (a self-hosted one serves it fine, so that fault is in
+  the deployment). Evidence:
   [`docs/pg-notes/ors-profile-outage.md`](docs/pg-notes/ors-profile-outage.md).
 - No test coverage for any error path. Removing the housing subsystem took
   `tests/unit/test_geocode_key.py` with it — 16 of the 25 unit tests — so `pytest tests/unit`

@@ -356,18 +356,28 @@ console.log('[api] fetchIsochrone response', { featureCount: data.features?.leng
 
 ## Known Issues
 
-- **ORS's `cycling-*` graphs are broken upstream and return HTTP 200, so `cycling` mode
-  silently under-reports.** All four cycling profiles answer a 600 s isochrone with the same
-  0.031 km² blob (`reachfactor` 0.0016 against foot's 1.0; a bike covers ~9x a walk, so this is
-  ~400x too small), and `/matrix/cycling-regular` returns `null` durations between points 800 m
-  apart. Because it is a 200 with a well-formed polygon, neither `raise_for_status()` nor the
-  `/pois` circle fallback can detect it. `MODE_MAPPING["cycling"]` is deliberately **not**
-  re-pointed — all four cycling graphs are equally broken, and substituting a foot or driving
-  graph for a bike request would be a worse lie. `foot-walking` was broken the same way but
-  louder (it black-holes the request entirely), and `walking` is therefore mapped to
-  `foot-hiking`, which is measured-equivalent. Both profiles are still current in the official
-  spec, so this is an outage, not a deprecation. Full evidence and the narrowing steps:
-  `docs/pg-notes/ors-profile-outage.md`. Revert the walking remap if upstream recovers.
+- **A `cycling-*` isochrone can be ~400x too small and still answer HTTP 200, so `cycling`
+  mode silently under-reports.** At `(4.9003, 52.3791)` a 600 s cycling isochrone is a
+  0.031 km² blob (`reachfactor` 0.0016 against foot's 1.0) and `/directions` from it fails
+  with ORS code 2009. Because it is a 200 with a well-formed polygon, neither
+  `raise_for_status()` nor the `/pois` circle fallback can detect it.
+  **Corrected 2026-10-28:** this was recorded as "all four cycling graphs are broken upstream",
+  which did not survive a second coordinate. A self-hosted v10.1.0 built from our own extract
+  reproduces the blob at that exact point and returns 10–16 km² with `reachfactor` 0.50–0.82
+  at Haarlem, Alkmaar, Hoorn and 200 m in any direction from the test point — the healthy
+  figure the original note itself predicted. The point snaps to a bike-disconnected component.
+  The original conclusion came from testing every profile at one coordinate, so it measured
+  the coordinate. Whether the *public* graph behaves the same away from that point is
+  **untested** (its 50/day quota was spent that day).
+  `MODE_MAPPING["cycling"]` is still **not** re-pointed, and the plausibility check is still
+  owed — it is what would have caught this in either reading.
+  `foot-walking` is a different fault: the public instance black-holes it entirely, while a
+  self-hosted instance serves it identically to `foot-hiking` (1.489 km², `reachfactor` 1.0,
+  routes 731 m), so that one is in the deployment, not in ORS or a graph. `walking` stays
+  mapped to `foot-hiking` regardless, because production on Vercel talks to the public API —
+  re-pointing it would fix localhost by breaking prod. Both profiles are still current in the
+  official spec, so neither is a deprecation. Full evidence and the narrowing steps:
+  `docs/pg-notes/ors-profile-outage.md`.
 - The official ORS OpenAPI spec is at `https://docs.openrouteservice.org/openrouteservice/v2/docs`
   (every `…/api-docs` URL 404s, and the `/dev/` docs page is a JS SPA that fetches it). It
   declares `servers[0]` as **`https://api.heigit.org`** with paths prefixed

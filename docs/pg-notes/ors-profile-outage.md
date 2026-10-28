@@ -134,9 +134,82 @@ answered. It is now verified against a real ORS isochrone.
 - **Should we move to `https://api.heigit.org/openrouteservice/v2`?** It is what the spec
   documents; our host is undocumented and behaves identically today. Low risk, but it is a
   base-URL change to the only hard external dependency, so it is a decision, not a cleanup.
-- `cycling` mode is broken for users until upstream fixes its graph. There is no workaround.
+- ~~`cycling` mode is broken for users until upstream fixes its graph.~~ **Answered below —
+  there was no broken graph to fix.** The plausibility check in the first bullet is now the
+  whole of the remaining work.
 - Revisit `MODE_MAPPING["walking"]` if/when `foot-walking` recovers. Nothing detects that
-  automatically.
-- Self-hosting ORS (docker, NL extract — we already download one for `import_poi.py`) would
-  remove the dependency on a free tier with no SLA entirely, and would make `/v2/status`
-  available so broken graphs are visible. Out of scope here; noted as the structural answer.
+  automatically, and the self-hosted measurement below shows a recovery would have to happen
+  on the **public** instance to matter: prod runs on Vercel against the public API.
+- ~~Self-hosting ORS~~ **done 2026-10-28** — see below. It did make `/v2/status` available,
+  and that is what falsified this note's main conclusion.
+
+
+---
+
+# Re-measured against a self-hosted instance, 2026-10-28
+
+`docker compose up -d ors`, `openrouteservice/openrouteservice:v10.1.0`, graphs built from the
+same `data/noord-holland-latest.osm.pbf` that `scripts/import_poi.py` reads. Runbook and the
+build figures: `docs/ors-self-host.md`.
+
+The prediction this note's own structure implied — *we build the graphs from our own extract, so
+a broken-graph fault cannot come with us* — was half right, and the half that was wrong is the
+interesting half.
+
+## What the second instance separated
+
+Same request as the original matrix (`range=600`, `attributes=["area","reachfactor"]`,
+`area_units=km`, centre `4.9003, 52.3791`):
+
+| profile | public, 2026-10-18 | self-hosted, 2026-10-28 | where the fault is |
+|---|---|---|---|
+| `foot-hiking` | 1.489 km² / 1.0 | 1.489 km² / 1.0 | — identical |
+| `driving-car` | 19.279 km² / 0.0221 | 20.477 km² / 0.0235 | — differs only by OSM date |
+| `cycling-regular` | 0.031 km² / 0.0016 | **0.0308 km² / 0.0016** | **not upstream — see below** |
+| `foot-walking` | no response at all | **1.489 km² / 1.0, routes 731 m in 526 s** | **the public deployment** |
+
+Areas were re-derived in PostGIS from the returned geometry rather than read from ORS's own
+`area` attribute (`ST_Area(geom::geography)/1e6`): 1.4918 / 20.5117 / 0.0309 km², agreeing
+within 0.2%. So the attribute is trustworthy here — but that is now a measured statement.
+
+**`foot-walking` works when we host it.** Identical to `foot-hiking` to eight decimal places,
+and it routes the same 731 m. The black hole is therefore in the public deployment, not in ORS
+and not in any graph. It does *not* license re-pointing `MODE_MAPPING["walking"]`: that is one
+global constant and production on Vercel talks to the public API, so re-pointing it would fix
+localhost by breaking prod.
+
+## The cycling conclusion was a single-point measurement
+
+The blob reproduced locally, which looked at first like a much worse finding — a bug we build
+ourselves. It is not. Varying **one axis, the coordinate**, against the same graph:
+
+| centre | area | reachfactor |
+|---|---|---|
+| `4.9003, 52.3791` — the original test point | **0.0308 km²** | **0.0016** |
+| 200 m east | 15.124 km² | 0.7703 |
+| 200 m west | 14.693 km² | 0.7483 |
+| 200 m north | 14.465 km² | 0.7367 |
+| 200 m south | 10.144 km² | 0.5166 |
+| Dam square, ~700 m west | 14.885 km² | 0.7581 |
+| Haarlem | 14.867 km² | 0.7572 |
+| Alkmaar | 16.082 km² | 0.8190 |
+| Hoorn | 12.454 km² | 0.6343 |
+
+10–16 km² is *the healthy number this note predicted*: "a 10-minute bike ride should cover
+roughly 9x a 10-minute walk (~13 km²)". The graph is fine. `/directions` from the bad point
+fails with ORS code `2009` ("Unable to find a route") while `foot-walking` covers the same
+731 m, so that one coordinate snaps to a bike-disconnected component — a few metres of path
+that no bike edge leaves.
+
+The original matrix tested **every profile at one coordinate**. Four cycling profiles agreeing
+read as four broken graphs; it was one bad snap seen four times. The note's own lesson, one
+section up, is *"vary one axis at a time against a known-good control"* — the control here is
+the location, and it was the one axis never varied.
+
+What does **not** change: a 400x-too-small polygon still arrives as HTTP 200 with a well-formed
+ring, and nothing in the stack can see it. The plausibility check in **Open** is still owed,
+and is now the entire fix.
+
+What is **not** established: whether the public graph is also healthy away from that point.
+The one request budgeted to check it returned `403 {"error": "Quota exceeded"}` — the 50/day
+was already spent. Untested, not confirmed.

@@ -67,6 +67,14 @@ const MapContainer = () => {
   // that call is currently dead, so nothing absorbs the repeats).
   useEffect(() => {
     if (!isReady) return;
+    // An empty selection means "show nothing" — it is not a request for the backend's
+    // default set. The distinction has to live here, because an omitted `categories` param
+    // and an empty one are indistinguishable over HTTP. Returning early also skips a
+    // request that would have cost a server-side ORS isochrone for zero markers.
+    if (!categories || categories.length === 0) {
+      setData(d => ({ ...d, pois: [], loading: false }));
+      return;
+    }
     let cancelled = false;
 
     const timer = setTimeout(async () => {

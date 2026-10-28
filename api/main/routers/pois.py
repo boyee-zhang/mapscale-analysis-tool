@@ -15,8 +15,9 @@ async def get_pois(
     profile: str = "walking",
     categories: list[str] | None = Query(
         None,
-        description="poi_category keys; repeat the param. Defaults to the legacy "
-        "supermarket/convenience/gym set. Ignored when Postgres is unconfigured.",
+        description="poi_category keys; repeat the param. Omitting it entirely falls back "
+        "to the legacy supermarket/convenience/gym set; an explicitly empty list returns no "
+        "elements. Beyond that, the filter is ignored when Postgres is unconfigured.",
     ),
 ):
     logger.info(

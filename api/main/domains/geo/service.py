@@ -164,7 +164,16 @@ def _element(row) -> dict:
 async def get_pois(
     lng: float, lat: float, minutes: int, profile: str, categories: list[str] | None = None
 ) -> dict:
-    cats = list(categories) if categories else list(DEFAULT_CATEGORIES)
+    # `None` means the caller omitted the parameter, and gets the legacy default set.
+    # `[]` means the caller explicitly asked for no categories, which is NOT the same thing.
+    # Conflating them (`if categories`) was the bug: deselecting every type in the picker
+    # returned the default supermarket/convenience/gym instead of nothing.
+    cats = list(categories) if categories is not None else list(DEFAULT_CATEGORIES)
+    if not cats:
+        # Short-circuited before the db.enabled() branch on purpose: the Overpass path cannot
+        # filter by category at all, so without this it would answer an empty selection with
+        # its three hardcoded types.
+        return {"elements": []}
 
     if not db.enabled():
         # Pre-Postgres path. Cached, because every call is a 3-mirror Overpass query.

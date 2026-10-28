@@ -26,8 +26,11 @@ export const api = {
     // bracket-less repeated form. Passing the array straight through silently fell back to
     // the backend's default three categories instead of erroring.
     const params = new URLSearchParams({ lng, lat, minutes, profile });
-    // An empty selection must not become `categories=` — that asks for nothing. Omitting
-    // the key entirely lets the backend apply its own default.
+    // An empty array appends nothing, so the request looks identical to one that never
+    // mentioned categories — and the backend treats an omitted param as "use the default
+    // three". That is why callers must not reach here with an empty selection; MapContainer
+    // returns before fetching instead. (This comment previously described that fallback as
+    // intended behaviour; it was the bug.)
     (categories || []).forEach(c => params.append('categories', c));
     return client.get('/api/main/pois', { params }).then(res => res.data.elements || []);
   },

@@ -1,5 +1,10 @@
 # 结构重构计划
 
+> **2026-10-28:housing 子系统已移除**(功能不再支持)。本文档中**已完成阶段**对 housing 的
+> 描述保留为历史记录——阶段 A 的产物(`domains/` 骨架、`upstream/` 传输层规则)现在仍在用,
+> 抹掉它会让"为什么这样组织"失去依据。**面向未来的 housing 规划已删除**,其中影响最大的是
+> PG 阶段 2/3/4 的路线:见下方「PG 阶段 2/3/4」一节。
+
 分支:`refactor/modular-architecture`(截至撰写时仅有 1 个 commit `afed2d2`,只改了 CLAUDE.md,代码未动)
 
 配套文档:`docs/postgres-refactor-plan.md`。两份计划有依赖关系,见「与 Postgres 计划的交错」。
@@ -54,10 +59,6 @@ api/main/
     search/
       router.py     /search
       service.py    ES → PDOK → Nominatim 瀑布 + 回写
-    housing/
-      router.py     /housing/*
-      service.py    用例编排
-      repo.py       SQL 全部集中在此(Postgres 计划引入)
       models.py registry.py providers/ geocoder.py etl.py stats.py
       chat_agent.py monitor.py boundaries.py
     regions/        阶段 D:从 Node 迁来的 CBS ETL
@@ -67,7 +68,7 @@ api/main/
 
 `upstream/` 里的函数**不得**包含业务规则、缓存决策或领域类型。
 
-> 判据:如果 `upstream/` 里的某个函数需要知道什么是 "listing"、什么是 "isochrone",它就放错了。
+> 判据:如果 `upstream/` 里的某个函数需要知道什么是 "isochrone",它就放错了。
 
 这条规则是 RC1 的实际解法。`clients/` 当前的问题不是"按上游组织"本身——传输层按上游组织
 是正确的——而是**没有领域层,所以业务语义无处可去,只能渗进 clients 和 routers**。
@@ -75,7 +76,7 @@ api/main/
 
 PDOK 是典型案例:它一个上游服务承担 4 种语义(反向地理编码、Locatieserver 自由搜索、
 地址转坐标、CBS WFS 边界)。处置是 `upstream/pdok.py` 只提供 4 个薄 HTTP 函数,
-各自的语义分别归 `geo` / `search` / `housing` 三个领域的 service。
+各自的语义分别归 `geo` / `search` 领域的 service(地址转坐标那一支随 housing 一起移除)。
 
 ### 命名决定:`spatial/` → `geo/`(2026-10-18 改名,原稿全文已随之更新)
 
@@ -102,8 +103,9 @@ PDOK 是典型案例:它一个上游服务承担 4 种语义(反向地理编码�
 
 它是其他领域组合的**空间原语层**,不是平级的功能模块。
 
-落地检验:阶段 B 完成后,`housing` 要实现"房源周边 15 分钟可达什么"时,必须
-`from ..geo import service as geo`,而不是自己再写一遍 isochrone 调用。
+落地检验:阶段 B 完成后,任何领域要实现"某点周边 15 分钟可达什么"时,必须
+`from ..geo import service as geo`,而不是自己再写一遍 isochrone 调用。原稿用 housing 的
+"房源周边可达性"举例,该域已移除;检验本身不变,`search` 要做"按可达性排序结果"就是下一个用例。
 
 `traffic` 并入 `geo` 而非独立成域——它是地图叠加数据,不是独立业务能力,
 且 `/traffic/flow` 目前无任何调用方(见 CLAUDE.md 已知问题)。
@@ -232,7 +234,8 @@ Node 侧保留的 `POST /api/analyze` 改为从 Python 读数据(或直接查 Po
 ## 与 Postgres 计划的交错
 
 两份计划动同一批文件,顺序不能乱。**PG 的"阶段 1"在 2026-10-17 换了内容**:原本是 housing ETL,
-被 OSM POI 离线化占用,housing ETL 则作为 `1'` 搁置(provider 全部不可达)。**其余阶段号没有顺延**
+被 OSM POI 离线化占用,housing ETL 则作为 `1'` 搁置,并已于 2026-10-28 随 housing 一起取消。
+**其余阶段号没有顺延**
 ——以 `docs/postgres-refactor-plan.md` 的「阶段划分」表为准:
 
 ```
@@ -240,11 +243,11 @@ Node 侧保留的 `POST /api/analyze` 改为从 Python 读数据(或直接查 Po
    ↓  必须先完成,否则 geocoder/boundaries 要移两次
 PG 阶段 0(PostGIS + geocode_cache + municipality)     ✅ 完成 1941317
 PG 阶段 1(OSM POI 离线化 + /pois 切换 + etl_run)      ✅ 完成 2026-10-18,未 commit
-PG 阶段 1'(housing ETL)                               ⛔ 搁置:provider 全部不可达
+PG 阶段 1'(housing ETL)                               ❌ 取消:housing 已移除
 阶段 B(geo 抽取)                                      🔶 isochrone/pois 已做,余 3 个端点未动
 PG 阶段 2(outbox + SKIP LOCKED worker)                ⛔ 需迁出 Vercel(worker 要常驻)+ 见下
-PG 阶段 3(合成快照 + 按 captured_at 分区 + 调优)      ⛔ 见下方阻塞
-PG 阶段 4(给 housing_listing 加 geom + 在线建索引)    ⛔ 见下方阻塞
+PG 阶段 3(合成快照 + 分区 + 调优)                      🔶 改走 poi,见下
+PG 阶段 4(在线加 geom 列 + 回填)                       🔶 改走 poi,见下
 阶段 C(search + lab 并入)
 阶段 D(regions ETL 迁入)
 PG 阶段 5(PgBouncer + 复制)                           ⬜ 本次不做
@@ -255,35 +258,28 @@ PG 阶段 5(PgBouncer + 复制)                           ⬜ 本次不做
 > 原稿这里有一行"阶段 B 的 points_in_polygon 切到 PostGIS;前端去掉 Turf 过滤",已删除:
 > 它在 PG 阶段 1 就连同 `/pois` 一起做完了,见阶段 B 小节。
 
-### ⛔ PG 阶段 2/3/4 共享同一个阻塞:`housing_listing` 表不存在
+### PG 阶段 2/3/4:原阻塞已消失,路线确定走 `poi`
 
-这三个阶段的产物全部挂在 `housing_listing` 上:阶段 2 的 outbox 消费的是 listing 事件,
-阶段 3 的 `housing_listing_snapshot` 外键指向它并要灌到 1000–2000 万行,
-阶段 4 就是给它加 `geom` 列再在线回填。而这张表至今没建,因为
-**所有荷兰商业房源站都在 Cloudflare managed challenge 后面,没有任何 provider 能取到行**
-(见 `docs/data-source-feasibility.md`),housing ETL 本身已作为 `1'` 搁置。
+这三个阶段原本全部挂在 `housing_listing` 上:阶段 2 的 outbox 消费 listing 事件,阶段 3 的
+快照表外键指向它,阶段 4 给它加 `geom` 列再在线回填。那张表从未建成,因为所有荷兰商业房源站
+都在 Cloudflare managed challenge 后面,没有 provider 能取到行。
 
-注意区分两件事,否则容易得出错误结论:
+**2026-10-28 housing 移除后,这不再是"阻塞"而是"该路线关闭"。** 原先记录的四个出路里,
+只剩第一个可行,因此它不再是选项而是决定:
 
-- **练习内容不被阻塞。** 幂等 upsert、`etl_run` 状态机、写偏斜、部分唯一索引、
-  sentinel 校验,都与"谁提供行"无关——这一点在 CLAUDE.md 里已经纠正过一次,
-  且 `etl_run` 确实已经在 PG 阶段 1 里用 POI 导入跑通了。
-- **但数据被阻塞。** 没有真实行就没有真实的每日快照,而**历史是唯一事后补不回来的东西**:
-  每拖一天,就永久少一天的 listing 历史。所以不能用"等 provider 通了再说"来处理。
+> **阶段 2/3/4 全部改在 `poi` 上做。** `poi` 有 512,844 行真实数据(全荷兰),分区、autovacuum
+> 与膨胀观察、在线 DDL、`FOR UPDATE SKIP LOCKED` 队列都照样能练,而且行数比 housing 曾经可能
+> 拿到的量级更大。
 
-可选出路(尚未决策,四选一):
+代价要说清楚,别自欺:
 
-1. 把 PG 阶段 3 的合成历史改到 `poi` 上做——`poi` 已有 82k 真实行,分区/调优照样能练,
-   但练不到 upsert 冲突与 sentinel。
-2. 用 BAG 构造 `housing_listing`(PDOK WFS 有 9.99M 真实住宅),拿真实行跑完整 ETL,
-   代价是它不是"广告"语义,时间序列是假的。
-3. 先把后端迁出 Vercel,直接做 PG 阶段 2 的 worker——它需要常驻进程,这件事早晚要做。
-4. 暂时放下 Postgres,转去做架构阶段 B/C(把剩下 5 个 router 下沉)。
-
-考虑到本次迭代的重心在 Postgres,合理的最小路径是:**阶段 A → PG 0/1 →(解除上述阻塞)→
-PG 2/3/4 → 视剩余精力做 B。**
-
----
+- **练不到的**:provider 维度的 upsert 冲突、`UNIQUE (provider_id, external_id)` 幂等键、
+  以及 sentinel(整轮抓取数量骤降判定失败)。这三项依赖"多来源 + 每日重复抓同一批实体"的
+  语义,`poi` 的离线导入只能部分模拟——一次 OSM 再导入确实会走 upsert,但没有 provider 维度。
+- **仍然能练到的**:`etl_run` 状态机(已在 PG 阶段 1 用 POI 导入跑通)、HOT 更新与部分索引、
+  `EXPLAIN (ANALYZE, BUFFERS)`、MVCC/horizon/膨胀(已有 `docs/pg-notes/mvcc-01-*.md`)。
+- **"历史是唯一补不回来的东西"这条论证随功能一起失效了**:不再采集房源,就不存在"每拖一天少
+  一天历史"的损失。阶段 3 的合成快照本来就是合成的,现在它是唯一的快照来源,不再是替代品。
 
 ## 被否决的方案
 
@@ -310,8 +306,9 @@ PG 2/3/4 → 视剩余精力做 B。**
 
 ### RC4:前端状态层
 
-`MapContainer.jsx`(295 行)同时是容器、store 和 fetch 编排。`HousingChatPanel`(369 行)、
-`AnalysisResultPanel`(351 行)、`HousingLayer`(302 行)都偏大。
+`MapContainer.jsx`(230 行)同时是容器、store 和 fetch 编排,`AnalysisResultPanel`(351 行)
+偏大。原稿还列了 `HousingChatPanel`(369 行)和 `HousingLayer`(302 行),两者已随 housing 移除——
+这顺带削掉了 MapContainer 的一部分编排负担,但它仍然既是容器又是 store,RC4 本身没有被解决。
 
 推迟的理由是坦率的:**与本次迭代的 Postgres 重心无关,且不服务学习目标。**
 前端目前能用,组件过大是可读性问题而非正确性问题。

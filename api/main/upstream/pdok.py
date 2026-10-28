@@ -7,6 +7,23 @@ logger = get_logger("client.pdok")
 
 PDOK_URL = "https://api.pdok.nl/bzk/locatieserver/search/v3_1/reverse"
 
+# CBS gebiedsindelingen WFS — municipality polygons. Used by scripts/seed_municipalities.py.
+# These lived in domains/housing/boundaries.py until that domain was removed (2026-10-28);
+# they are pure transport config, so upstream/ is where they belong.
+WFS_BASE = "https://service.pdok.nl/cbs/gebiedsindelingen/2024/wfs/v1_0"
+
+# One request returns all ~342 municipalities (~300 KB). PDOK's CQL_FILTER is silently
+# ignored by this service, so any narrowing has to happen in Python.
+WFS_PARAMS = {
+    "service":      "WFS",
+    "version":      "2.0.0",
+    "request":      "GetFeature",
+    "typeNames":    "gemeente_gegeneraliseerd",
+    "outputFormat": "application/json",
+    "count":        "500",
+    "srsName":      "EPSG:4326",
+}
+
 
 async def fetch_region(lng: float, lat: float) -> dict:
     params = {"lat": lat, "lon": lng, "type": "gemeente", "fl": "gemeentecode,gemeentenaam,id"}

@@ -16,8 +16,6 @@ ES_URL = os.getenv("ES_URL")  # optional — omit to disable ES and fall back to
 TOMTOM_API_KEY = os.getenv("TOMTOM_API_KEY")
 UPSTASH_URL = os.getenv("UPSTASH_REDIS_REST_URL")
 UPSTASH_TOKEN = os.getenv("UPSTASH_REDIS_REST_TOKEN")
-ETL_CRON_TOKEN = os.getenv("ETL_CRON_TOKEN")
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")  # optional — omit to run without Postgres
 
 # ORS profile outage, measured 2026-10-18. Full evidence: docs/pg-notes/ors-profile-outage.md.

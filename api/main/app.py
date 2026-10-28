@@ -5,7 +5,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from . import db
-from .domains.housing import router as housing
 from .errors import ExternalServiceError, InternalError
 from .logger import RequestLoggingMiddleware
 from .logger import get_logger
@@ -67,5 +66,4 @@ app.include_router(directions.router)
 app.include_router(region.router)
 app.include_router(traffic.router)
 app.include_router(search.router)
-app.include_router(housing.router)
 

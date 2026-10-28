@@ -11,8 +11,26 @@ export const api = {
   fetchIsochrone: (lng, lat, minutes, profile) => 
     client.get('/api/main/isochrone', { params: { lng, lat, minutes, profile } }).then(res => res.data),
     
-  fetchPOIs: (lng, lat, minutes, profile) => 
-    client.get('/api/main/pois', { params: { lng, lat, minutes, profile } }).then(res => res.data.elements || []),
+  /**
+   * @param {number} lng
+   * @param {number} lat
+   * @param {number} minutes
+   * @param {'walking'|'cycling'|'driving'} profile
+   * @param {string[]} [categories]  poi_category keys; omitted = backend's legacy default.
+   *   Only honoured on the Postgres path — the Overpass fallback ignores it.
+   * @returns {Promise<Array<{ type, id, lon, lat, category?, tags }>>}
+   */
+  fetchPOIs: (lng, lat, minutes, profile, categories) => {
+    // Built by hand because axios serialises an array as `categories[]=a&categories[]=b`
+    // (verified, axios 1.13.2), while FastAPI's `list[str] = Query(...)` only reads the
+    // bracket-less repeated form. Passing the array straight through silently fell back to
+    // the backend's default three categories instead of erroring.
+    const params = new URLSearchParams({ lng, lat, minutes, profile });
+    // An empty selection must not become `categories=` — that asks for nothing. Omitting
+    // the key entirely lets the backend apply its own default.
+    (categories || []).forEach(c => params.append('categories', c));
+    return client.get('/api/main/pois', { params }).then(res => res.data.elements || []);
+  },
     
   /**
    * @param {{ lng: number, lat: number }} start

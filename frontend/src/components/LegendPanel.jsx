@@ -1,10 +1,22 @@
 import React from 'react';
+import { POI_GROUPS } from '../constants/poiCategories';
 
-const LegendPanel = () => {
+/**
+ * Legend for what is actually on the map right now.
+ *
+ * It used to be a hardcoded three-row list whose colours did not match what PoiMarker drew
+ * (#FFCC00 vs #FFD700, #FF3B30 vs #FF4500). Both sides now read the same constants, and
+ * only groups with a selected category are listed — an empty legend row for a type nobody
+ * asked for is just noise.
+ */
+const LegendPanel = ({ categories = [] }) => {
+  const activeGroups = POI_GROUPS.filter(g =>
+    g.categories.some(([key]) => categories.includes(key))
+  );
+
   const legendItems = [
-    { label: 'Supermarket', color: '#FFCC00', type: 'dot' }, // 更柔和的 Apple 金
-    { label: 'Gym', color: '#FF3B30', type: 'dot' },      // 典型的 iOS 红
-    { label: 'Reachable', color: '#AF52DE', type: 'area' }   // 典型的 iOS 紫
+    ...activeGroups.map(g => ({ label: g.label, color: g.color, type: 'dot' })),
+    { label: 'Reachable', color: '#AF52DE', type: 'area' },
   ];
 
   return (

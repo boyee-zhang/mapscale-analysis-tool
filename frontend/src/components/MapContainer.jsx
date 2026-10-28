@@ -7,6 +7,7 @@ import AnalysisPanel from './AnalysisPanel.jsx';
 import LegendPanel from './LegendPanel';
 import AnalysisResultPanel from './AnalysisResultPanel';
 import SearchBar from './SearchBar';
+import { DEFAULT_CATEGORIES } from '../constants/poiCategories';
 
 // TomTom iconCategory → color (https://developer.tomtom.com/traffic-api/documentation/product-information/introduction)
 const INCIDENT_COLORS = [
@@ -26,6 +27,7 @@ const MapContainer = () => {
   const { map, isReady } = useMap(containerRef);
   const [analysisData, setAnalysisData] = useState(null);
   const [showTraffic, setShowTraffic] = useState(false);
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
 
   // 1. 统一状态
   const [data, setData] = useState({ iso: null, pois: [], loading: false });
@@ -36,25 +38,52 @@ const MapContainer = () => {
   });
 
   // 2. 响应式数据同步
+  //
+  // Two effects, not one, and the split is about the ORS quota rather than tidiness: the
+  // free tier is 50 requests/day/endpoint, and changing a POI category does not move the
+  // isochrone. Keeping categories out of the isochrone effect's deps stops a type toggle
+  // from re-spending an isochrone call.
   useEffect(() => {
     if (!isReady) return;
+    let cancelled = false;
 
-    const fetchData = async () => {
+    (async () => {
       setData(d => ({ ...d, loading: true }));
       try {
-        const [iso, pois] = await Promise.all([
-          api.fetchIsochrone(params.center.lng, params.center.lat, params.minutes, params.mode),
-          api.fetchPOIs(params.center.lng, params.center.lat, params.minutes, params.mode)
-        ]);
-        setData({ iso, pois, loading: false });
+        const iso = await api.fetchIsochrone(params.center.lng, params.center.lat, params.minutes, params.mode);
+        if (!cancelled) setData(d => ({ ...d, iso, loading: false }));
       } catch (err) {
-        console.error("Fetch Error:", err);
-        setData(d => ({ ...d, loading: false }));
+        console.error('[MapContainer] isochrone failed', err);
+        if (!cancelled) setData(d => ({ ...d, loading: false }));
       }
-    };
+    })();
 
-    fetchData();
+    return () => { cancelled = true; };
   }, [isReady, params.center, params.minutes, params.mode]);
+
+  // POIs refetch on category change too. Debounced because the picker is a row of chips —
+  // without it, selecting five types fires five requests, and /pois still costs an ORS
+  // isochrone server-side (it clips to the real polygon, and the Upstash cache in front of
+  // that call is currently dead, so nothing absorbs the repeats).
+  useEffect(() => {
+    if (!isReady) return;
+    let cancelled = false;
+
+    const timer = setTimeout(async () => {
+      setData(d => ({ ...d, loading: true }));
+      try {
+        const pois = await api.fetchPOIs(
+          params.center.lng, params.center.lat, params.minutes, params.mode, categories
+        );
+        if (!cancelled) setData(d => ({ ...d, pois, loading: false }));
+      } catch (err) {
+        console.error('[MapContainer] pois failed', err);
+        if (!cancelled) setData(d => ({ ...d, pois: [], loading: false }));
+      }
+    }, 400);
+
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [isReady, params.center, params.minutes, params.mode, categories]);
 
   // 3. 点击地图更新中心点
   useEffect(() => {
@@ -201,6 +230,8 @@ const MapContainer = () => {
         onAIAnalysis={handleAIAnalysis}
         showTraffic={showTraffic}
         onToggleTraffic={() => setShowTraffic(v => !v)}
+        categories={categories}
+        onSetCategories={setCategories}
       />
 
       <AnalysisResultPanel
@@ -209,7 +240,7 @@ const MapContainer = () => {
       />
 
       {/* 图例组件 */}
-      <LegendPanel />
+      <LegendPanel categories={categories} />
 
       {/* 渲染 Markers */}
       {isReady && <CenterMarker map={map} pos={params.center} />}

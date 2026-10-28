@@ -1,7 +1,8 @@
 // src/components/AnalysisPanel.jsx
 import React, { useState } from 'react';
+import PoiCategoryPicker from './PoiCategoryPicker';
 
-const AnalysisPanel = ({ params, setParams, poiCount, loading, onAIAnalysis, showTraffic, onToggleTraffic }) => {
+const AnalysisPanel = ({ params, setParams, poiCount, loading, onAIAnalysis, showTraffic, onToggleTraffic, categories, onSetCategories }) => {
   // AI 分析的内部加载状态
   const [isAnalysing, setIsAnalysing] = useState(false);
 
@@ -49,6 +50,13 @@ const AnalysisPanel = ({ params, setParams, poiCount, loading, onAIAnalysis, sho
           style={sliderStyle}
         />
       </div>
+
+      {/* POI 类型筛选 */}
+      <PoiCategoryPicker
+        selected={categories}
+        onChange={onSetCategories}
+        disabled={loading}
+      />
 
       {/* 实时交通按钮 */}
       <div style={{ marginBottom: '12px' }}>

@@ -1,5 +1,10 @@
 # Postgres 改造计划
 
+> **2026-10-28:housing 子系统已移除**(功能不再支持)。这份计划原本把"房源快照"当作最高优先
+> 和唯一的专有数据资产,该前提已不成立。已改:逐源判定、阶段 2/3/4 的路线(改走 `poi`)。
+> 已删:「房源数据能算出的独有指标」与「多 provider 可扩展性」两整节,以及 `housing_listing`
+> 的目标 schema。**已完成阶段(0 与 1)的记录保留原样**,它们描述的是真实跑过的东西。
+
 分支:`refactor/modular-architecture`
 
 ## 目标与约束
@@ -29,9 +34,9 @@
 
 | 性质 | API 为什么给不了 |
 |---|---|
-| **历史** | PDOK / OSM / H2S / CBS 全都只告诉你"现在"。没有 API 能回答"过去 12 个月某市租金怎么变的" |
-| **跨源 join** | PDOK 有地址、OSM 有设施、CBS 有人口、H2S 有房源。没有单个 API 能回答"人口增长 >5% 的区里,步行 10 分钟有超市、月租 <€1500 的房源" |
-| **聚合分析** | API 给点查不给 `GROUP BY`。"租金涨幅最快的 10 个市"用 API 做 = 340 次调用 + Python 里算 |
+| **历史** | PDOK / OSM / CBS 全都只告诉你"现在"。没有 API 能回答"这一年里某区新开了多少家店、关了多少家" |
+| **跨源 join** | PDOK 有地址、OSM 有设施、CBS 有人口。没有单个 API 能回答"人口增长 >5% 的区里,步行 10 分钟有超市的地址有哪些" |
+| **聚合分析** | API 给点查不给 `GROUP BY`。"人均超市数最少的 10 个市"用 API 做 = 340 次调用 + Python 里算 |
 
 ### 关键:历史是唯一无法事后补的东西
 
@@ -39,29 +44,22 @@
 
 这决定了优先级,也是下面把阶段 1 标为最高优先的原因。
 
+> 2026-10-28:这条论证原本最强的用例是房源快照(易逝、provider 无历史 API),该用例随
+> housing 移除而消失。论证本身没错,但现在**没有任何一个在采集的数据源具备那种紧迫性**:
+> OSM POI 的历史可以从 Geofabrik 的历史抽取补,CBS OData 自带全量历史。所以这份计划剩下的
+> 部分不再有"每拖一天就永久少一天"的压力,优先级应当按练习价值而非数据时效来排。
+
 ### 逐源判定
 
 | 数据源 | 进 Postgres | 理由 |
 |---|---|---|
-| **房源快照** | ★★★ 最高 | 房源是**易逝的**:出现又消失,provider 都没有历史 API。`etl.py` 已在算 new/disappeared/booked 的 diff——**这是只有我们有的数据** |
 | **OSM POI** | ★★★ | 见阶段 2.5。Overpass 要在 3 个镜像间故障转移,说明在线调用本来就撑不住 |
-| **地理编码结果** | ★★★ | API 没有的派生数据,且现在是进程内 dict,冷启动全丢 |
-| **市级边界(~340)** | ★★★ | 静态、极小、每次 choropleth 都要 |
+| **市级边界(~340)** | ★★★ | 静态、极小,`/search` 的城市解析与地址导入都要 |
 | **CBS 区域数据** | ★★☆ | CBS OData 自带全量历史,所以"历史"论据弱。真正理由是 join 能力,以及它现在存在 Redis 的 `raw:*`/`features:*` 里**无 TTL 永久堆积,已经是个糟糕的数据库了** |
 | **PDOK 地址(~1000 万)** | ★☆☆ 部分 | 静态参考数据,但 ES 已在做搜索。只存需要 join 的字段 |
 | isochrone | ✗ 留 Redis | 派生数据,键空间 =(点 × 分钟 × 模式)无限大,重算便宜,无历史价值 |
 | traffic flow | ✗ 留 Redis | 本质实时,5 分钟 TTL 是正确的 |
 | Nominatim 结果 | ✗ 留 Redis | 同上 |
-
-### 房源数据能算出的独有指标
-
-这些**只能**从自建快照推出,公开 API 一个都给不了。这是本项目唯一真正的专有数据资产,
-其余功能本质都是公开 API 的重新包装:
-
-- **出租周期** — `first_seen_at` 到 status 变 `booked` 的天数。哪个城市/户型/价位最快租掉
-- **价格调整行为** — 挂久没租掉的房源是否降价、降多少
-- **真实供给流量** — 不是"现在有多少套",而是"每周新放出多少套"
-- **撤下但未租掉的比例** — `disappeared` 而非 `booked` 的占比
 
 ## 几何类型约定
 
@@ -76,9 +74,9 @@
 | **0** | PostGIS 容器 + migration runner + `geocode_cache` + `municipality` | GiST 索引 | 冷启动不再丢地理编码缓存;choropleth 不再每请求打 PDOK WFS |
 | **1** | **OSM POI 离线化**:Geofabrik 荷兰 extract 导入 `poi` 表 + `etl_run` 状态机 + 幂等 upsert + 软删 + 哨兵 | 唯一索引做幂等键、部分索引(含 partial 谓词与 HOT 的冲突)、GiST 与 GIN、真实倾斜下的 `EXPLAIN` | **修掉等时圈 POI 永久丢点的正确性 bug**;类别运行时可选;解锁空间 join / 聚合 / KNN / 反向搜索 |
 | **2** | `outbox` 表 + SKIP LOCKED worker | 行锁、`FOR UPDATE SKIP LOCKED`、死锁复现与排查 | 需要常驻进程,**前置条件是后端离开 Vercel serverless(尚未规划)** |
-| **~~1'~~** | ~~housing ETL 迁入 Postgres~~ **搁置** | — | provider 全部不可达(见 `docs/data-source-feasibility.md`),没有数据可跑。练习内容已搬入阶段 1 |
+| **~~1'~~** | ~~housing ETL 迁入 Postgres~~ **取消** | — | 2026-10-28 随 housing 功能移除而取消。练习内容已搬入阶段 1 |
 | **3** | 合成历史快照 + 按 `captured_at` 分区 + 查询调优 + `CREATE STATISTICS` | `EXPLAIN (ANALYZE, BUFFERS)`、Nested Loop vs Hash Join、估算行数偏差、MVCC/死元组/表膨胀/autovacuum 调参 | 可做房价时间序列;AI 分析从"CBS 给什么算什么"变为"用自建历史算" |
-| **4** | 给 `housing_listing` 加 `geom` 列 + `CREATE INDEX CONCURRENTLY` + 分批回填 | 大表在线变更 | 空间过滤从前端 Turf 移到 `ST_Contains` |
+| **4** | 给大表在线加列 + `CREATE INDEX CONCURRENTLY` + 分批回填(对象改为 `poi`) | 大表在线变更 | 已不再是 Turf → `ST_Contains` 的迁移,那在阶段 1 就做完了 |
 | **5** | **本次不做**,见下方「未来迭代」 | 连接池、复制、读写分离 | 无 |
 
 ### 为什么 POI 是唯一该最先做的那一项
@@ -266,14 +264,13 @@ DATABASE_URL=postgresql://mapscale:mapscale@localhost:5432/mapscale
 > | 表 | 原稿标注 | 实际 |
 > |---|---|---|
 > | `etl_run` | 阶段 1 | ✅ **已建**,`migrations/0003_poi.sql`,但列与下方不同,见下 |
-> | `housing_listing` | 阶段 1 | ⛔ **未建**,provider 全部不可达 |
-> | `outbox` | 阶段 2 | ⬜ 未建 |
-> | `housing_listing_snapshot` | 阶段 3 | ⛔ 未建,外键指向 `housing_listing` |
+> > | `outbox` | 阶段 2 | ⬜ 未建 |
+> | 阶段 3 的快照表 | 阶段 3 | ⬜ 未建。原设计外键指向 `housing_listing`,现改为挂在 `poi` 上 |
 >
 > **`etl_run` 的实际定义与下方不同,以 `0003_poi.sql` 为准**,差异有理由:
-> - 键是自由文本 `source`(`'osm_poi:noord-holland'` / `'housing:h2s'`)而不是
->   `provider_id`——POI 导入、未来的 BAG 导入和 housing provider 要共用同一个状态机,
->   而 POI 导入没有 "provider" 可言。
+> - 键是自由文本 `source`(`'osm_poi:noord-holland'`)而不是 `provider_id`——POI 导入和
+>   未来的 BAG 导入要共用同一个状态机,而它们没有 "provider" 可言。这个设计当初也是为了容纳
+>   housing provider,该用例已随功能移除,但自由文本键的决定本身仍然成立。
 > - `status` 取值是 `running | succeeded | failed`,不是原稿的四态;`pending` 没有写入方,
 >   建它就是建一个永远为空的状态。
 > - 多了 `row_count` / `note` 两列(哨兵比较与排错都要读),以及
@@ -283,76 +280,29 @@ DATABASE_URL=postgresql://mapscale:mapscale@localhost:5432/mapscale
 >   `WHERE status = 'running'`——理由与实测结论见 §「`etl_run_one_active` 为什么这样设计」
 >   和 `0003_poi.sql` 的注释。
 
-### ⛔ 阶段 2/3/4 共享的阻塞:`housing_listing` 至今不存在
+### 阶段 2/3/4:原阻塞已消失,改走 `poi`
 
-这三个阶段的产物全部挂在这张表上(2 的 outbox 消费的是 listing 事件,3 的
-`housing_listing_snapshot` 外键指向它,4 要给它加 `geom` 列并回填),而它没建,
-因为没有任何 provider 能取到行。
+这三个阶段的产物原本全挂在 `housing_listing` 上:阶段 2 的 outbox 消费 listing 事件,阶段 3 的
+快照表外键指向它并要灌到 1000–2000 万行,阶段 4 给它加 `geom` 列再在线回填。那张表从未建成,
+因为所有荷兰商业房源站都在 Cloudflare managed challenge 后面,没有 provider 能取到行。
 
-必须区分的两件事:
+**2026-10-28 housing 移除后,这不再是"阻塞"而是"该路线关闭"。** 原先记录的四个出路里只剩
+第一个可行,因此它从选项变成决定:
 
-- **练习内容不被阻塞。** 幂等 upsert、状态机、写偏斜、部分唯一索引、哨兵,都与"谁提供行"
-  无关。CLAUDE.md 里纠正过一次的正是这一点。
-- **数据被阻塞,而且是不可补的那种。** 每推迟一天就永久少一天 listing 历史。
+> **阶段 2/3/4 全部改在 `poi` 上做。** `poi` 有 512,844 行真实数据(全荷兰),按
+> `last_changed_run` 或合成的 `captured_at` 分区、autovacuum 与膨胀观察、
+> `CREATE INDEX CONCURRENTLY`、在线加列回填、`FOR UPDATE SKIP LOCKED` 队列都照样能练。
 
-出路四选一(尚未决策,与 `docs/architecture-refactor-plan.md` 的同名小节保持同步):
-① 合成历史改到已有 82k 行的 `poi` 上做;② 用 BAG(PDOK WFS,999 万真实住宅)构造实体表;
-③ 先把后端迁出 Vercel 直接做阶段 2 的常驻 worker;④ 暂停 PG,转做架构阶段 B/C。
+代价要写清楚,别自欺:
 
-```sql
--- 原「阶段 1」,现搁置(见上):实体表,幂等键在此
-CREATE TABLE housing_listing (
-    id                bigserial PRIMARY KEY,
-    provider_id       text NOT NULL,
-    external_id       text NOT NULL,
-    city              text NOT NULL,
-    municipality_code text REFERENCES municipality(code),
-    address           text,
-    property_type     text,
-    area_m2           numeric,
-    price_eur         numeric,
-    available_from    date,
-    status            text NOT NULL,          -- active | disappeared | booked
-    first_seen_at     timestamptz NOT NULL,
-    last_seen_at      timestamptz NOT NULL,
-    UNIQUE (provider_id, external_id)         -- 幂等键,配合 ON CONFLICT DO UPDATE
-);
--- 阶段 4 追加:geom geometry(Point,4326) + CREATE INDEX CONCURRENTLY + 分批回填
-
--- 原「阶段 1」:ETL run 状态机。⚠️ 已在阶段 1(POI)建成,但实际列与此不同,
--- 以 migrations/0003_poi.sql 为准,差异及理由见本节开头的更正框。
-CREATE TABLE etl_run (
-    id          bigserial PRIMARY KEY,
-    provider_id text NOT NULL,
-    status      text NOT NULL,                -- pending | running | completed | failed
-    started_at  timestamptz,
-    finished_at timestamptz,
-    stats       jsonb
-);
-CREATE UNIQUE INDEX etl_run_one_active
-    ON etl_run (provider_id) WHERE status = 'running';
-
--- 阶段 2:outbox / 任务队列,替代 Kafka
-CREATE TABLE outbox (
-    id           bigserial PRIMARY KEY,
-    topic        text NOT NULL,
-    payload      jsonb NOT NULL,
-    created_at   timestamptz NOT NULL DEFAULT now(),
-    locked_at    timestamptz,
-    processed_at timestamptz,
-    attempts     int NOT NULL DEFAULT 0
-);
-CREATE INDEX outbox_pending ON outbox (created_at) WHERE processed_at IS NULL;
-
--- 阶段 3:append-only 时序快照,会长到千万行
-CREATE TABLE housing_listing_snapshot (
-    listing_id  bigint NOT NULL REFERENCES housing_listing(id),
-    captured_at timestamptz NOT NULL,
-    price_eur   numeric,
-    status      text,
-    PRIMARY KEY (listing_id, captured_at)
-) PARTITION BY RANGE (captured_at);
-```
+- **练不到的三项**:provider 维度的 upsert 冲突、`UNIQUE (provider_id, external_id)` 作为
+  幂等键、以及 sentinel(整轮抓取数量骤降 >50% 判定 `failed` 且不写 diff)。这三项依赖
+  "多来源 + 每日重复抓同一批实体"的语义。`poi` 的离线再导入会走 upsert(已实测:
+  `ON CONFLICT DO UPDATE ... WHERE <row differs>` + staging 反连接),但没有 provider 维度,
+  也没有"今天比昨天少了一半"的业务含义——POI 少一半只会是导入范围变了。
+- **仍然练得到的**:`etl_run` 状态机(阶段 1 已用 POI 导入跑通,含 HOT 实测)、部分唯一索引、
+  `EXPLAIN (ANALYZE, BUFFERS)`、MVCC/horizon/膨胀(见 `docs/pg-notes/mvcc-01-*.md`)。
+- **阶段 2 的前置没变**:`SKIP LOCKED` worker 要常驻进程,后端仍需迁出 Vercel。
 
 ### `etl_run_one_active` 为什么这样设计
 
@@ -371,8 +321,8 @@ CREATE TABLE housing_listing_snapshot (
 
 目标是"在 Mac 上能看出问题",不追求绝对量级。配合 0.1 的小参数:
 
-- `housing_listing` 约 5 万行(接近真实量级)
-- `housing_listing_snapshot` 约 1000–2000 万行(5 万 × 每日一条 × 约 1 年),磁盘约 1–2 GB
+- ~~`housing_listing` 约 5 万行~~ → 改用 `poi` 的 512,844 行真实数据(全荷兰)
+- 合成快照约 1000–2000 万行(51 万 × 每日一条 × 约 1 个月,或抽样后拉长到 1 年),磁盘约 1–2 GB
 
 表膨胀观察不依赖规模,只依赖 UPDATE 频次——写个脚本反复全量 UPDATE 状态/价格列来催,
 对比 HOT update(不触及索引列)与非 HOT 的差异。
@@ -382,120 +332,25 @@ CREATE TABLE housing_listing_snapshot (
 
 ---
 
-## 多 provider 可扩展性(强制要求)
+## 多 provider 可扩展性:随 housing 一起作废(2026-10-28)
 
-当前只实现了 `h2s` 一个 provider,但**schema 设计必须为接入多个平台(Pararius / Funda /
-Kamernet / 各大 corporatie 等)留出余地**。
+原本这里有一整节 9 条**强制要求**,规定 housing 的多 provider 架构:provider 参照表、
+复合唯一键 `UNIQUE (provider_id, external_id)`、按 provider 隔离的 diff、抓取失败的哨兵校验、
+价格口径双列、平台特有字段走 jsonb、跨平台去重的禁止假设、地理编码缓存与 provider 无关、
+队列按 provider 分片。
 
-Python 层已经是 provider 无关的(`models.py` 的 `HousingProvider` ABC + `registry.py` 自注册),
-这是全仓库设计最好的部分。**风险在于 SQL schema 会把它破坏掉**——一旦数据落了库,
-schema 里的错误假设就很难改。下面逐条是必须遵守的约束。
+housing 移除后它们没有适用对象,整节已删。留这条记录是为了说明**它们是作废的,不是被忽略的**
+——如果以后再做任何多来源 ETL(例如 BAG 导入),这几条里至少三条应当重新捡起来:
 
-### 1. provider 是参照表,不是自由文本列
-
-```sql
-CREATE TABLE provider (
-    id              text PRIMARY KEY,        -- 'h2s' | 'pararius' | ...
-    display_name    text NOT NULL,
-    enabled         boolean NOT NULL DEFAULT true,
-    price_basis     text NOT NULL,           -- 见第 5 条
-    rate_limit_rpm  int,
-    config          jsonb NOT NULL DEFAULT '{}',
-    last_success_at timestamptz
-);
-```
-
-`housing_listing.provider_id` 和 `etl_run.provider_id` 都加 FK。好处:引用完整性,
-且 per-provider 的限流配置、启用开关、最后成功时间有地方放。
-
-### 2. 唯一键必须是复合的
-
-`UNIQUE (provider_id, external_id)` ——**不能**只用 `external_id`。
-不同平台的 ID 空间完全独立,随时会撞。这一点现有 schema 已经是对的。
-
-### 3. ETL 状态机天然支持并行
-
-`etl_run_one_active` 是 `(provider_id) WHERE status = 'running'`,
-所以**不同 provider 可以并发跑,同一 provider 不行**。这正是想要的语义,已经是对的。
-
-### 4. diff 范围必须按 provider 隔离,且要防抓取失败被误读为大规模下架
-
-这是**最危险的一个坑**,会直接污染历史数据:
-
-> 如果 diff 不按 provider 隔离,provider A 抓取成功而 B 失败返回空集时,
-> B 的全部房源会被标记成 `disappeared`——而这是抓取故障,不是市场事件。
-
-两条强制规则:
-
-- diff 的作用范围 = 单个 provider 的单次 run,不跨 provider
-- **哨兵检查**:若本次抓到的数量相比上次下降超过阈值(例如 >50%),
-  则将该 run 标记为 `failed` 并**不写 diff**,而不是如实记录"大规模下架"
-
-错误地记录一次大规模下架,会永久污染出租周期、供给流量这些核心指标。
-抓取失败丢一天数据是可恢复的,写错数据不是。
-
-### 5. 价格语义因平台而异,必须记录口径
-
-H2S 的报价可能含服务费,其他平台可能不含;有的含水电,有的押金另计。
-**直接把各家的 `price_eur` 存进同一列然后跨平台比较,得到的结论是错的。**
-
-处置:`provider.price_basis` 记录原始口径;listing 表同时保留
-
-- `price_raw_eur` — 平台原样给出的数字
-- `price_normalized_eur` — 统一口径(建议:不含服务费的基础租金)后的值,供跨平台比较
-
-跨 provider 的聚合查询只允许用 normalized 列。
-
-### 6. 平台特有字段用 jsonb,不要加宽主表
-
-各平台暴露的属性不一样(`energy_label` / `furnished` / `service_costs` / `deposit` /
-`min_stay_months` ...)。
-
-- **会用来过滤或聚合的** → 提升为正式列
-- **仅展示用的平台特有属性** → `attributes jsonb`
-
-GIN 索引只在确实出现 jsonb 条件查询时再建,不要预先建。
-
-### 7. 跨平台重复房源:现在不实现,但不许假设 listing = 物理房源
-
-同一套公寓可能同时挂在 H2S、Pararius、Funda 上,`external_id` 不同、价格不同。
-**朴素统计会重复计数。**
-
-正解是分两层:`property`(物理单元)↔ `listing`(某平台对它的一则广告),多对一。
-
-**决定:现在不建 `property` 表**——只有一个 provider 时无从验证匹配逻辑,属于过度设计。
-但有两条约束立刻生效:
-
-- 代码和查询中**不得**出现"listing 数量 = 房源数量"的假设;涉及计数的地方注释说明
-  这是"广告条数"而非"房源套数"
-- 接入第二个 provider 时,加 `housing_listing.property_id bigint NULL` + 实体匹配逻辑。
-  **这正好是一次真实的在线加列 + 分批回填**,与阶段 4 的练习目标重合
-
-### 8. 地理编码缓存与 provider 无关(这是优点)
-
-`geocode_cache` 以归一化地址为主键,不带 `provider_id`。
-因此**多个平台登记同一地址时共享缓存**,新接入的 provider 自动受益。
-不要为了"数据隔离"给它加 provider 维度——那会白白放弃这个好处。
-
-### 9. 任务队列要能按 provider 分片
-
-阶段 2 的 `outbox` / 队列消费必须避免**一个慢 provider 饿死其他 provider**。
-`SELECT ... FOR UPDATE SKIP LOCKED` 的取任务语句需要能按 provider 过滤,
-使每个 provider 拥有独立的并发配额(对应 `provider.rate_limit_rpm`)。
-
-### 验收标准
-
-接入第二个 provider 时,**不允许修改任何已有表的结构**(加列可以,改列/改约束不行),
-也不允许修改 `domains/housing/` 之外的任何代码。
-
-做不到就说明前面某条约束没落实。
-
----
+- **复合唯一键作为幂等键**,而不是自增 id 加后置去重。
+- **diff 范围按来源隔离**,否则一个来源的失败会被读成另一个来源的大规模消失。
+- **哨兵校验**:单轮数量骤降(原定 >50%)应判定整轮 `failed` 且不写 diff。这条的理由与
+  provider 无关,是"失败的抓取被记录成大规模下架会永久污染核心指标"。
 
 ## 阶段 1 Spec:OSM POI 离线化
 
 > **2026-10-17 提前到阶段 1。** 原先排在 2.5,排在 housing ETL 之后。两个理由推翻了那个顺序:
-> (a) housing 的 provider 已经全部不可达(见 `docs/data-source-feasibility.md`),阶段 1 原本
+> (a) housing 的 provider 已经全部不可达(该功能已于 2026-10-28 移除),阶段 1 原本
 > 的内容没有数据可跑;(b) 这是整个计划里**唯一一项做完之后代码更少、bug 更少、能力更强**的
 > 改动——其余每一项都是净增复杂度。原阶段 1 的练习内容(幂等 upsert、`etl_run` 状态机、
 > 哨兵检查)一条不少地搬到这里,而且有真实数据驱动。
@@ -543,7 +398,7 @@ CREATE EXTENSION IF NOT EXISTS btree_gist;   -- 1.6 的复合 GiST 实验需要
 -- 导入批次。同时服务 POI 和未来的其它 source,所以键是 source 而非 provider_id。
 CREATE TABLE etl_run (
     id          bigserial PRIMARY KEY,
-    source      text NOT NULL,              -- 'osm_poi' | 'housing:h2s' | ...
+    source      text NOT NULL,              -- 'osm_poi' | 'osm_poi:noord-holland' | ...
     status      text NOT NULL,              -- 'running' | 'succeeded' | 'failed'
     started_at  timestamptz NOT NULL DEFAULT now(),
     finished_at timestamptz,                -- 写一次就不再改,见下

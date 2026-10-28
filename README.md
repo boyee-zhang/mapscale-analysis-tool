@@ -1,7 +1,7 @@
 # MapScale Analysis Tool
 
 A spatial data platform for the Netherlands. The user-facing part is a map — travel-time
-isochrones, POI density, address search, rental-market layers — but the work this repo is
+isochrones, POI density, address search — but the work this repo is
 actually about is the layer underneath it: a PostgreSQL 16 / PostGIS 3.4 database with
 hand-written SQL, an offline OSM import pipeline, and index designs justified by measured
 `EXPLAIN (ANALYZE, BUFFERS)` output rather than by intuition.
@@ -58,9 +58,8 @@ per-process, so it does nothing across Vercel instances. See
   was removed from the code *and* from `package.json` when `/pois` started clipping in Postgres.
 - **Cache** — Upstash Redis (REST), demoted to a pure TTL cache.
 - **Search** — Elasticsearch 8.14, optional.
-- **AI** — DeepSeek `deepseek-chat` via the OpenAI-compatible SDK.
 - **Upstreams** — OpenRouteService, Overpass, PDOK Locatieserver + WFS, Nominatim, TomTom
-  Traffic, Holland2Stay GraphQL.
+  Traffic.
 
 A sibling repo, [`mapscale-ai-service`](https://github.com/boyee-zhang/mapscale-ai-service),
 holds a Node serverless ETL over CBS OData and is proxied in as `/api/ai/*`.
@@ -78,7 +77,6 @@ api/main/
   upstream/         transport only — ors, overpass, pdok, tomtom, es_client. No business rules.
   domains/
     geo/            spatial primitives: isochrone, POI-inside-a-shape
-    housing/        rental-market domain, owns its own router + provider registry
   routers/          isochrone, pois, directions, region, traffic, search, health
 migrations/         0001_init … 0004_poi_category_seed  (+ .noxact.sql for CREATE INDEX CONCURRENTLY)
 scripts/            dev.sh, migrate.py, import_poi.py, seed_municipalities.py, ingest_addresses.py
@@ -86,7 +84,7 @@ docs/pg-notes/      raw EXPLAIN / lock / vacuum output per stage
 ```
 
 The rule the refactor is built on: `upstream/` is transport, domain semantics live in
-`domains/<d>/service.py`. If a function in `upstream/` needs to know what a "listing" or an
+`domains/<d>/service.py`. If a function in `upstream/` needs to know what an
 "isochrone" is, it is in the wrong directory. Full specs in
 [`docs/architecture-refactor-plan.md`](docs/architecture-refactor-plan.md) and
 [`docs/postgres-refactor-plan.md`](docs/postgres-refactor-plan.md).
@@ -109,7 +107,9 @@ upserts into `poi`:
   `finished_at IS NULL`.
 
 **Municipality polygons** (`scripts/seed_municipalities.py`, ~342 rows from the PDOK CBS WFS)
-back the choropleth: **26 ms from Postgres against 534 ms through the WFS**.
+resolve city names for `/search` and the address ingest: **26 ms from Postgres against 534 ms
+through the WFS**. They used to back a housing choropleth, which has been removed; the table
+and the measurement stand on their own.
 
 ---
 
@@ -156,21 +156,12 @@ All under `/api/main`.
 | `/directions`, `/bulk_directions` | ORS | — |
 | `/traffic/tile-url`, `/traffic/flow`, `/traffic/incidents` | TomTom | 5m |
 | `/search` | ES → PDOK → Nominatim | — |
-| `/housing/providers`, `/listings`, `/choropleth`, `/heatmap` | provider + PDOK + `municipality` | `geocode_cache` table |
-| `/housing/etl/run`, `/housing/monitor/run` | provider → Upstash (bearer token) | — |
-| `/housing/chat`, `/housing/city-report` | DeepSeek | — |
 
 **Search waterfall.** Elasticsearch `nl_addresses` (weights overridable per request via
 `w_street` / `w_city` / `w_postcode` / `w_label`, accepted only above `ES_MIN_SCORE=15`) → PDOK,
 filtered so every long query token must appear in the label → Nominatim. Tier 2–3 results are
 written back into ES, so the index self-enriches. Without `ES_URL` the chain simply starts at
 PDOK.
-
-**Geocoding has two traps, both guarded.** PDOK's free search always returns a best match, so a
-malformed address resolves to an arbitrary place in the country; a result whose
-`woonplaatsnaam` is not the expected city is rejected and falls back to the city centre. And
-PDOK does not index English city names — without the translation table, every **The Hague**
-address geocodes to **Zwolle**.
 
 ---
 
@@ -196,8 +187,6 @@ DATABASE_URL=postgresql://mapscale:mapscale@localhost:5432/mapscale
 ES_URL=                        # optional; omit and /search starts at PDOK
 UPSTASH_REDIS_REST_URL=        # optional; omit to disable caching
 UPSTASH_REDIS_REST_TOKEN=
-ETL_CRON_TOKEN=                # guards the housing ETL/monitor endpoints
-DEEPSEEK_API_KEY=              # housing chat / monitor / city narrative
 ```
 
 Then one command brings up the whole stack — port pre-check → Postgres (`--wait`) → migrations
@@ -251,15 +240,6 @@ every `EXPLAIN ANALYZE` timing meaningless.
 
 Honest list; what remains is upstream, or missing work rather than a defect.
 
-- **Holland2Stay's GraphQL endpoint returns 403** behind a Cloudflare *managed challenge*, which
-  needs a JS engine and a Turnstile token. All seven `curl_cffi` impersonation profiles return a
-  byte-identical 403, so TLS fingerprinting is no longer the discriminator. `/housing/listings`,
-  `/heatmap`, `/city-report`, `/chat` and `/choropleth?direction=future` all fail — as a 502,
-  the provider having translated the upstream 403. Every other
-  Dutch commercial rental source sits behind the same protection — measured matrix in
-  [`docs/data-source-feasibility.md`](docs/data-source-feasibility.md). Circumvention is out of
-  scope. The ETL *exercises* are unaffected; the **data** is what's blocked, which is why
-  `housing_listing` does not exist yet.
 - **ORS's `cycling-*` graphs are broken upstream and return HTTP 200**, so cycling mode silently
   under-reports — all four profiles answer a 600 s isochrone with the same 0.031 km² blob,
   roughly 400x too small. `MODE_MAPPING["cycling"]` is deliberately *not* re-pointed; every
@@ -267,8 +247,9 @@ Honest list; what remains is upstream, or missing work rather than a defect.
   worse lie. `walking` *is* remapped to `foot-hiking`, which is measured-equivalent, because
   `foot-walking` black-holes the request. Evidence:
   [`docs/pg-notes/ors-profile-outage.md`](docs/pg-notes/ors-profile-outage.md).
-- No test coverage for the housing subsystem, the DeepSeek agents, or any error path. No rate
-  limiting; upstream quotas are the only backpressure. Only one housing provider exists.
+- No test coverage for any error path. Removing the housing subsystem took
+  `tests/unit/test_geocode_key.py` with it — 16 of the 25 unit tests — so `pytest tests/unit`
+  is now 9. No rate limiting; upstream quotas are the only backpressure.
 - Traffic figures in the AI service are a PV27 (North Holland) provincial proxy applied to every
   municipality, so other provinces are not location-specific.
 
@@ -279,10 +260,10 @@ Honest list; what remains is upstream, or missing work rather than a defect.
 Numbered by the stages in [`docs/postgres-refactor-plan.md`](docs/postgres-refactor-plan.md),
 which is authoritative.
 
-- **Stage 0 — done.** `geocode_cache`, `municipality`, the migration runner, the degradation guard.
+- **Stage 0 — done.** `geocode_cache`, `municipality`, the migration runner, the degradation
+  guard. `geocode_cache` is now an orphan: its only caller was the removed housing geocoder, and
+  `0001_init.sql` is deliberately left untouched rather than adding a migration to drop it.
 - **Stage 1 — done.** Offline OSM POI import, `etl_run`, `/pois` answered from PostGIS.
-- **Stage 1′ — shelved.** Listing-snapshot ETL, blocked on data rather than on code (see above).
-  History is the one thing that cannot be backfilled later, so this is the costliest thing to defer.
 - **Stage 2.** A transactional outbox plus a `FOR UPDATE SKIP LOCKED` worker. Needs a long-lived
   process, so the backend has to leave Vercel first.
 - **Stage 3.** Synthetic snapshots at scale: partitioning, autovacuum and bloat behaviour, tuning.

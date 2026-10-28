@@ -7,9 +7,6 @@ import AnalysisPanel from './AnalysisPanel.jsx';
 import LegendPanel from './LegendPanel';
 import AnalysisResultPanel from './AnalysisResultPanel';
 import SearchBar from './SearchBar';
-import HousingLayer from './HousingLayer';
-import CityReportPanel from './CityReportPanel';
-import HousingChatPanel from './HousingChatPanel';
 
 // TomTom iconCategory → color (https://developer.tomtom.com/traffic-api/documentation/product-information/introduction)
 const INCIDENT_COLORS = [
@@ -29,11 +26,6 @@ const MapContainer = () => {
   const { map, isReady } = useMap(containerRef);
   const [analysisData, setAnalysisData] = useState(null);
   const [showTraffic, setShowTraffic] = useState(false);
-  const [showHousing, setShowHousing] = useState(false);
-  const [housingDirection, setHousingDirection] = useState('future');
-  const [cityReport, setCityReport] = useState(null);
-  const [cityReportLoading, setCityReportLoading] = useState(false);
-  const [chatCities, setChatCities] = useState([]);
 
   // 1. 统一状态
   const [data, setData] = useState({ iso: null, pois: [], loading: false });
@@ -209,10 +201,6 @@ const MapContainer = () => {
         onAIAnalysis={handleAIAnalysis}
         showTraffic={showTraffic}
         onToggleTraffic={() => setShowTraffic(v => !v)}
-        showHousing={showHousing}
-        onToggleHousing={() => setShowHousing(v => !v)}
-        housingDirection={housingDirection}
-        onSetHousingDirection={setHousingDirection}
       />
 
       <AnalysisResultPanel
@@ -222,46 +210,6 @@ const MapContainer = () => {
 
       {/* 图例组件 */}
       <LegendPanel />
-
-      {/* Housing 自然语言搜索 */}
-      <HousingChatPanel
-        onResult={(cities) => {
-          setChatCities(cities);
-          if (cities.length) {
-            setShowHousing(true);
-            map?.flyTo({ center: [5.29, 52.13], zoom: 7, duration: 1000 });
-          }
-        }}
-        onClear={() => setChatCities([])}
-      />
-
-      {/* Housing 热力图层 */}
-      {showHousing && (
-        <HousingLayer
-          map={map}
-          isReady={isReady}
-          direction={housingDirection}
-          highlightCities={chatCities.length ? chatCities : null}
-          onCityClick={async (city) => {
-            setCityReport(null);
-            setCityReportLoading(true);
-            try {
-              const report = await api.fetchCityReport(city, housingDirection === 'past' ? 1 : 3, housingDirection);
-              setCityReport(report);
-            } catch (err) {
-              console.error('[MapContainer] city report failed', err);
-            } finally {
-              setCityReportLoading(false);
-            }
-          }}
-        />
-      )}
-
-      <CityReportPanel
-        data={cityReport}
-        loading={cityReportLoading}
-        onClose={() => { setCityReport(null); setCityReportLoading(false); }}
-      />
 
       {/* 渲染 Markers */}
       {isReady && <CenterMarker map={map} pos={params.center} />}

@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 load_dotenv(ROOT / ".env")
 
-from api.main.domains.housing.boundaries import WFS_BASE, WFS_PARAMS  # noqa: E402
+from api.main.upstream.pdok import WFS_BASE, WFS_PARAMS  # noqa: E402
 
 # ST_Multi normalises the Polygon/MultiPolygon mix PDOK returns into the single
 # MultiPolygon type the column declares.

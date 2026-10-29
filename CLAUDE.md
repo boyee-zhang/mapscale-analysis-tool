@@ -53,7 +53,14 @@ python scripts/migrate.py                   # apply pending migrations (idempote
 python scripts/migrate.py --status          # list applied / pending
 python scripts/seed_municipalities.py       # seed municipality from PDOK CBS WFS (~342 rows)
 python scripts/import_poi.py data/noord-holland-latest.osm.pbf   # OSM POI import
+python scripts/import_bekendmaking.py --gemeente Utrecht --from 2026-01-01  # announcements
 ```
+
+`import_bekendmaking.py` is scoped **per municipality** (or an RD New circle), because those
+are the only two ways KOOP's SRU service narrows by place. Widening coverage is therefore
+re-running it, once per municipality — there is no national mode. It only ever upserts, so a
+re-run is idempotent and a short fetch costs coverage, never correctness. Both importers read
+`.env` via `load_dotenv`; neither requires `DATABASE_URL` to be exported by hand.
 
 `import_poi.py` needs `osmium` (pyosmium) from `requirements-local.txt` — a Python
 package, not `brew install osmium-tool`; nothing system-level is required. It takes a

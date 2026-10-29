@@ -183,3 +183,50 @@ Index Cond: ((published_at >= '2026-07-01') AND (geom && i.geom))
 **对照组的每一个差异都要是你有意引入的。** 我同时改了索引、表结构和膨胀状态,然后把
 全部收益算在索引头上。"vary one axis at a time" 这条规矩我在 ORS 那次是对别人的结论用的,
 这次没对自己的用。
+
+---
+
+## Utrecht 加入后的实际覆盖,以及一句要收回的话 (2026-10-29)
+
+`--gemeente Utrecht --from 2026-01-01`:7,288 条公告、11,601 条位置行、0 条解析失败,
+`etl_run 19` succeeded。全库现在:
+
+```
+bekendmaking          61,853
+bekendmaking_locatie 100,475   POINT 67,084 / POLYGON 18,653 / LINESTRING 14,671 / MULTIPOLYGON 67
+无效几何                   0
+建设许可              14,122   Amsterdam 10,128 / Utrecht 3,817 / Diemen 177
+```
+
+### 要收回的话:不是"100% 有地理信息"
+
+上一轮我口头报过"54,566 条公告 **100%** 有地理信息"。**错的。** 实测现在
+**74 条公告一条位置行都没有**,其中 65 条是 Amsterdam/Diemen —— 也就是说那 74 条**当时就在**,
+不是 Utrecht 带进来的。真实数字是 **99.88%**(61,779 / 61,853)。
+
+写在仓库里的记录其实是对的:`a9a736a` 的 commit message 自己写着"100 条 Amsterdam 记录里
+80 条一个位置、11 条两个、1 条六个、**8 条没有**",而 `locatiegebied` 那段的"100%"说的是
+**按 doc_type 的样本覆盖率**,不是全表。错的是我把样本结论口头放大成了全表结论。
+
+**而且放大之后它恰好仍然"看起来对"**,因为真值是 99.88% —— 差 0.12 个百分点,任何一次抽查
+都不会露馅。这类错误不会被随机抽样发现,只会被一次穷举计数发现。
+
+没有地理信息的那些不是 bug,是**本来就没有单一地址的东西**:
+
+| 类型 | 条数 |
+|---|---|
+| andere vergunning(酒牌、Bibob 授权) | 32 |
+| exploitatievergunning | 14 |
+| omgevingsvergunning | 9 |
+| 其余 11 种 | 19 |
+
+**建设许可里 0 条缺几何**(14,122 / 14,122),所以这个功能不受影响 —— 但这是量出来的,
+不是从"100%"推出来的。
+
+### 顺带修掉的:这个脚本一直依赖外部导出的 DATABASE_URL
+
+`import_poi.py` 有 `load_dotenv(ROOT / ".env")`,`import_bekendmaking.py` 没有。前两次导入
+碰巧是在已经 export 过的 shell 里跑的,所以从没暴露;这次换了 shell 就直接
+`DATABASE_URL is not set` 退出。已对齐。
+
+**同一个目录下的两个脚本 bootstrap 方式不一样时,能跑的那个会教会你错误的习惯。**

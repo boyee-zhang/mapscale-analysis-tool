@@ -23,8 +23,18 @@ import re
 import sys
 from datetime import date, timedelta
 
+from pathlib import Path
+
 import asyncpg
 import httpx
+from dotenv import load_dotenv
+
+# import_poi.py does this and this script did not, so it only ran in a shell that had
+# already exported DATABASE_URL — which is how the first two imports happened to work and
+# why the third exited with "DATABASE_URL is not set". Scripts in the same directory must
+# bootstrap the same way or the one that works teaches the wrong habit.
+ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(ROOT / ".env")
 
 SRU = "https://repository.overheid.nl/sru"
 PAGE = 100  # the service's own maximum per request

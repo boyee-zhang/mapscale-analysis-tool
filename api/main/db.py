@@ -12,6 +12,7 @@ custom codec, so that every query can be pasted straight into psql for EXPLAIN.
 from __future__ import annotations
 
 import json
+import os
 from contextlib import asynccontextmanager
 
 import asyncpg
@@ -20,6 +21,12 @@ from .config import DATABASE_URL
 from .logger import get_logger
 
 logger = get_logger("db")
+
+# Pool size is an env var so it can be VARIED while measuring, which is the only way to
+# tell "the pool is the wall" from "the pool is merely full". 10 is the default because
+# that is what the ceiling was first measured against; raising it is a decision backed by
+# a number, not a default to drift upward. See docs/monitoring.md.
+POOL_MAX_SIZE = int(os.getenv("DB_POOL_MAX_SIZE", "10"))
 
 _pool: asyncpg.Pool | None = None
 
@@ -65,7 +72,7 @@ async def connect() -> None:
         return
     try:
         _pool = await asyncpg.create_pool(
-            DATABASE_URL, min_size=1, max_size=10, init=_init_connection,
+            DATABASE_URL, min_size=1, max_size=POOL_MAX_SIZE, init=_init_connection,
             server_settings={"plan_cache_mode": "force_custom_plan"},
         )
     except Exception as e:

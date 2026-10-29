@@ -3,3 +3,6 @@ elasticsearch[async]==8.14.0
 osmium==4.3.1          # scripts/import_poi.py only; not imported by the API
 pytest==8.3.5
 ruff==0.9.10
+# Local-only: /metrics degrades to 503 without it, and scraping Vercel is pointless
+# anyway — every invocation is a fresh process, so a counter never accumulates.
+prometheus_client==0.21.1

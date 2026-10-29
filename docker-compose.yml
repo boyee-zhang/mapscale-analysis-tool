@@ -123,8 +123,76 @@ services:
       retries: 60
       start_period: 300s
 
+  # ── Monitoring ─────────────────────────────────────────────────────────────
+  #
+  # All three carry profiles: ["monitoring"], which is what actually keeps them out of a
+  # bare `docker compose up -d` — a comment does not (the ors service learned that the
+  # hard way; `docker compose config --services` listed it anyway). Start with:
+  #     docker compose --profile monitoring up -d
+  #
+  # Deliberately local-only. Scraping the Vercel deployment is not possible: each
+  # invocation is a fresh process, so counters reset and there is no stable target.
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: mapscale-prometheus
+    profiles: ["monitoring"]
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    # The backend runs on the host under `uvicorn --reload`, not in a container, so
+    # Prometheus reaches it through the host gateway. Docker Desktop provides this name
+    # automatically; the explicit mapping is what makes it work on Linux too.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      # 7 days is plenty: this is for watching load tests, not for long-term capacity
+      # planning, and the default 15 days of 5-second samples is a lot of disk for that.
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle
+
+  grafana:
+    image: grafana/grafana:11.5.1
+    container_name: mapscale-grafana
+    profiles: ["monitoring"]
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"
+    environment:
+      # Anonymous admin, no login page. This binds to localhost on a single-user dev
+      # machine and holds nothing but its own query history — a password here would be
+      # ceremony. Do not copy this block to anything reachable from a network.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_USERS_DEFAULT_THEME: light
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    container_name: mapscale-pg-exporter
+    profiles: ["monitoring"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATA_SOURCE_NAME: "postgresql://mapscale:mapscale@postgres:5432/mapscale?sslmode=disable"
+    # The API's own db_pool_* gauges say how many connections WE hold; this says what the
+    # server sees — including the connections the psql sessions and the importers open.
+    # The two disagreeing is itself the signal that something outside the app is busy.
+
 volumes:
   esdata:
   pgdata:
   ors_graphs:
   ors_elevation:
+  promdata:
+  grafanadata:

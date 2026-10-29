@@ -93,6 +93,29 @@ the command above is unaffected. Reads the same
 backend at it with `ORS_BASE_URL=http://localhost:8080/ors/v2`. The why, the measured
 preconditions and the three things to measure after the build are in `docs/ors-self-host.md`.
 
+### Monitoring (optional) — Prometheus + Grafana
+```bash
+docker compose up -d prometheus grafana postgres-exporter   # :9090, :3000
+.venv/bin/python scripts/loadtest.py --scenario permits     # then watch the dashboard
+```
+All three carry `profiles: ["monitoring"]`, which is what keeps them out of a bare
+`docker compose up -d`. The backend exposes `/metrics` — **not** under `/api/main`, since
+that prefix is what vercel.json routes to the serverless function. `prometheus_client`
+lives in `requirements-local.txt`, so `/metrics` returns **503, not an empty 200**, where
+it is absent; an empty 200 charts as a flat zero that looks like "no traffic". Scraping
+Vercel would be pointless regardless: each invocation is a fresh process.
+
+Request labels use the **route template** (`scope["route"].path`), never the raw path —
+`/api/main/pois?lng=…&lat=…` as a label is one time series per coordinate the browser
+ever sent. Pool and loop-lag gauges are sampled by a 1 s background task rather than read
+inside the scrape handler, because reading them on scrape observes them only at the one
+moment the pool is guaranteed idle.
+
+Measured ceilings and which resource binds them: `docs/monitoring.md`. Headline — the
+wall is **single-process Python CPU**, not the pool (10→30 changed nothing) and not ORS
+(4% of request time). `--workers 4` buys +80% on `/bekendmakingen` and is slightly
+*negative* on `/health`.
+
 ### Elasticsearch (optional)
 ```bash
 docker compose up -d elasticsearch   # :9200, single-node, security disabled
@@ -120,6 +143,9 @@ ORS_API_KEY=                   # required for isochrone + directions
 ORS_BASE_URL=                  # optional; defaults to the public host. See docs/ors-self-host.md
 TOMTOM_API_KEY=                # required for traffic
 DATABASE_URL=                  # optional; omit to run without Postgres (see below)
+DB_POOL_MAX_SIZE=              # optional, default 10. An env var so it can be VARIED while
+                               # measuring — that is the only way to tell "the pool is the
+                               # wall" from "the pool is merely full". Measured: it is not.
 ES_URL=                        # optional; omit to disable ES and fall back to PDOK/Nominatim
 UPSTASH_REDIS_REST_URL=        # optional; omit to disable caching (degrades silently)
 UPSTASH_REDIS_REST_TOKEN=

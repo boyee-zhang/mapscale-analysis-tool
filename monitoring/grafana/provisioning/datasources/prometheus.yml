@@ -1,0 +1,12 @@
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    # Fixed uid so the provisioned dashboard JSON can reference it. Without this Grafana
+    # generates a random uid per install and every panel renders "datasource not found".
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    # Container-to-container, so the compose service name, not localhost.
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false

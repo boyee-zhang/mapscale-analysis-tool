@@ -1,0 +1,9 @@
+apiVersion: 1
+providers:
+  - name: mapscale
+    type: file
+    # Provisioned from disk so the dashboard is in git and survives a volume wipe.
+    # Edits made in the Grafana UI are NOT saved back here — change the JSON instead.
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards

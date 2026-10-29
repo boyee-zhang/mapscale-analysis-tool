@@ -1,0 +1,482 @@
+{
+  "uid": "mapscale-backend",
+  "title": "MapScale \u2014 backend capacity",
+  "description": "Local-only. Built to answer one question: where does this backend stop, and which resource stops it. Panels are ordered as the diagnosis runs \u2014 throughput, then latency, then the three things that explain them.",
+  "tags": [
+    "mapscale"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Throughput \u2014 requests/s by route",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (route) (rate(http_requests_total{route!=\"unmatched\"}[30s]))",
+          "legendFormat": "{{route}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Served, not offered. If this flattens while the load generator pushes harder, the ceiling is here \u2014 compare with in-flight and loop lag below."
+    },
+    {
+      "id": 2,
+      "title": "Latency \u2014 p50 / p95 / p99 (all routes)",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_request_duration_seconds_bucket[30s])))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[30s])))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket[30s])))",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Buckets are this app's own range (10 ms - 10 s). A quantile sitting exactly on a bucket edge means the real value is past the last bucket, not that it is stable."
+    },
+    {
+      "id": 3,
+      "title": "Concurrency actually reached",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 8,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "http_requests_in_flight",
+          "legendFormat": "in flight",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "What the server experienced, not what the client aimed for. These diverge the moment something queues."
+    },
+    {
+      "id": 4,
+      "title": "Event loop lag \u2014 the saturation signal",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 8,
+        "y": 8,
+        "w": 8,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "event_loop_lag_seconds",
+          "legendFormat": "lag",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Delay beyond a requested 1 s sleep. This is what separates 'a dependency is slow' (lag stays flat, latency rises) from 'this process is saturated' (lag rises with it). Everything here is async, so a starved loop makes every individual await still look fast."
+    },
+    {
+      "id": 5,
+      "title": "DB pool \u2014 in use vs max_size",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 16,
+        "y": 8,
+        "w": 8,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "db_pool_size - db_pool_idle",
+          "legendFormat": "in use",
+          "refId": "A"
+        },
+        {
+          "expr": "db_pool_size",
+          "legendFormat": "open",
+          "refId": "B"
+        },
+        {
+          "expr": "db_pool_max",
+          "legendFormat": "max_size",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "asyncpg pool is max_size=10. Exhaustion is INVISIBLE from outside: requests queue on acquire(), so latency climbs with no error and no log line. 'in use' pinned at max is that wall."
+    },
+    {
+      "id": 6,
+      "title": "Where the time goes \u2014 ORS vs total (p95)",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(upstream_request_duration_seconds_bucket{service=\"ors\"}[30s])))",
+          "legendFormat": "ORS p95",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[30s])))",
+          "legendFormat": "total p95",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "A 10-minute walk is ~0.7 s end to end and ~0.6 s of that is ORS. Without this split the latency panel cannot say whether we are slow or our dependency is."
+    },
+    {
+      "id": 7,
+      "title": "Errors \u2014 5xx and upstream failures",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 15,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (route) (rate(http_requests_total{status=~\"5..\"}[30s]))",
+          "legendFormat": "5xx {{route}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by (service) (rate(upstream_errors_total[30s]))",
+          "legendFormat": "upstream {{service}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "A load test that gets faster at high concurrency is usually failing faster, not working better. Read this before believing panel 1."
+    },
+    {
+      "id": 8,
+      "title": "Postgres \u2014 server-side connections",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (state) (pg_stat_activity_count{datname=\"mapscale\"})",
+          "legendFormat": "{{state}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "What the SERVER sees, including psql sessions and importers. Disagreeing with the pool gauges above is itself the signal that something outside the app is busy."
+    },
+    {
+      "id": 9,
+      "title": "Postgres \u2014 rows read vs returned",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 23,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "rate(pg_stat_database_tup_fetched{datname=\"mapscale\"}[30s])",
+          "legendFormat": "fetched/s",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(pg_stat_database_tup_returned{datname=\"mapscale\"}[30s])",
+          "legendFormat": "returned/s",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(pg_stat_database_blks_hit{datname=\"mapscale\"}[30s])",
+          "legendFormat": "buffer hits/s",
+          "refId": "C"
+        },
+        {
+          "expr": "rate(pg_stat_database_blks_read{datname=\"mapscale\"}[30s])",
+          "legendFormat": "disk reads/s",
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "shared_buffers is deliberately 128MB. Disk reads climbing while hits flatten is that limit showing up, which is the whole reason the parameter is small."
+    }
+  ]
+}

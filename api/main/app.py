@@ -2,9 +2,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
-from . import db
+from . import db, metrics
 from .errors import ExternalServiceError, InternalError
 from .logger import RequestLoggingMiddleware
 from .logger import get_logger
@@ -16,7 +16,9 @@ logger = get_logger("app")
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     await db.connect()
+    metrics.start_sampler()
     yield
+    await metrics.stop_sampler()
     await db.close()
 
 
@@ -57,6 +59,26 @@ async def internal_error_handler(request: Request, exc: InternalError):
         "error": "internal_error",
         "detail": "An unexpected error occurred.",
     })
+
+# ── Metrics ──────────────────────────────────────────────────────────────────
+#
+# Deliberately NOT under /api/main. That prefix is what vercel.json routes to the
+# serverless function and what the Vite dev proxy forwards; /metrics is a local-only
+# operational surface and should not look like part of the public API. It also means a
+# scrape never passes through the CORS middleware's allow-origin "*".
+
+
+@app.get("/metrics", include_in_schema=False)
+async def prometheus_metrics() -> Response:
+    if not metrics.enabled():
+        # 503, not an empty 200: Prometheus marks the target down and says why, instead
+        # of charting a flat zero that looks like "no traffic".
+        return PlainTextResponse(
+            "prometheus_client not installed (it lives in requirements-local.txt)",
+            status_code=503,
+        )
+    return Response(content=metrics.render(), media_type=metrics.CONTENT_TYPE_LATEST)
+
 
 # ── Routers ──────────────────────────────────────────────────────────────────
 app.include_router(health.router)

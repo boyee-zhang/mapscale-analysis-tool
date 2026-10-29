@@ -144,6 +144,24 @@ These are the reason the project exists in its current form. Each one is reprodu
 
 ---
 
+## Monitoring and measured capacity
+
+`docker compose up -d prometheus grafana postgres-exporter` brings up a local-only
+Prometheus + Grafana (profile-gated, so a bare `up -d` does not start them), and
+`scripts/loadtest.py` ramps concurrency against it.
+
+The ceiling is endpoint-shaped, not one number: `/health` peaks near **3,000 req/s** and
+`/bekendmakingen` near **40–70 req/s** — a 75x spread. The binding resource is
+**single-process Python CPU**: the connection pool was tripled with no effect, ORS is 4%
+of request time, and Postgres sat at 1–4 cores with one active query most of the time,
+while event-loop lag under load ran 0.05–0.54 s. `--workers 4` buys +80% on the heavy
+endpoint and is slightly negative on the trivial one.
+
+Two measurement mistakes are recorded alongside the results in `docs/monitoring.md`,
+because both produced confident wrong answers first: a single-process load generator that
+was itself the bottleneck (caught by pointing it at a Go server), and reading the
+loop-lag gauge *after* the run instead of during it.
+
 ## Endpoints
 
 All under `/api/main`.

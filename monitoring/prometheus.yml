@@ -1,0 +1,24 @@
+# Local-only monitoring. Nothing here runs on Vercel: a serverless invocation is a fresh
+# process, so a counter never accumulates and there is no stable target to scrape.
+global:
+  # 5s rather than the usual 15s. This stack exists to watch a load test that lasts a
+  # couple of minutes; at 15s a 60-second ramp step is four data points.
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  # The backend runs on the HOST (uvicorn --reload), not in a container, so Prometheus
+  # has to reach back out through Docker Desktop's host gateway. On Linux this name does
+  # not resolve by default — the compose service declares an extra_hosts mapping for it.
+  - job_name: mapscale-api
+    static_configs:
+      - targets: ["host.docker.internal:8000"]
+    metrics_path: /metrics
+
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

@@ -297,3 +297,48 @@ specified — `reachfactor < 0.01` plus an area far below `minutes * SPEED_MAP[p
 would **not** have caught the 3.47 km² case: reachfactor 0.0159 is above the threshold and
 3.47 km² is not far below expectation. Duplicate-detection is a different instrument, and it
 only works across a sweep, not on a single request.
+
+---
+
+# `reachfactor` 是什么,以及我上一条结论的订正 (2026-10-29)
+
+上一轮我写了"**plausibility check 必须按面积判,不能用 reachfactor**",理由是乌特的
+reachfactor 是 0.0188–0.1476,高于规格里的 `< 0.01`。**理由站不住 —— 两者是同一个信号。**
+
+官方文档没有给公式(论坛上维护者说它是"等时圈占一个按该 profile 平均速度画的圆的比例",
+但那条帖子里的算例是错的)。所以反解:若 `rf = area / (π·(v·t)²)`,则
+`v = sqrt(area/rf/π)/t`。如果 v 在不同地点、不同 range 下是常数,公式就被确认了。
+
+实测 4 个地点 × 2–3 个 range:
+
+| profile | 反解出的 v | 波动 |
+|---|---|---|
+| `driving-car` | **100.00 km/h** | 99.93 – 100.03 |
+| `cycling-regular` | **15.00 km/h** | 14.86 – 15.00 |
+| `foot-hiking` | **4.00 km/h** | 未被截断的读数全是 4.00 |
+
+**公式确认,并且 rf 在 1.0 处被截断** —— 每一个反解出 >4.00 的步行读数,rf 都正好是 1.0000
+(Haarlem 300 s / 600 s 没被截断,反解出的正是 4.00 和 4.00)。
+
+所以:
+
+```
+reachfactor ≡ area / (π · (v_mean · t)²)      v_mean: 步行 4 / 骑行 15 / 驾车 100 km/h
+```
+
+**rf 和 area 携带完全相同的信息**,rf 只是把 area 按 `(v·t)²` 归一化了。订正如下:
+
+- ❌ 我上一轮说的"必须按面积、不能用 reachfactor"**是错的**。
+- ✅ 真正的问题是**阈值定错了**:乌特步行是期望值的 **1.9%**(rf 0.0188),而规格写的是
+  `rf < 0.01`,也就是只抓低于期望 1% 的情况 —— 太宽松了。
+- ✅ 而且 rf 的归一化**正是我们想要的**:它自带 profile 和 range 的量纲,一个阈值可以同时
+  管步行/骑行/驾车,按 area 判则要为每个 profile 和每个 minutes 另算期望值。
+
+还有一个必须说的局限:**rf 抓不到"碎片"类故障的根因,只能抓到它的后果**。阿姆斯特丹那个
+骑行坏点 600 s 反解出 14.86 km/h —— 面积和 rf 一起缩小,比值不变,所以**自洽**。
+rf 能告诉你"这个圈比应该的小 99.84%",但它永远不会告诉你"你量到的是一段孤立路段"。
+那个只有**跨多次请求比对重复值**才看得见。
+
+两件工具,两种故障:
+- **单次请求** → reachfactor 阈值(需要把 0.01 调高,0.01 太宽松;乌特要 >0.15 才能覆盖)。
+- **一次扫描** → 查重复值(不同输入返回相同输出)。

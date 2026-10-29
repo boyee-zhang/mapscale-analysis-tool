@@ -8,6 +8,9 @@ import LegendPanel from './LegendPanel';
 import AnalysisResultPanel from './AnalysisResultPanel';
 import SearchBar from './SearchBar';
 import { DEFAULT_CATEGORIES } from '../constants/poiCategories';
+import PermitLayer, { PERMIT_LAYER_IDS } from './PermitLayer';
+import PermitPanel from './PermitPanel';
+import { DEFAULT_WINDOW_MONTHS } from '../constants/bekendmaking';
 
 // TomTom iconCategory → color (https://developer.tomtom.com/traffic-api/documentation/product-information/introduction)
 const INCIDENT_COLORS = [
@@ -28,6 +31,9 @@ const MapContainer = () => {
   const [analysisData, setAnalysisData] = useState(null);
   const [showTraffic, setShowTraffic] = useState(false);
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+  const [showPermits, setShowPermits] = useState(false);
+  const [permitWindow, setPermitWindow] = useState(DEFAULT_WINDOW_MONTHS);
+  const [permits, setPermits] = useState({ data: null, loading: false });
 
   // 1. 统一状态
   const [data, setData] = useState({ iso: null, pois: [], loading: false });
@@ -93,10 +99,50 @@ const MapContainer = () => {
     return () => { cancelled = true; clearTimeout(timer); };
   }, [isReady, params.center, params.minutes, params.mode, categories]);
 
+  // Building permits. A third effect rather than a branch in the POI one: it is toggled
+  // off by default, it has its own time window, and it must not re-run when a POI type is
+  // toggled. It does share the isochrone — /bekendmakingen clips to the same polygon
+  // server-side, so the shape on screen and the shape queried cannot drift apart.
+  useEffect(() => {
+    if (!isReady) return;
+    if (!showPermits) { setPermits({ data: null, loading: false }); return; }
+    let cancelled = false;
+
+    // The window is computed here rather than sent as a month count so the request is a
+    // pair of absolute dates: the same URL means the same thing tomorrow.
+    const to = new Date();
+    const from = new Date(to);
+    from.setMonth(from.getMonth() - permitWindow);
+    const iso = (d) => d.toISOString().slice(0, 10);
+
+    const timer = setTimeout(async () => {
+      setPermits(p => ({ ...p, loading: true }));
+      try {
+        const data = await api.fetchBekendmakingen({
+          lng: params.center.lng, lat: params.center.lat,
+          minutes: params.minutes, profile: params.mode,
+          dateFrom: iso(from), dateTo: iso(to), buildingPermits: true,
+        });
+        if (!cancelled) setPermits({ data, loading: false });
+      } catch (err) {
+        console.error('[MapContainer] permits failed', err);
+        if (!cancelled) setPermits({ data: null, loading: false });
+      }
+    }, 300);
+
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [isReady, showPermits, permitWindow, params.center, params.minutes, params.mode]);
+
   // 3. 点击地图更新中心点
   useEffect(() => {
     if (!isReady) return;
     const handleClick = (e) => {
+      // A click on a permit dot opens its popup and must not also move the centre, which
+      // would re-run the isochrone and unmount the popup. MapLibre delivers the same click
+      // to the layer handler and to this one, so the layer has to be excluded here —
+      // stopPropagation inside the layer handler does not reach this listener.
+      const present = PERMIT_LAYER_IDS.filter(id => map.getLayer(id));
+      if (present.length && map.queryRenderedFeatures(e.point, { layers: present }).length) return;
       const { lng, lat } = e.lngLat;
       setParams(p => ({ ...p, center: { lng, lat } }));
     };
@@ -240,6 +286,8 @@ const MapContainer = () => {
         onToggleTraffic={() => setShowTraffic(v => !v)}
         categories={categories}
         onSetCategories={setCategories}
+        showPermits={showPermits}
+        onTogglePermits={() => setShowPermits(v => !v)}
       />
 
       <AnalysisResultPanel
@@ -249,6 +297,23 @@ const MapContainer = () => {
 
       {/* 图例组件 */}
       <LegendPanel categories={categories} />
+
+      {/* 建设许可：地图图层 + 按月统计面板 */}
+      <PermitLayer
+        map={map}
+        isReady={isReady}
+        items={permits.data?.items}
+        visible={showPermits}
+      />
+      {showPermits && (
+        <PermitPanel
+          data={permits.data}
+          loading={permits.loading}
+          windowMonths={permitWindow}
+          onSetWindow={setPermitWindow}
+          onClose={() => setShowPermits(false)}
+        />
+      )}
 
       {/* 渲染 Markers */}
       {isReady && <CenterMarker map={map} pos={params.center} />}

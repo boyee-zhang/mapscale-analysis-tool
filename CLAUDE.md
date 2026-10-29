@@ -153,9 +153,11 @@ api/main/
   upstream/       transport only: ors, overpass, pdok, tomtom, es_client
   domains/
     geo/          spatial primitives: isochrone + POI-inside-a-shape (service.py)
-  routers/        isochrone, pois, directions, region, traffic, search, health
-                  — isochrone/pois are thin callers of domains/geo; the rest are
-                    not yet folded into domains/ (refactor phases B & C)
+    bekendmaking/ official announcements for a place and a time window (service.py);
+                  composes domains/geo's isochrone, owns no shape of its own
+  routers/        isochrone, pois, bekendmakingen, directions, region, traffic,
+                  search, health — isochrone/pois/bekendmakingen are thin callers of
+                  domains/; the rest are not yet folded in (refactor phases B & C)
 ```
 
 **`upstream/` is a transport layer only.** It may not contain business rules, caching
@@ -167,7 +169,8 @@ decisions, or domain types. Judgement call: if a function in `upstream/` needs t
 `db.enabled()` is the guard; the pre-Postgres code path stays in place behind it, exactly
 as `cache.py` degrades when Upstash is unconfigured. This keeps the Vercel deployment
 working while Postgres is local-only. Current tables: `municipality` (stage 0); `etl_run`,
-`poi_category`, `poi_category_rule`, `poi`, `poi_import` (stage 1). `geocode_cache` is also
+`poi_category`, `poi_category_rule`, `poi`, `poi_import` (stage 1); `bekendmaking`,
+`bekendmaking_locatie` (official announcements, loaded by `scripts/import_bekendmaking.py`). `geocode_cache` is also
 still there but no longer read or written — its only caller was the housing geocoder.
 
 A refactor is in progress — see `docs/architecture-refactor-plan.md` (structure) and
@@ -184,6 +187,7 @@ All under the `/api/main` prefix.
 | `/health` | GET | — | — |
 | `/isochrone` | GET | ORS | 24h |
 | `/pois` | GET | `poi` table (Overpass as fallback) | 6h on the Overpass path only |
+| `/bekendmakingen` | GET | `bekendmaking` tables + ORS for the shape | — |
 | `/region` | GET | PDOK reverse | 7d |
 | `/directions` | GET | ORS | — |
 | `/bulk_directions` | GET | ORS (`asyncio.gather`) | — |
@@ -219,6 +223,33 @@ inside the `Index Cond` and is now slightly ahead (91 buffers against 98). The i
 still load-bearing. Re-measure before quoting either number. Likewise the
 radius is a buffer polygon, not `ST_DWithin(geom::geography, …)`, which is unindexable against a
 `geometry` GiST. Both are measured in `docs/pg-notes/stage1-poi-import.md`; do not "simplify".
+
+`/bekendmakingen` answers "what has been happening here, month by month" over the same
+isochrone. `building_permits=true` is shorthand for `doc_type=omgevingsvergunning` +
+`activiteit=bouwen` — `doc_type` alone also covers felling, signage and zoning. Four things
+about its contract are easy to get wrong:
+- `total` and `months` count every match; `items` is capped at 500 and `truncated` says so.
+  **Never re-derive the month histogram from `items`** — a truncated list under-reports.
+- `by_activiteit` counts do **not** sum to `total`: one permit can carry several activities.
+  Correct as a bar chart, wrong as a pie.
+- `stage` (aanvraag / ontwerp / besluit / overig) is **derived from the title**, not a field
+  the source publishes. 99.8% of building permits classify; the UI labels it as derived.
+- without `DATABASE_URL` it returns `shape: "unavailable"`, not `total: 0`. There is no
+  Overpass-equivalent to degrade to, and "no source" must not look like "no permits".
+
+The spatial predicate is `ST_Intersects`, not the `ST_Contains` `/pois` uses: announcement
+geometry is 16% POLYGON and 13% LINESTRING, and a plot straddling the isochrone edge is
+within reach. One row per publication comes from `DISTINCT ON` in the same index pass —
+a publication carries 2.5 geometries on average. Measured in
+`docs/pg-notes/bekendmaking-map-layer.md`; do not "simplify" either.
+
+**`db.py` sets `plan_cache_mode=force_custom_plan` on every pooled connection, and that is
+load-bearing.** asyncpg sends queries as server-side prepared statements and caches them;
+PostgreSQL switches to a generic plan on the 6th execution, and our spatial queries pass the
+search shape as a parameter, so the planner has no bounding box to estimate from. Measured:
+the same wide query took 2.4-3.1 s for five executions and **104 s on the sixth**, reproduced
+independently in psql with PREPARE/EXECUTE (77.5 s on the sixth). `/pois` passes its polygon
+the same way and had the same latent exposure. Do not remove the setting.
 
 Mode constants live **only** in `config.py`:
 - `MODE_MAPPING`: `walking → foot-hiking`, `cycling → cycling-regular`, `driving → driving-car`
@@ -263,7 +294,16 @@ fetch was removed rather than wired up — drawing the route is a feature, not a
 `api.fetchDirections` is still there if it is ever wanted.
 
 Components: `SearchBar`, `CenterMarker`, `PoiMarker`, `PoiPopup`, `LegendPanel`,
-`AnalysisPanel` + `AnalysisResultPanel` (AI service).
+`AnalysisPanel` + `AnalysisResultPanel` (AI service), `PermitLayer` + `PermitPanel`.
+
+`PermitLayer` is a GeoJSON source plus two circle layers, **not** one DOM marker per item
+the way `PoiMarker` is: `/bekendmakingen` returns up to 500 and a driving isochrone hits
+that cap every time. Both circle layers are interactive and both are in `MapContainer`'s
+click guard — the dot is 2-7px and the halo around it is 4-18px, so hit-testing only the dot
+let a click that visibly landed on a permit fall through and move the centre instead.
+`e.originalEvent.stopPropagation()` does **not** stop MapLibre's own dispatch to the bare
+`map.on('click')` handler; the guard has to live in that handler, via
+`queryRenderedFeatures`.
 
 `AnalysisResultPanel` still renders a **Housing Price Trend** chart. That is deliberate and is
 not part of the removed subsystem: the data is CBS OData from the sibling `mapscale-ai-service`

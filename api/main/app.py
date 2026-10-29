@@ -8,7 +8,7 @@ from . import db
 from .errors import ExternalServiceError, InternalError
 from .logger import RequestLoggingMiddleware
 from .logger import get_logger
-from .routers import isochrone, pois, directions, region, traffic, search, health
+from .routers import isochrone, pois, bekendmakingen, directions, region, traffic, search, health
 
 logger = get_logger("app")
 
@@ -62,6 +62,7 @@ async def internal_error_handler(request: Request, exc: InternalError):
 app.include_router(health.router)
 app.include_router(isochrone.router)
 app.include_router(pois.router)
+app.include_router(bekendmakingen.router)
 app.include_router(directions.router)
 app.include_router(region.router)
 app.include_router(traffic.router)

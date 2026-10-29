@@ -36,6 +36,53 @@ export const api = {
   },
     
   /**
+   * Official government announcements whose geometry meets the same isochrone /pois uses.
+   *
+   * @param {object} q
+   * @param {number} q.lng
+   * @param {number} q.lat
+   * @param {number} q.minutes
+   * @param {'walking'|'cycling'|'driving'} q.profile
+   * @param {string} q.dateFrom  ISO date, inclusive
+   * @param {string} q.dateTo    ISO date, inclusive
+   * @param {boolean} [q.buildingPermits]  shorthand for omgevingsvergunning + bouwen
+   * @returns {Promise<{
+   *   shape: 'isochrone'|'circle'|'unavailable'|'none',
+   *   window: { from: string, to: string },
+   *   total: number, truncated: boolean,
+   *   months: Array<{ month: string, count: number }>,
+   *   by_type: Array<{ doc_type: string, count: number }>,
+   *   by_activiteit: Array<{ activiteit: string, count: number }>,
+   *   by_stage: Array<{ stage: string, count: number }>,
+   *   items: Array<{ identifier, title, doc_type, published_at, activiteit, stage,
+   *                  gemeente, url, lon, lat }>
+   * }>}
+   *
+   * `total` counts every match; `items` is capped by the backend at 500 and `truncated`
+   * says whether that happened. The month histogram is computed over all matches, so a
+   * truncated list does not under-report a month — do not re-derive it from `items`.
+   */
+  fetchBekendmakingen: async ({ lng, lat, minutes, profile, dateFrom, dateTo, buildingPermits }) => {
+    // Hand-built for the same reason as fetchPOIs: axios would send `doc_type[]=`, which
+    // FastAPI's repeated-param reader ignores. No array params are sent today, but the
+    // shorthand flag is here instead precisely so callers are not tempted to pass one.
+    const params = new URLSearchParams({ lng, lat, minutes, profile });
+    if (dateFrom) params.append('date_from', dateFrom);
+    if (dateTo) params.append('date_to', dateTo);
+    if (buildingPermits) params.append('building_permits', 'true');
+    try {
+      const res = await client.get('/api/main/bekendmakingen', { params });
+      console.log('[api] fetchBekendmakingen', {
+        shape: res.data.shape, total: res.data.total, truncated: res.data.truncated,
+      });
+      return res.data;
+    } catch (err) {
+      console.error('[api] fetchBekendmakingen failed', err);
+      throw err;
+    }
+  },
+
+  /**
    * @param {{ lng: number, lat: number }} start
    * @param {{ lng: number, lat: number }} end
    * @param {'walking'|'cycling'|'driving'} mode

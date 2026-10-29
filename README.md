@@ -77,7 +77,8 @@ api/main/
   upstream/         transport only — ors, overpass, pdok, tomtom, es_client. No business rules.
   domains/
     geo/            spatial primitives: isochrone, POI-inside-a-shape
-  routers/          isochrone, pois, directions, region, traffic, search, health
+  routers/          isochrone, pois, bekendmakingen, directions, region, traffic,
+                    search, health
 migrations/         0001_init … 0004_poi_category_seed  (+ .noxact.sql for CREATE INDEX CONCURRENTLY)
 scripts/            dev.sh, migrate.py, import_poi.py, seed_municipalities.py, ingest_addresses.py
 docs/pg-notes/      raw EXPLAIN / lock / vacuum output per stage
@@ -152,10 +153,21 @@ All under `/api/main`.
 | `/health` | — | — |
 | `/isochrone` | ORS | 24h |
 | `/pois` | `poi` table (Overpass fallback) | 6h on the Overpass path only |
+| `/bekendmakingen` | `bekendmaking` tables, clipped to the isochrone | — |
 | `/region` | PDOK reverse | 7d |
 | `/directions`, `/bulk_directions` | ORS | — |
 | `/traffic/tile-url`, `/traffic/flow`, `/traffic/incidents` | TomTom | 5m |
 | `/search` | ES → PDOK → Nominatim | — |
+
+**Announcements on the map.** `/bekendmakingen` answers "what has been happening here,
+month by month" over the same isochrone `/pois` uses, from the KOOP publications loaded by
+`scripts/import_bekendmaking.py`. `building_permits=true` narrows it to
+`omgevingsvergunning` + activity `bouwen`; `doc_type` on its own also covers tree felling,
+signage and zoning. `total` and the month histogram count every match while `items` is
+capped at 500, so the bars must not be re-derived from the list. `stage`
+(applied / draft / decided) is **derived from the publication title**, not a field the
+source publishes — 99.8% of building permits classify, and the UI says it is derived.
+Without `DATABASE_URL` it reports `shape: "unavailable"` rather than zero results.
 
 **Search waterfall.** Elasticsearch `nl_addresses` (weights overridable per request via
 `w_street` / `w_city` / `w_postcode` / `w_label`, accepted only above `ES_MIN_SCORE=15`) → PDOK,
@@ -268,6 +280,11 @@ which is authoritative.
   guard. `geocode_cache` is now an orphan: its only caller was the removed housing geocoder, and
   `0001_init.sql` is deliberately left untouched rather than adding a migration to drop it.
 - **Stage 1 — done.** Offline OSM POI import, `etl_run`, `/pois` answered from PostGIS.
+  Official announcements (`bekendmaking`, `bekendmaking_locatie`) landed on the same
+  footing, with `/bekendmakingen` and a map layer on top of them. Finding the plan-cache
+  cliff that this endpoint exposed — a prepared statement 31x slower on its 6th execution,
+  which `/pois` was equally exposed to — is in
+  `docs/pg-notes/bekendmaking-map-layer.md`.
 - **Stage 2.** A transactional outbox plus a `FOR UPDATE SKIP LOCKED` worker. Needs a long-lived
   process, so the backend has to leave Vercel first.
 - **Stage 3.** Synthetic snapshots at scale: partitioning, autovacuum and bloat behaviour, tuning.

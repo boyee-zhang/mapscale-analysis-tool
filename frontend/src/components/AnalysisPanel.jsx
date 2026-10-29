@@ -2,7 +2,9 @@
 import React, { useState } from 'react';
 import PoiCategoryPicker from './PoiCategoryPicker';
 
-const AnalysisPanel = ({ params, setParams, poiCount, loading, onAIAnalysis, showTraffic, onToggleTraffic, categories, onSetCategories }) => {
+const AnalysisPanel = ({ params, setParams, poiCount, loading, onAIAnalysis, showTraffic,
+                         onToggleTraffic, categories, onSetCategories,
+                         showPermits, onTogglePermits }) => {
   // AI 分析的内部加载状态
   const [isAnalysing, setIsAnalysing] = useState(false);
 
@@ -57,6 +59,26 @@ const AnalysisPanel = ({ params, setParams, poiCount, loading, onAIAnalysis, sho
         onChange={onSetCategories}
         disabled={loading}
       />
+
+      {/* 建设许可按钮 — 开关在这里，统计面板在右侧 */}
+      <div style={{ marginBottom: '12px' }}>
+        <button
+          onClick={onTogglePermits}
+          style={{
+            ...trafficButtonStyle,
+            background: showPermits
+              ? 'linear-gradient(135deg, #34C759 0%, #FF9500 100%)'
+              : 'rgba(0,0,0,0.06)',
+            color: showPermits ? 'white' : '#1d1d1f',
+            boxShadow: showPermits ? '0 4px 12px rgba(52,199,89,0.3)' : 'none',
+          }}
+        >
+          <span style={{ fontSize: '14px' }}>🏗️</span>
+          <span style={{ marginLeft: '8px' }}>
+            {showPermits ? 'Hide Permits' : 'Building Permits'}
+          </span>
+        </button>
+      </div>
 
       {/* 实时交通按钮 */}
       <div style={{ marginBottom: '12px' }}>

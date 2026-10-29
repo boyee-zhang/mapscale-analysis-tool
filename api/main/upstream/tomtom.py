@@ -1,4 +1,5 @@
 import httpx
+from .. import http_client
 from ..config import TOMTOM_API_KEY
 from ..errors import ExternalServiceError
 from ..logger import get_logger
@@ -17,16 +18,15 @@ async def fetch_flow(lat: float, lng: float) -> dict:
     params = {"point": f"{lat},{lng}", "key": TOMTOM_API_KEY}
     logger.info("→ flow", extra={"lat": lat, "lng": lng})
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(FLOW_URL, params=params)
-            resp.raise_for_status()
-            data = resp.json()
-            flow = data.get("flowSegmentData", {})
-            logger.info("← flow", extra={
-                "currentSpeed": flow.get("currentSpeed"),
-                "freeFlowSpeed": flow.get("freeFlowSpeed"),
-            })
-            return flow
+        resp = await http_client.get().get(FLOW_URL, params=params, timeout=10.0)
+        resp.raise_for_status()
+        data = resp.json()
+        flow = data.get("flowSegmentData", {})
+        logger.info("← flow", extra={
+            "currentSpeed": flow.get("currentSpeed"),
+            "freeFlowSpeed": flow.get("freeFlowSpeed"),
+        })
+        return flow
     except httpx.TimeoutException:
         raise ExternalServiceError("tomtom", 504, "flow request timed out")
     except httpx.HTTPStatusError as e:
@@ -48,12 +48,11 @@ async def fetch_incidents(min_lng: float, min_lat: float, max_lng: float, max_la
     }
     logger.info("→ incidents", extra={"bbox": params["bbox"]})
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(INCIDENTS_URL, params=params)
-            resp.raise_for_status()
-            incidents = resp.json().get("incidents", [])
-            logger.info("← incidents", extra={"count": len(incidents)})
-            return incidents
+        resp = await http_client.get().get(INCIDENTS_URL, params=params, timeout=10.0)
+        resp.raise_for_status()
+        incidents = resp.json().get("incidents", [])
+        logger.info("← incidents", extra={"count": len(incidents)})
+        return incidents
     except httpx.TimeoutException:
         raise ExternalServiceError("tomtom", 504, "incidents request timed out")
     except httpx.HTTPStatusError as e:

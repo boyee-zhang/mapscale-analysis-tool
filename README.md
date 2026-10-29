@@ -151,16 +151,24 @@ Prometheus + Grafana (profile-gated, so a bare `up -d` does not start them), and
 `scripts/loadtest.py` ramps concurrency against it.
 
 The ceiling is endpoint-shaped, not one number: `/health` peaks near **3,000 req/s** and
-`/bekendmakingen` near **40–70 req/s** — a 75x spread. The binding resource is
-**single-process Python CPU**: the connection pool was tripled with no effect, ORS is 4%
-of request time, and Postgres sat at 1–4 cores with one active query most of the time,
-while event-loop lag under load ran 0.05–0.54 s. `--workers 4` buys +80% on the heavy
-endpoint and is slightly negative on the trivial one.
+`/bekendmakingen` originally near **40 req/s**. Chasing that gap found a real defect —
+every upstream helper opened its own `httpx.AsyncClient` per call, and building that
+client's TLS context costs **13.88 ms of CPU**. With the Upstash host NXDOMAIN, every
+request paid it for a cache lookup that could never hit. One shared client
+(`api/main/http_client.py`) took per-request CPU from **22.3 ms to 7.5 ms** and throughput
+from **40.9 to 119.4 req/s**, with the dead cache still configured and still failing on
+every request.
 
-Two measurement mistakes are recorded alongside the results in `docs/monitoring.md`,
-because both produced confident wrong answers first: a single-process load generator that
-was itself the bottleneck (caught by pointing it at a Go server), and reading the
-loop-lag gauge *after* the run instead of during it.
+Not the connection pool (tripled, no effect), not ORS (4% of request time), not Postgres
+(1.3–4.3 of 8 cores). `--workers 4` buys +80%, but only by adding cores to burn on the
+same waste.
+
+Three measurement mistakes are recorded alongside the results in `docs/monitoring.md`,
+because each produced a confident wrong answer first: a single-process load generator that
+was itself the bottleneck (caught by pointing it at a Go server), reading the loop-lag
+gauge *after* the run instead of during it, and attributing the CPU to "parsing and
+serialisation" by listing plausible work instead of measuring it (that work is 4.5 ms of
+the 22.3).
 
 ## Endpoints
 

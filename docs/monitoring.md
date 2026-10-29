@@ -161,12 +161,61 @@ docker compose config --services     # 只应该列出 elasticsearch 和 postgre
 |---|---|---|
 | ORS 上游 | 固定坐标下 **0.18 次调用/请求**(single-flight 去重掉 82%),占请求时间 **4%** | ❌ 不是 |
 | 连接池 | 10 → 30,吞吐**没动** | ❌ 不是 |
-| Postgres | 容器 CPU 1.3–4.3 核,`pg_stat_activity` 多数时刻只有 1 个 active | ❌ 不是主因 |
-| **单进程 Python CPU** | 压测中 loop lag **0.05–0.54 s**;加 worker 直接 **+80%** | ✅ **是** |
+| Postgres | 容器 CPU 1.3–4.3 核(VM 共 8 核),多数时刻只有 1 个 active 查询 | ❌ 不是 |
+| 单进程 Python CPU | 压测中单 worker 稳定 **71–96% 的一个核**;loop lag 0.05–0.54 s | ✅ 是,但这是**症状** |
+| **每次调用新建 `httpx.AsyncClient`** | 构造一次 **13.88 ms CPU**;修掉之后 **22.3 → 7.5 ms/请求** | ✅ **这才是原因** |
 
-每个 `/bekendmakingen` 请求在 Python 里要做:解析 ORS 的 GeoJSON 多边形 → `json.dumps`
-成查询参数 → asyncpg 解码最多 500 条的 jsonb → FastAPI 再序列化成 JSON。**这些全是单线程
-事件循环里的 CPU**,而 `/health` 一样都不做。
+### ⚠️ 本节第一版的结论是错的,订正如下
+
+第一版写的是:「每个请求要解析 GeoJSON → `json.dumps` → 解码 jsonb → 序列化,**这些累积
+起来**就是 CPU 墙」。**数字不支持这个说法**,而我当时没有去量它们,只是列举了一串看起来
+很忙的操作。实测:
+
+| 阶段 | CPU |
+|---|---|
+| DB 往返(含 asyncpg 解码 284 条) | 0.9 ms |
+| `jsonable_encoder` + `json.dumps` 108 KB | 3.5 ms |
+| 两条 JSON 日志 | 0.03 ms |
+| **实测每请求总计** | **22.3 ms** |
+
+差了 18 ms。**单轴验证**:同一端点只改时间窗口,把返回条数从 284 砍到 2 条:
+
+| 窗口 | items | 响应 | rps | CPU/请求 |
+|---|---|---|---|---|
+| 12 个月 | 284 | 102 KB | 40.9 | 22.3 ms |
+| 1 个月 | 43 | 16 KB | 54.9 | 17.9 ms |
+| 1 天 | **2** | **1.1 KB** | 57.9 | **17.1 ms** |
+
+响应体只解释 5.2 ms。**返回 2 条、1.1 KB 的请求仍然要烧 17.1 ms**,而 `/health` 走同一套
+中间件只要 0.32 ms —— 所以既不是中间件,也不是"干的活多"。
+
+### 真正的原因:per-call 构造 `httpx.AsyncClient`
+
+```
+kv_get 一次(必然失败):        墙钟 17.03 ms | CPU 14.53 ms
+只是 new httpx.AsyncClient(): CPU 13.88 ms       <- 95% 在这里
+```
+
+构造一个 AsyncClient 要从系统信任库重建 TLS context。代码里**有 10 处**是
+`async with httpx.AsyncClient(...) as client:`(cache 2、ors 2、tomtom 2、search 2、
+overpass 1、pdok 1)。而 Upstash 的域名自 2026-10-28 起 NXDOMAIN,于是**每个请求都要为一次
+注定失败的缓存查询付 14 ms**。
+
+修法是 `api/main/http_client.py`:一个进程级共享实例,`timeout` / `headers` 仍按调用点传。
+
+| 配置 | CPU/请求 | rps | p95 |
+|---|---|---|---|
+| per-call 构造(原状) | 22.3 ms | 40.9 | 1,495 ms |
+| 关掉死缓存(**只是诊断手段**) | 7.4 ms | 107.7 | 452 ms |
+| **共享 client(真修复)** | **7.5 ms** | **119.4** | **364 ms** |
+
+共享 client 在**缓存照常配置、照常失败、日志里照常 3,608 次 `kv get failed`** 的前提下拿回
+了全部损失 —— 这个计数是用来证明对照有效的,不是装饰。
+
+> **"加 worker" 是治标。** 它确实有用(+80%),但它只是给你更多核去烧同一笔浪费。
+> 先修掉浪费,2.9 倍;再谈要不要加 worker。
+
+每个 `/bekendmakingen` 请求在 Python 里确实也做解析和序列化,但那只有 4.5 ms。
 
 ## 结论,按可操作性排序
 

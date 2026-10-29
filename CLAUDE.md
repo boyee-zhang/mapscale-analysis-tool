@@ -111,10 +111,16 @@ ever sent. Pool and loop-lag gauges are sampled by a 1 s background task rather 
 inside the scrape handler, because reading them on scrape observes them only at the one
 moment the pool is guaranteed idle.
 
-Measured ceilings and which resource binds them: `docs/monitoring.md`. Headline — the
-wall is **single-process Python CPU**, not the pool (10→30 changed nothing) and not ORS
-(4% of request time). `--workers 4` buys +80% on `/bekendmakingen` and is slightly
-*negative* on `/health`.
+Measured ceilings and which resource binds them: `docs/monitoring.md`. Headline — the wall
+was **constructing an `httpx.AsyncClient` per call**: building its TLS context costs
+**13.88 ms of CPU**, and with the Upstash host NXDOMAIN every request paid that for a
+cache lookup that could never hit. `api/main/http_client.py` is now the one shared client;
+**use it, never `httpx.AsyncClient(...)` in a request path**. Measured: 22.3 → 7.5 ms CPU
+per request, 40.9 → 119.4 req/s, p95 1495 → 364 ms, with the dead cache still configured
+and still called every request. Not the pool (10→30 changed nothing), not ORS (4% of
+request time), not Postgres (1.3–4.3 of 8 cores, one active query most samples).
+`--workers 4` buys +80% but only adds cores to burn on the same waste — fix the waste
+first. The doc records the first, wrong conclusion too.
 
 ### Elasticsearch (optional)
 ```bash

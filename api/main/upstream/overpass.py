@@ -1,4 +1,5 @@
 import httpx
+from .. import http_client
 from ..config import SPEED_MAP
 from ..errors import ExternalServiceError
 from ..logger import get_logger
@@ -56,12 +57,11 @@ async def fetch_pois(lng: float, lat: float, minutes: int, profile: str) -> dict
     last_error = None
     for url, timeout_s in OVERPASS_ENDPOINTS:
         try:
-            async with httpx.AsyncClient(timeout=timeout_s, headers=_HEADERS) as client:
-                resp = await client.post(url, data={"data": query})
-                resp.raise_for_status()
-                data = resp.json()
-                logger.info("← pois", extra={"elements": len(data.get("elements", [])), "endpoint": url})
-                return data
+            resp = await http_client.get().post(url, data={"data": query}, timeout=timeout_s, headers=_HEADERS)
+            resp.raise_for_status()
+            data = resp.json()
+            logger.info("← pois", extra={"elements": len(data.get("elements", [])), "endpoint": url})
+            return data
         except httpx.TimeoutException:
             logger.warning("pois timeout", extra={"service": "overpass", "endpoint": url, "timeout_s": timeout_s})
             last_error = ExternalServiceError("overpass", 504, "query timed out — try a smaller area")

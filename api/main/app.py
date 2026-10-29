@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
-from . import db, metrics
+from . import db, http_client, metrics
 from .errors import ExternalServiceError, InternalError
 from .logger import RequestLoggingMiddleware
 from .logger import get_logger
@@ -19,6 +19,7 @@ async def lifespan(_: FastAPI):
     metrics.start_sampler()
     yield
     await metrics.stop_sampler()
+    await http_client.aclose()
     await db.close()
 
 

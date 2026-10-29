@@ -363,3 +363,40 @@ widget 31%, and the user's own `uvicorn --reload` burning 35–72% of a core **w
 (its file watcher polls the whole repo, `data/*.osm.pbf` and `.venv` included). Load average
 reached 16 on an 8-core machine during the sweeps. Every figure above is therefore a floor.
 The per-core costs are the part worth carrying forward.
+
+### Where the eight cores actually went at 4,000 req/s
+
+Measured in one window, `/health`, 6 workers, generator at `--procs 6`, 23.4 s:
+
+| | cores | share of the machine | CPU per request |
+|---|---|---|---|
+| the server (6 workers) | 2.31 | 28.9% | **0.58 ms** |
+| **the load generator** | **2.80** | **35.0%** | **0.70 ms** |
+| both | 5.11 | 63.8% | |
+| left for everything else | 2.89 | 36.1% | |
+
+**The generator costs more per request than the server it is measuring** — 0.70 ms against
+0.58 ms. So "the ceiling is contention" is the right shape but the wrong culprit: the largest
+single competitor is the measuring instrument, not the desktop. Chrome, WindowServer and the
+idle `--reload` watcher together are comparable to it, but the generator alone outweighs the
+server.
+
+Two consequences, and they point in different directions:
+
+**For the bare handlers, the machine is the limit.** The server never had more than 2.31 of 8
+cores. At 0.58 ms per request, 8 dedicated cores extrapolates to ~13,800 req/s — but that is
+an extrapolation, not a measurement, and it would meet walls this run never reached (uvicorn's
+accept loop, the kernel socket path). The defensible statement is the cost, not the
+extrapolation: **0.58 ms of CPU per request, and 4,004 req/s is what this laptop yields while
+also generating the load.** Finding the real ceiling needs the generator on a second machine.
+
+**For the endpoints that matter, contention is not the limit at all.** `/bekendmakingen` peaks
+at 142 req/s using 1.03 cores while 2.89 cores sat free — it had headroom and could not use
+it, because it was waiting on Postgres and ORS. Giving it more cores does nothing. The 4,000
+figure belongs to `/health`, an endpoint that returns a timestamp; quoting it as "the
+backend's throughput" describes the framework, not the application.
+
+So there are two separate ceilings with two separate fixes, and the one number cannot stand
+for both: the bare-framework ceiling is machine-bound and would move with hardware, while
+the real endpoints are upstream-bound and would move only with the ORS deployment, the
+`/bekendmakingen` query (the deferred `doc_type` denormalisation) or a working cache.

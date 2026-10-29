@@ -169,9 +169,13 @@ const closeStyle = {
 };
 
 const windowRowStyle = { display: 'flex', gap: '4px', margin: '12px 0 10px' };
+// Longhand border properties, not the `border` shorthand: pillOnStyle overrides only the
+// colour, and React warns (and can mis-apply) when a rerender drops a longhand while a
+// conflicting shorthand is set. Caught from the browser console, not from the diff.
 const pillStyle = {
   flex: 1, padding: '5px 0', borderRadius: '10px', cursor: 'pointer',
-  border: '1px solid rgba(0,0,0,0.1)', background: 'rgba(0,0,0,0.03)',
+  borderWidth: '1px', borderStyle: 'solid', borderColor: 'rgba(0,0,0,0.1)',
+  background: 'rgba(0,0,0,0.03)',
   fontSize: '11px', fontWeight: 600, color: '#1d1d1f',
 };
 const pillOnStyle = { background: '#007AFF', color: 'white', borderColor: '#007AFF' };

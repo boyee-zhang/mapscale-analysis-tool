@@ -274,3 +274,92 @@ The tell was the same one as always: 0.35 ms of CPU per request is `/health` ter
 `/bekendmakingen` runs an ORS call and a GiST scan. **A throughput number with no plausible
 cost per request behind it is not a measurement.** This is the third time in this work that
 a 2xx-or-near-2xx status was treated as evidence of the right work being done.
+
+## The whole exposed surface, measured (2026-10-29)
+
+Every endpoint under `/api/main`, on this laptop (8 cores: 6 performance + 2 efficiency),
+with the self-hosted ORS and Postgres in Docker on the same machine. Generator ceiling that
+day: **5,290 req/s** at `--procs 6`, measured against Prometheus's Go `/-/healthy`; every
+number below has to be read against that, not against infinity.
+
+### What may be saturated, and what may not
+
+`loadtest.py` now refuses to saturate four of the eleven endpoints, and the refusal is in the
+code (`THIRD_PARTY`), not in this document, because a note does not stop a command:
+
+| scenario | upstream | why it is not load-tested |
+|---|---|---|
+| `region` | PDOK | a Dutch government open service |
+| `search` | ES (down here) → PDOK → Nominatim | Nominatim's usage policy is 1 req/s |
+| `traffic_flow` | TomTom | metered key |
+| `traffic_incidents` | TomTom | metered key |
+
+Their ceiling is the upstream's rate limiter, not this backend's, so `--probe N` times them
+sequentially instead. The other seven are served entirely by this machine.
+
+### Results, warm
+
+| endpoint | peak req/s | workers | conc | CPU/req | what actually binds it |
+|---|---|---|---|---|---|
+| `/health` | **4,346** | 6 | 32 | 0.67 ms | **82% of the generator's ceiling — a floor, not a limit** |
+| `/traffic/tile-url` | 3,062 | 1 | 64 | — | same bare-handler wall as `/health` |
+| `/pois` (deduplicated) | 844 | 6 | 64 | 3.55 ms | Postgres + serialisation |
+| `/pois` (every request distinct) | 445 | 6 | 8 | 3.55 ms | ORS |
+| `/directions` | 431 | 1 | 8 | — | ORS |
+| `/isochrone` | 410 | 1 | 8 | — | ORS |
+| `/bekendmakingen` | 142 | **2** | 64 | 7.22 ms | Postgres query, then machine contention |
+| `/bulk_directions` | 65 | 1 | 8 | — | 5 ORS routes per request |
+
+`/health` and `/traffic/tile-url` landing within 4% of each other is not a coincidence to
+explain away: both are handlers with no upstream, so both hit the same FastAPI + uvicorn wall.
+It was worth checking, because two different inputs giving one answer is also what measuring
+the wrong axis looks like — here the generator was 1.7x faster than either, so the wall is the
+server's.
+
+### The single most useful number: 1,498 req/s per core
+
+CPU per request is the only figure here that survives leaving this laptop, because it does not
+depend on who else wanted the cores. `/health` costs 0.67 ms, `/pois` 3.55 ms,
+`/bekendmakingen` 7.22 ms — so one core fully dedicated serves roughly 1,498 / 282 / 138 req/s
+respectively. Observed throughput sits below those, and the gap is contention, not the code.
+
+### Everything that touches ORS is bound by ORS, which lives on this same machine
+
+`docker stats` during an `/isochrone` sweep: **ORS 130–460% CPU (1.3–4.6 cores), Postgres
+~0%.** That is the whole explanation for the five endpoints peaking at concurrency 8 and then
+getting *worse* — throughput falling as concurrency rises is queueing, and here the queue is
+for CPU that ORS, the six generator processes, the server's own workers and the desktop are
+all asking for at once on eight cores.
+
+The attribution is clean because `/isochrone` and `/directions` touch no Postgres at all and
+collapse identically — which excludes Postgres without having to measure it.
+
+### Three things that were wrong, and what corrected them
+
+**More workers made the heaviest endpoint slower.** `/bekendmakingen` does 142 req/s on
+**2** workers and 119 on 6. Six server workers plus six generator processes is twelve
+CPU-hungry processes on eight cores. `--workers N` is not a free lever on a machine that is
+already oversubscribed; the 2.9x win recorded earlier came from removing waste, not from
+adding workers.
+
+**The connection pool is still not the wall — I was wrong to suspect it.** At concurrency 64
+`pg_stat_activity` showed **11–15** connections against a configured 10, 15 or 40 per worker:
+the pool never filled, so it never queued. The earlier "not the pool" finding stands.
+
+What *is* real is the multiplication: `DB_POOL_MAX_SIZE` is **per worker**, and Postgres here
+has `max_connections = 100`. `DB_POOL_MAX_SIZE=30` with `--workers 6` asks for 180 and the
+service collapses — 205,630 errors in one 15 s step. An innocent-looking env var times an
+innocent-looking flag exceeds a limit neither of them mentions.
+
+**The first run after a server starts reads ~3x low.** The same `/pois` configuration gave
+268 req/s cold and 782 / 837 / 844 on three successive warm repeats — ±4% once warm. The cold
+number is the pool growing from `min_size=1` and the OS page cache filling. Discard the first
+run; a single measurement taken right after a restart is a cold-start artifact, not a ceiling.
+
+### Conditions, so these numbers are not over-read
+
+Ambient load was not controlled and could not be: Chrome 30%, WindowServer 24%, a Stocks
+widget 31%, and the user's own `uvicorn --reload` burning 35–72% of a core **while idle**
+(its file watcher polls the whole repo, `data/*.osm.pbf` and `.venv` included). Load average
+reached 16 on an 8-core machine during the sweeps. Every figure above is therefore a floor.
+The per-core costs are the part worth carrying forward.

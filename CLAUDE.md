@@ -96,8 +96,14 @@ preconditions and the three things to measure after the build are in `docs/ors-s
 ### Monitoring (optional) — Prometheus + Grafana
 ```bash
 docker compose up -d prometheus grafana postgres-exporter   # :9090, :3000
-.venv/bin/python scripts/loadtest.py --scenario permits     # then watch the dashboard
+.venv/bin/python scripts/loadtest.py --scenario all         # every LOCAL endpoint
+.venv/bin/python scripts/loadtest.py --scenario search --probe 5   # third-party: timed, not loaded
 ```
+`loadtest.py` **refuses to saturate** `region`, `search`, `traffic_flow` and
+`traffic_incidents`: each leaves the machine on every request, so hammering them measures
+PDOK/Nominatim/TomTom's rate limiter and burns a metered quota or abuses a free public
+service. The constraint lives in `THIRD_PARTY` in the script, not in a comment. `--probe N`
+times them sequentially instead.
 All three carry `profiles: ["monitoring"]`, which is what keeps them out of a bare
 `docker compose up -d`. The backend exposes `/metrics` — **not** under `/api/main`, since
 that prefix is what vercel.json routes to the serverless function. `prometheus_client`
@@ -121,6 +127,18 @@ and still called every request. Not the pool (10→30 changed nothing), not ORS 
 request time), not Postgres (1.3–4.3 of 8 cores, one active query most samples).
 `--workers 4` buys +80% but only adds cores to burn on the same waste — fix the waste
 first. The doc records the first, wrong conclusion too.
+
+Full-surface measurement (2026-10-29, warm, generator ceiling 5,290 req/s): `/health`
+**4,346 req/s**, `/traffic/tile-url` 3,062, `/pois` 844 deduplicated and 445 when every
+request is distinct, `/directions` 431, `/isochrone` 410, `/bekendmakingen` 142,
+`/bulk_directions` 65. Carry forward the **per-core** costs, not the peaks: 0.67 / 3.55 /
+7.22 ms of CPU per request for `/health` / `/pois` / `/bekendmakingen`, i.e. 1,498 / 282 /
+138 req/s on one dedicated core. Three traps the sweep found: **more workers made
+`/bekendmakingen` slower** (142 on 2 workers, 119 on 6 — twelve hungry processes on eight
+cores); **`DB_POOL_MAX_SIZE` is per worker** and times `--workers` it will exceed Postgres's
+`max_connections=100`, which collapses the service outright (the pool itself is still not a
+bottleneck — it never held more than 15 connections); and **the first run after a restart
+reads ~3x low** (268 req/s cold against 782/837/844 warm), so discard it.
 
 ### Elasticsearch (optional)
 ```bash

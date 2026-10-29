@@ -39,9 +39,17 @@ BASE = "http://localhost:8000/api/main"
 CENTRES = [(4.9003, 52.3791), (4.8952, 52.3702), (4.9200, 52.3600), (4.8800, 52.3900)]
 
 SCENARIOS = {
+    # --- LOCAL: served entirely by this machine (Postgres + the self-hosted ORS on :8080).
+    # Safe to saturate; these are the only ones whose ceiling is OUR backend's.
+    #
     # No DB, no upstream, no cache: the bare FastAPI + uvicorn ceiling on this machine.
     # Everything else has to be read against this number, not against zero.
     "health": lambda i, vary: (f"{BASE}/health", {}),
+    # Also no upstream — it only formats a URL string. Separates "a trivial handler" from
+    # "/health", which FastAPI may treat differently, at no cost.
+    "tile_url": lambda i, vary: (f"{BASE}/traffic/tile-url", {}),
+    # ORS only, no Postgres: isolates the routing leg.
+    "isochrone": lambda i, vary: (f"{BASE}/isochrone", _geo(i, vary, {"minutes": 10, "profile": "walking"})),
     # Postgres + an ORS isochrone. The app's normal page load.
     "pois": lambda i, vary: (f"{BASE}/pois", _geo(i, vary, {"minutes": 10, "profile": "walking"})),
     # The heaviest endpoint: same isochrone, then a GiST scan + 5 aggregates over the hit set.
@@ -49,9 +57,52 @@ SCENARIOS = {
         f"{BASE}/bekendmakingen",
         _geo(i, vary, {"minutes": 10, "profile": "walking", "building_permits": "true"}),
     ),
-    # Isochrone only — isolates the ORS leg from the Postgres leg.
-    "isochrone": lambda i, vary: (f"{BASE}/isochrone", _geo(i, vary, {"minutes": 10, "profile": "walking"})),
+    # One ORS route. No frontend caller today, but it is exposed, so it is measured.
+    "directions": lambda i, vary: (f"{BASE}/directions", _route(i, vary)),
+    # 5 ORS routes behind one request via asyncio.gather — the fan-out amplifier.
+    "bulk_directions": lambda i, vary: (f"{BASE}/bulk_directions", _bulk(i, vary)),
+
+    # --- THIRD PARTY: every request leaves this machine for a service we do not own.
+    # Saturating these measures THEIR rate limiter and burns quota or abuses a free
+    # public service. Guarded below; use --probe to time them instead.
+    "region": lambda i, vary: (f"{BASE}/region", _geo(i, vary, {})),
+    "search": lambda i, vary: (f"{BASE}/search", {"q": _QUERIES[i % len(_QUERIES)]}),
+    "traffic_flow": lambda i, vary: (f"{BASE}/traffic/flow", _geo(i, vary, {})),
+    "traffic_incidents": lambda i, vary: (f"{BASE}/traffic/incidents", {
+        "min_lng": 4.85, "min_lat": 52.35, "max_lng": 4.95, "max_lat": 52.40}),
 }
+
+# Which scenarios may be driven to saturation. This is a property of where the work
+# happens, not a preference: the four below leave the machine on every request.
+#   region            -> PDOK, a Dutch government open service
+#   search            -> ES (down here) -> PDOK -> Nominatim, whose usage policy is 1 req/s
+#   traffic_flow      -> TomTom, a metered key
+#   traffic_incidents -> TomTom, a metered key
+# Encoded here rather than written in a doc, because a note does not stop a command.
+THIRD_PARTY = {"region", "search", "traffic_flow", "traffic_incidents"}
+LOCAL = [k for k in SCENARIOS if k not in THIRD_PARTY]
+
+_QUERIES = ["Damrak 1", "1012 Amsterdam", "Utrecht Centraal", "Haarlemmerstraat",
+            "Prinsengracht 263", "Zuidas", "Leidseplein", "Vondelpark"]
+
+
+def _route(i: int, vary: bool) -> dict:
+    """A short walkable route, both ends inside the Noord-Holland graph."""
+    lng, lat = CENTRES[i % len(CENTRES)] if vary else CENTRES[0]
+    d = (i % 23) * 0.0004 if vary else 0.0
+    return {"start_lng": round(lng, 6), "start_lat": round(lat, 6),
+            "end_lng": round(lng + 0.004 + d, 6), "end_lat": round(lat + 0.003, 6),
+            "mode": "walking"}
+
+
+def _bulk(i: int, vary: bool) -> dict:
+    """Five targets around the start — the same shape the map would ask for."""
+    lng, lat = CENTRES[i % len(CENTRES)] if vary else CENTRES[0]
+    d = (i % 23) * 0.0004 if vary else 0.0
+    targets = ";".join(
+        f"{round(lng + 0.003 * k + d, 6)},{round(lat + 0.002 * k, 6)}" for k in range(1, 6))
+    return {"start_lng": round(lng, 6), "start_lat": round(lat, 6),
+            "targets": targets, "mode": "walking"}
 
 
 def _geo(i: int, vary: bool, extra: dict) -> dict:
@@ -182,7 +233,15 @@ def _run_step_multiproc(args, concurrency: int) -> dict:
 
 async def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--scenario", choices=sorted(SCENARIOS), default="permits")
+    ap.add_argument("--scenario", choices=sorted(SCENARIOS) + ["all"], default="permits",
+                    help="one scenario, or `all` to sweep every LOCAL one in sequence")
+    ap.add_argument("--probe", type=int, metavar="N", help=(
+        "do not load-test: send N requests one at a time and report latency. This is the "
+        "ONLY supported way to measure a THIRD_PARTY scenario, because its ceiling is the "
+        "upstream's rate limiter, not this backend's capacity."))
+    ap.add_argument("--force-thirdparty", action="store_true", help=(
+        "saturate a THIRD_PARTY scenario anyway. Doing so burns a metered quota (TomTom) "
+        "or abuses a free public service (PDOK, Nominatim at 1 req/s). Off by default."))
     ap.add_argument("--steps", default="1,2,4,8,16,32,64",
                     help="concurrency levels, comma separated")
     ap.add_argument("--seconds", type=float, default=15.0, help="duration per step")
@@ -214,10 +273,30 @@ async def main() -> None:
         SCENARIOS["__url__"] = lambda i, vary: (args.url, {})
         args.scenario = "__url__"
 
-    steps = [int(s) for s in args.steps.split(",")]
+    if args.probe:
+        await _probe(args.scenario, args.probe, args.vary)
+        return
+
+    if args.scenario in THIRD_PARTY and not args.force_thirdparty:
+        ap.error(
+            f"'{args.scenario}' leaves this machine on every request. Saturating it measures "
+            f"the upstream's rate limiter and burns quota or abuses a free service. Use "
+            f"--probe N to time it, or --force-thirdparty if you really mean it.")
+
+    if args.scenario == "all":
+        for name in LOCAL:
+            args.scenario = name
+            await _sweep(args, [int(x) for x in args.steps.split(",")])
+            print()
+        return
+
+    await _sweep(args, [int(x) for x in args.steps.split(",")])
+
+
+async def _sweep(args, steps: list[int]) -> dict:
     label = args.url or f"{args.scenario} @ {BASE}"
     print(f"target={label}  vary={args.vary}  {args.seconds:.0f}s per step  "
-          f"procs={args.procs}\n")
+          f"procs={args.procs}")
     print(f"{'conc':>5} {'rps':>8} {'ok':>6} {'err':>5} "
           f"{'p50 ms':>8} {'p95 ms':>8} {'p99 ms':>8}")
     rows = []
@@ -230,9 +309,32 @@ async def main() -> None:
         await asyncio.sleep(3)
 
     best = max(rows, key=lambda r: r["rps"])
-    print(f"\npeak {best['rps']:.1f} req/s at concurrency {best['concurrency']} "
-          f"(p95 {best['p95']*1000:.0f} ms)")
-    print("Past the knee, rps flattens while p95 climbs — that is queueing, not capacity.")
+    print(f"peak {best['rps']:.1f} req/s at concurrency {best['concurrency']} "
+          f"(p95 {best['p95']*1000:.0f} ms, err {best['err']})")
+    return best
+
+
+async def _probe(scenario: str, n: int, vary: bool) -> None:
+    """Sequential, one request at a time. For endpoints whose ceiling is not ours."""
+    counter = _counter()
+    lat: list[float] = []
+    codes: dict[int, int] = {}
+    print(f"probe {scenario} @ {BASE}  n={n}  (sequential, not a load test)")
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        for _ in range(n):
+            url, params = SCENARIOS[scenario](next(counter), vary)
+            t0 = time.perf_counter()
+            try:
+                r = await client.get(url, params=params)
+                lat.append(time.perf_counter() - t0)
+                codes[r.status_code] = codes.get(r.status_code, 0) + 1
+            except Exception as e:
+                codes[0] = codes.get(0, 0) + 1
+                print(f"  request failed: {type(e).__name__}: {e}")
+    if lat:
+        print(f"  n={len(lat)}  min {min(lat)*1000:.0f} ms  median {_pct(lat, .5)*1000:.0f} ms  "
+              f"max {max(lat)*1000:.0f} ms  -> ~{1/statistics.fmean(lat):.1f} req/s serial")
+    print(f"  status: {dict(sorted(codes.items()))}")
 
 
 if __name__ == "__main__":

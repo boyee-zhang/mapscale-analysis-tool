@@ -213,3 +213,87 @@ and is now the entire fix.
 What is **not** established: whether the public graph is also healthy away from that point.
 The one request budgeted to check it returned `403 {"error": "Quota exceeded"}` — the 50/day
 was already spent. Untested, not confirmed.
+
+---
+
+# Graph coverage, measured three times, wrong twice (2026-10-29)
+
+Question that started it: "is the building-permit layer only Amsterdam?" The data answer is
+yes (10,128 of 10,306 permits). The *shape* answer — where `/bekendmakingen` and `/pois` get
+a real isochrone rather than a radius fallback — needed the graph's real extent, and the
+first two attempts to measure it both produced a wrong number.
+
+## Attempt 1 — counted HTTP 200. Answer: 72/342. Wrong.
+
+A 300 s `driving-car` isochrone from each of the 342 municipality centroids
+(`ST_PointOnSurface`), counting status 200. The note two sections up says, in its own words,
+*"for geometry, a 200 is not evidence of a correct answer; only a magnitude check is"* —
+and I counted status codes anyway.
+
+## Attempt 2 — added a magnitude check. Answer: 54. Still wrong.
+
+`area >= 2.0 km²`, deliberately generous against an expected 8-10 km² for a 5-minute drive.
+That removed 18 obvious blobs (0.25-1.86 km²) but left Culemborg, De Bilt, Heusden,
+Hilvarenbeek, Houten, Oisterwijk, Reusel-De Mierden, West Betuwe and Zaltbommel in the
+"covered" list — nine municipalities in Utrecht, Gelderland and Noord-Brabant, nowhere near
+a Noord-Holland extract.
+
+## Attempt 3 — grouped by area value. Answer: 53, and the tell was duplication.
+
+| probe | area | reachfactor |
+|---|---|---|
+| Culemborg | **3.47 km²** | **0.0159** |
+| De Bilt | **3.47 km²** | **0.0159** |
+| Heusden | **3.47 km²** | **0.0159** |
+| Hilvarenbeek | **3.47 km²** | **0.0159** |
+| Houten | **3.47 km²** | **0.0159** |
+| Oisterwijk | **3.47 km²** | **0.0159** |
+| Reusel-De Mierden | **3.47 km²** | **0.0159** |
+| West Betuwe | **3.47 km²** | **0.0159** |
+| Zaltbommel | **3.47 km²** | **0.0159** |
+| Haarlem | 8.83 km² | 0.0405 |
+| Hoorn | 11.51 km² | 0.0528 |
+| Den Helder | 13.27 km² | 0.0608 |
+
+Nine different coordinates, spread over three provinces, return **byte-identical** areas.
+That is not nine isochrones; it is **one stranded motorway fragment reached from nine
+different snap points**. Geofabrik extracts keep ways that cross the cut line, so a point far
+outside the province still snaps onto a few kilometres of orphaned A-road and ORS builds a
+perfectly well-formed isochrone on it.
+
+Grouping all 342 answers by area:
+
+```
+342 municipalities; 72 answered 200, 270 refused honestly (ORS code 3099)
+  distinct area -> 53   genuinely inside the graph
+  shared  area -> 19   the same fragment seen from several places
+     9 x 3.47 km2 | 6 x 0.69 km2 | 2 x 1.80 km2 | 2 x 0.93 km2
+```
+
+**53** is the real figure, and the list is Noord-Holland plus the extract's immediate edge
+(Hillegom / Lisse / Teylingen in Zuid-Holland, Eemnes / Baarn / Bunnik / Stichtse Vecht in
+Utrecht). The 270 refusals are the *honest* failure: `/bekendmakingen` and `/pois` fall back
+to a geodesic circle there, which they report as `shape: "circle"`.
+
+## The lesson, which is new and sharper than the one above it
+
+A magnitude check catches a blob that is *absurd*. It does **not** catch a blob that is
+*plausible* — 3.47 km² is a perfectly believable 5-minute drive in a small town. What caught
+it was that **distinct inputs produced identical outputs**.
+
+> **When a probe sweeps many inputs, check the answers for duplicates before trusting any of
+> them. Identical outputs from different inputs mean the thing you varied is not what the
+> system answered from.**
+
+A caveat on the method itself, so the 53 is not over-read: Amsterdam's own centroid returns
+only 2.77 km², because `ST_PointOnSurface` of its multipolygon lands in the port. Centroid
+probing measures *the centroid*, not the municipality. The 53 is a floor.
+
+## What this does not change
+
+The plausibility check in **Open** is still owed, and this is now its third independent
+motivation (cycling blob, invalid rings, stranded fragments). Note that the check as
+specified — `reachfactor < 0.01` plus an area far below `minutes * SPEED_MAP[profile]` —
+would **not** have caught the 3.47 km² case: reachfactor 0.0159 is above the threshold and
+3.47 km² is not far below expectation. Duplicate-detection is a different instrument, and it
+only works across a sweep, not on a single request.

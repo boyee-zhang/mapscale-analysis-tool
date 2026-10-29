@@ -226,3 +226,51 @@ overpass 1、pdok 1)。而 Upstash 的域名自 2026-10-28 起 NXDOMAIN,于是**
    ORS 的平均响应也从 87 ms 涨到 173 ms(它自己开始排队了)。
 4. 生产在 Vercel 上,**以上没有一条适用于那里** —— 那是按请求扩容的无状态函数,
    没有常驻进程、没有连接池复用、也没有 single-flight。这些数字描述的是本地这套栈。
+
+## Removing the dead Upstash cache (2026-10-29)
+
+The Upstash host has been NXDOMAIN since 2026-10-28, so `kv_get`/`kv_set` threw on every
+call and the cache could never hit. `UPSTASH_REDIS_REST_URL`/`_TOKEN` are now commented out
+in `.env`, which makes `cache.py` short-circuit on `if not UPSTASH_URL or not UPSTASH_TOKEN`
+before any network call. `.env` is gitignored, so this is a local change only — **Vercel's
+own env vars are untouched and production still has the dead instance configured.**
+
+Measured back to back, two uvicorn processes on the same machine, same 30 s / conc 32 /
+`--vary` run, the only difference being whether the two variables are set:
+
+| | CPU per request | rps | p50 | p95 | one core busy |
+|---|---|---|---|---|---|
+| dead cache configured | 7.27 ms | 115.3 | 245 ms | 512 ms | 84% |
+| cache removed | **5.50 ms** | 115.7 | 214 ms | 523 ms | **64%** |
+
+**CPU per request fell 24%; throughput did not move at all.** That is the result, and it is
+not a disappointment — it is the binding constraint changing hands. Before the shared-client
+fix the endpoint spent 22.3 ms of CPU at 40.9 rps, i.e. 91% of the one core a single worker
+can use: it was at the CPU wall, and every millisecond saved was a millisecond of throughput.
+After it, 115 rps × 5.5 ms is 64% of that core, so the process is idle a third of the time and
+is waiting on something else — ORS, since `--vary` makes every request a unique isochrone that
+cannot be deduplicated by the single-flight map.
+
+So the honest claim is **headroom, not speed**: the same box now serves the same traffic with
+a quarter less CPU, which is what a second worker or a busier endpoint would have spent.
+Do not quote this as a throughput win.
+
+### A load generator that invented 2736 rps
+
+Found while taking the measurement above. `--base http://127.0.0.1:8002` replaced the whole
+of `BASE`, which carries the `/api/main` prefix, so every scenario requested
+`http://127.0.0.1:8002/bekendmakingen` — a 404. `_worker` counted `status_code < 500` as a
+success, so 82,110 consecutive 404s were reported as `ok 82110  err 0` at **2736 rps and
+p95 19 ms**, about 8x the real ceiling of the endpoint it claimed to be measuring, at
+0.35 ms of CPU per request.
+
+Two separate defects, and the dangerous one is the status threshold: a wrong `--base` is a
+typo that announces itself the moment anything checks, while `< 500` is a generator that
+cannot distinguish "served" from "routed nowhere" and will quietly fabricate capacity from
+any mistake that produces a 4xx. Both are fixed — `< 400`, and `--base` now appends the
+prefix when it is missing.
+
+The tell was the same one as always: 0.35 ms of CPU per request is `/health` territory, and
+`/bekendmakingen` runs an ORS call and a GiST scan. **A throughput number with no plausible
+cost per request behind it is not a measurement.** This is the third time in this work that
+a 2xx-or-near-2xx status was treated as evidence of the right work being done.

@@ -153,8 +153,12 @@ DB_POOL_MAX_SIZE=              # optional, default 10. An env var so it can be V
                                # measuring — that is the only way to tell "the pool is the
                                # wall" from "the pool is merely full". Measured: it is not.
 ES_URL=                        # optional; omit to disable ES and fall back to PDOK/Nominatim
-UPSTASH_REDIS_REST_URL=        # optional; omit to disable caching (degrades silently)
-UPSTASH_REDIS_REST_TOKEN=
+UPSTASH_REDIS_REST_URL=        # optional; omit to disable caching (degrades silently).
+UPSTASH_REDIS_REST_TOKEN=      # COMMENTED OUT locally 2026-10-29: the instance is gone
+                               # (NXDOMAIN), so every call threw and the cache could never
+                               # hit. Unset costs 24% less CPU per request than configured-
+                               # and-failing, and buys zero throughput — see docs/monitoring.md.
+                               # .env is gitignored, so PRODUCTION ON VERCEL STILL HAS IT SET.
 ```
 
 ## Architecture
@@ -501,6 +505,8 @@ What that took with it, so the absences are not mistaken for gaps:
 - **`cache.py` was kept** (`/region`, `/traffic`, `domains/geo`); only the housing-specific
   `domains/housing/upstash.py` went. Note the configured Upstash instance no longer resolves
   (NXDOMAIN as of 2026-10-28), so caching is silently degraded — `cache.py` handles that by
-  design, which is why nothing fails.
+  design, which is why nothing fails. **Commented out of `.env` 2026-10-29** so the failing
+  path is not even entered locally; Vercel's env is separate and unchanged. If caching is ever
+  wanted again, point these two variables at a live instance — no code change is needed.
 - `docs/data-source-feasibility.md` and the housing sections of the two refactor plans were
   deleted. `docs/pg-notes/` never mentioned housing and is untouched.

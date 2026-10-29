@@ -72,7 +72,12 @@ async def _worker(client, scenario, vary, counter, stop_at, results, errors):
         try:
             r = await client.get(url, params=params)
             dt = time.perf_counter() - t0
-            (results if r.status_code < 500 else errors).append(dt)
+            # `< 400`, not `< 500`. This counted 404 as a success, and a wrong --base
+            # (below) pointed every request at a path that does not exist: 82,110 404s
+            # in 30 s reported as `err 0` and 2736 rps, which is ~8x the real ceiling of
+            # the endpoint it claimed to be measuring. A load generator that cannot tell
+            # "served" from "routed nowhere" invents capacity out of a typo.
+            (results if r.status_code < 400 else errors).append(dt)
         except Exception:
             errors.append(time.perf_counter() - t0)
 
@@ -189,7 +194,7 @@ async def main() -> None:
         "Go binary) to find the generator's OWN ceiling. A single Python process both "
         "generating and timing load is a plausible bottleneck at high concurrency, and "
         "without this control a collapse in the numbers cannot be attributed to the server."))
-    ap.add_argument("--base", help="override the API base URL, e.g. a second uvicorn on :8001")
+    ap.add_argument("--base", help="override the API origin, e.g. http://127.0.0.1:8001 for a second uvicorn. `/api/main` is appended if absent.")
     ap.add_argument("--procs", type=int, default=max(2, (os.cpu_count() or 4) // 2), help=(
         "generator PROCESSES, each running concurrency/procs coroutines. Default is half "
         "the cores. One process was measured topping out near 680 req/s against a Go "
@@ -199,7 +204,12 @@ async def main() -> None:
 
     global BASE
     if args.base:
+        # Append the API prefix when it is missing. BASE carries `/api/main`, so a bare
+        # origin (the obvious thing to pass, and what the old help text invited) silently
+        # produced 404s for every scenario.
         BASE = args.base.rstrip("/")
+        if not BASE.endswith("/api/main"):
+            BASE += "/api/main"
     if args.url:
         SCENARIOS["__url__"] = lambda i, vary: (args.url, {})
         args.scenario = "__url__"

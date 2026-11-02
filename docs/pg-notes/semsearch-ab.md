@@ -266,3 +266,116 @@ The 24-point gap cannot be attributed between them. Two LLM calls settle it — 
 vocabulary but ask only for translation, give B no vocabulary but ask for expansion. If the
 vocabulary is the main effect, then the load-bearing component is an **offline term-frequency
 table**, not a model, and the expected value of the whole AI track moves down.
+
+---
+
+# Follow-up 2: separating vocabulary from expansion — and finding out n=15 cannot attribute
+
+Measured 2026-11-02. The first experiment's arm B changed **three** things at once relative to
+arm A: it was given the corpus vocabulary, it was told to expand, and its output schema allowed
+`doc_type`/`activiteit` hard filters. This runs the missing cells of the factorial with the
+schema held at terms-only, and extends the judgment pool properly.
+
+Harness: `scripts/experiments/semsearch_factorial.py`, `_score2.py`, `_score3.py`.
+
+| | no vocabulary | vocabulary |
+|---|---|---|
+| **translate only** | A (reused) | **C (new)** |
+| **expand** | **D (new)** | B' = B with its filters discarded |
+
+234 documents returned by C and D were not in the original pool. **All of them were judged
+blind** before scoring, and every arm was then re-scored against the extended pool — that is
+the step whose absence invalidated the facet-strip number in the first experiment.
+
+## Scores on the extended pool
+
+| arm | precision@10 |
+|---|---|
+| B with filters (the original arm B) | **105/150 = 70.0%** |
+| C vocabulary + translate | 95/150 = 63.3% |
+| B' vocabulary + expand, no filters | 91/150 = 60.7% |
+| D expand, no vocabulary | 86/150 = 57.3% |
+| A translate, no vocabulary | 69/150 = 46.0% |
+
+Arm A scores exactly 69/150 on both the original and the extended pool, which is a useful
+sanity check: extending a pool can only add relevant documents, and none of A's results were
+newly judged relevant.
+
+## The real finding: the total effect is real, the attribution is not
+
+Paired bootstrap on the 15 per-query differences, 20,000 resamples:
+
+| comparison | mean diff (hits/query) | 95% CI | |
+|---|---|---|---|
+| **A vs B-with-filters** | **+2.40** | **[+0.67, +4.20]** | **significant** |
+| vocabulary, holding translate (C − A) | +1.73 | [−0.93, +4.33] | inside noise |
+| expansion, holding no vocabulary (D − A) | +1.13 | [−0.73, +3.13] | inside noise |
+| expansion, holding vocabulary (B' − C) | −0.27 | [−3.00, +2.33] | inside noise |
+| the hard filters (B − B') | +0.93 | [−0.60, +2.67] | inside noise |
+
+So the headline of the first experiment survives — something in arm B really does work. But
+**n = 15 cannot say what.** Every decomposition of that 24-point gap crosses zero.
+
+The point estimates are suggestive and no more: vocabulary looks like the larger lever (+17
+points on its own), expansion adds nothing once the vocabulary is present (−2.7, interaction
+−14.0), and the best single arm is vocabulary + *plain translation* — the cheaper prompt. If
+that pattern held, the load-bearing component would be an **offline term-frequency table**
+rather than a model. It is a hypothesis, not a result.
+
+**Correction to an earlier claim in this file:** "a hard filter the LLM guessed is worse than no
+filter" was drawn from the two queries where it visibly hurt. In aggregate the filters are
++0.93 per query and the filtered arm is the best of the five. That claim was an overreach.
+
+## How many queries would it take
+
+Paired t, alpha = .05, power = .80, using the measured sd of per-query differences (5.39):
+
+| effect to detect | ≈ percentage points | queries needed |
+|---|---|---|
+| 2.5 hits/query | 25 | 36 |
+| 1.7 | 17 | **79** |
+| 1.0 | 10 | **228** |
+| 0.5 | 5 | 912 |
+| 0.3 | 3 | 2,532 |
+
+**A 15-query set can only see differences of 25 points or more.** Embedding's plausible gain
+over a *fixed* FTS is far more likely to be 5–10 points, which needs 228–912 judged queries.
+On that path the most likely outcome is no conclusion at all — neither "it works" nor "it does
+not" — which is the worst of the three.
+
+## Why this validates narrowing to a single concept
+
+Fixing the concept ("noisy works") changes the error structure, not just the scope:
+
+- **Per-query means over 15 queries**: n = 15, sd of differences 5.39, only huge effects visible.
+- **Recall against near-exhaustive ground truth for one concept**: the unit becomes *the
+  document*, not the query. The question is "did method X retrieve document d", a proportion
+  over the few hundred relevant documents inside 61,853 — and the corpus is templated enough
+  (9,563 distinct 40-char title prefixes; `TVM parkeervak` alone covers 12,301 rows) that
+  labelling *patterns* rather than rows makes near-exhaustive truth feasible.
+
+That is a confidence interval an order of magnitude tighter, for less labelling work than
+228 queries would need. The narrowed scope is not a smaller experiment; it is the only version
+of this experiment that can reach a verdict.
+
+## Incidental findings from the 234 newly judged documents
+
+Worth recording because they bear on the recall question the pool-based method cannot answer:
+
+- Three queries that scored **0 relevant** in the first experiment have real answers that no
+  original arm retrieved: `充电桩` → 10 (`aanleg twee elektrische oplaadvakken`), `垃圾箱` →
+  13 (`Melding objecten ... het plaatsen van een container op de openbare weg`), `自行车` → 5
+  (APV rows whose abstract starts `Fietsen`). **The first experiment's relevant sets were
+  missing documents that exist in quantity** — direct evidence that pooled judging understates
+  recall.
+- Whole vocabulary families were absent from the original pool: `vellen van een houtopstand`
+  (the formal register for felling, vs Amsterdam's `kappen`), `terrasvergunning`,
+  `horecavergunning`, `omzettingsvergunning`, `kamerverhuur`, `filmvergunningen`,
+  `Melding objecten`.
+- A false-positive class worth knowing: `Besluit apv vergunning Verleend - **Bouwen**
+  Ewoutszstraat` matches a query for `bouwen` because **the street is called Bouwen
+  Ewoutszstraat**. Street names in the title poison a content-word search; the address belongs
+  in `bekendmaking_locatie`, not in the indexed text.
+- `maatwerkvoorschrift bouwlawaai/werktijden ... geluidhinder sloopwerkzaamheden` exists — a
+  document type that is *literally* about construction noise, and which none of the earlier
+  noise queries surfaced.

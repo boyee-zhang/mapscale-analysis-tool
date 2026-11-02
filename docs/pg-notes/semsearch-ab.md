@@ -404,3 +404,24 @@ The document type `maatwerkvoorschrift bouwlawaai/werktijden` — bespoke condit
 construction noise and working hours — is literally the subject the "noisy works" layer wants,
 and **no query in either experiment surfaced it.** It was found only by judging the 234
 documents the factorial arms added to the pool.
+
+---
+
+# Where this goes next: `noise-groundtruth.md`
+
+The sample-size table above is the blocking fact — 15 queries can only see effects of 25
+points or more. The response was to change the unit of measurement from queries to documents
+by fixing a single concept, and that work is in **`noise-groundtruth.md`** (same directory).
+
+Three results from it that bear directly on this note:
+
+- The 661-row count above was taken on `abstract`. The **full** document text would have made
+  it meaningless: every APV publication carries a glossary paragraph defining
+  `Nachtwerkontheffing`, so `lawaai` matches 9 of 9 sampled APV bodies regardless of what the
+  permit is. Counting on `abstract` was right by luck, not by design.
+- An APV document body is **91.3% byte-identical boilerplate** (n=9); the remaining ~290
+  characters are seven closed-value fields. For that family — ~22,000 rows, 36% of the corpus
+  — embedding has a provable negative result, not an estimated one.
+- The free-text families already have their applicant-written descriptions in `abstract`, so
+  the embedding experiment needs **no document fetching**. Only the duration and time-of-day
+  extension does.

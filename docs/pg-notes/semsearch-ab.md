@@ -379,3 +379,28 @@ Worth recording because they bear on the recall question the pool-based method c
 - `maatwerkvoorschrift bouwlawaai/werktijden ... geluidhinder sloopwerkzaamheden` exists — a
   document type that is *literally* about construction noise, and which none of the earlier
   noise queries surfaced.
+
+## Correction: the noise vocabulary is 661 rows, not 13
+
+An earlier count in discussion put "documents that mention noise" at 13, which was wrong —
+it searched only the exact string `geluidhinder`. Widened:
+
+| term | rows |
+|---|---|
+| `geluid*` | 339 |
+| `Nachtwerk` | 232 |
+| `maatwerkvoorschrift` | 126 |
+| `werktijden` | 18 |
+| `geluidhinder` | 13 ← the only one originally counted |
+| `bouwlawaai` | 8 |
+| **any of the above, deduplicated** | **661** |
+
+Measured 2026-11-02. This matters for the narrowed experiment: the concept has **direct
+textual signal in 661 rows**, not just the broad `activiteit = bouwen` proxy (14,130). A
+high-confidence positive class of that size is enough to anchor near-exhaustive ground truth,
+with the proxy classes judged separately rather than assumed.
+
+The document type `maatwerkvoorschrift bouwlawaai/werktijden` — bespoke conditions on
+construction noise and working hours — is literally the subject the "noisy works" layer wants,
+and **no query in either experiment surfaced it.** It was found only by judging the 234
+documents the factorial arms added to the pool.

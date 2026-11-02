@@ -189,3 +189,80 @@ Not addressed here, and still true: the corpus is three municipalities and 2026 
 evaluation set built from it measures retrieval, not coverage. Widening it is
 `scripts/import_bekendmaking.py --gemeente X`, one municipality at a time; there is no national
 mode.
+
+---
+
+# Follow-up: was it "did not find" or "found but ranked low"?
+
+Measured 2026-11-02, before touching any embedding API, on the advice that the question
+should be answered first. Harness: `scripts/experiments/semsearch_ab_diagnose.py`, output in
+`semsearch-ab-diag.json`. No new judging — it re-runs each arm's own tsquery with **no limit**
+and the same `ORDER BY`, then asks where the already-judged relevant documents actually land.
+
+## Result: it is ranking, not recall
+
+| | known relevant | query matches it at all | of matched, reach top-10 |
+|---|---|---|---|
+| A_literal | 160 | **131 (82%)** — misses 29 | **67/131 = 51%** |
+| B_expanded | 160 | **128 (80%)** — misses 32 | **105/128 = 82%** |
+
+Two things follow, and the first one is the surprise:
+
+1. **Expansion did not improve raw recall at all.** A misses 18% outright, B misses 20% —
+   indistinguishable, and B is nominally *worse*. Whatever B is buying, it is not reach.
+2. **The entire 46% → 70% gap is ranking.** A found 131 relevant documents and buried 64 of
+   them below rank 10. B found 128 and buried 23.
+
+## The mechanism: match-set size predicts failure
+
+| match set | share of matched relevant docs reaching top-10 |
+|---|---|
+| < 1,000 | **85%** (n=8) |
+| 1,000–10,000 | 79% (n=10) |
+| **> 10,000** | **42%** (n=7) |
+
+Spearman rho = **-0.63**, Pearson r = -0.72, n = 25 (query × arm pairs with at least one
+matched relevant document).
+
+A's worst cases have match sets of 44,773 / 44,060 / 43,689 / 22,193 — one literal Dutch word
+matching most of the corpus. B's best have 54 / 332 / 680. So **the predictor of failure is
+how many documents the query matches, not how good the terms are** — which is the same
+`ts_rank_cd`-has-no-IDF finding from the first experiment, now with a dose-response curve
+instead of a single anecdote.
+
+Caveats on this number: n = 25 is small, and match-set size is partly confounded with the arm
+(A tends to produce broader terms). The bucket table pools both arms, so comparisons *within* a
+bucket are fair, but the correlation should be read as direction-and-rough-magnitude.
+
+## The blind spot this measurement cannot fill
+
+The relevant set is **pool-derived** — it was built from what the two arms surfaced in their own
+top-10. So a document that *neither* arm ever surfaced is not in the 160 and contributes
+nothing. The 696 `oplaadvak` rows are the known example: for that query the relevant count is
+literally 0, because nothing correct was ever retrieved to judge.
+
+**So this experiment cannot size the recall gap.** It can only say that among documents at
+least one arm reached, the loss is ranking.
+
+## What this means for embedding, stated as two separate hypotheses
+
+- **"Embedding fixes recall"** — neither confirmed nor refuted. The blind spot above is exactly
+  where it would show up, and sizing it needs real ground truth for a fixed concept, not
+  pooled judging.
+- **"Embedding fixes ranking"** — substantially strengthened. Ranking is the confirmed cause of
+  loss, and a cosine distance is a continuous, discriminating score where `ts_rank_cd` returns
+  a constant.
+
+But the second hypothesis has a cheaper competitor that must be measured first: **a
+document-frequency weighting on the existing FTS**. Embedding's opponent on ranking is not
+today's `ts_rank_cd` — it is a *fixed* `ts_rank_cd`. That fix costs one SQL query per search
+and no new dependency, and the dose-response curve above predicts it should recover most of
+the loss on its own.
+
+## Still unseparated, and cheaper than any of this
+
+Arm B changed **two** things at once: it was given the corpus vocabulary *and* told to expand.
+The 24-point gap cannot be attributed between them. Two LLM calls settle it — give A the
+vocabulary but ask only for translation, give B no vocabulary but ask for expansion. If the
+vocabulary is the main effect, then the load-bearing component is an **offline term-frequency
+table**, not a model, and the expected value of the whole AI track moves down.

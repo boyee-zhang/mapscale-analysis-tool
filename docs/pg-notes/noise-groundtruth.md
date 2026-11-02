@@ -175,3 +175,52 @@ keeps the labelling auditable and re-runnable, which a per-row judgement is not.
 Nothing is labelled yet. What is settled is the design and its cost: the free-text experiment
 needs no fetching, the time dimension needs ~24,000 fetches restricted to two families, and
 the APV family has a provable negative result for embedding that cost 30 HTTP requests.
+
+## Feasibility of the frame, measured — and it inverts the priority
+
+The tiered rules were run over the geographic frame at three radii, all of 2026.
+
+| radius | total | T1 explicit noise | T2 loud activity named | T3 evenement | **T4 undeterminable** |
+|---|---|---|---|---|---|
+| 400 m | 1,117 | 26 | 7 | 56 | **594 (53%)** |
+| 800 m | 4,156 | 66 | 15 | 225 | **2,135 (51%)** |
+| 1,500 m | 11,223 | 194 | 59 | 448 | **6,026 (54%)** |
+
+T4 is Object + TVM + `activiteit = bouwen` with no further detail. **Its share is stable at
+51–54% across all three radii**, so it is a structural property of the corpus, not a sampling
+artefact. For those rows the honest label is neither "noisy" nor "quiet" but *undeterminable
+from the data we hold* — a skip container for two days and scaffolding with a crane for 144
+days are the same row in this database, because the end date was never imported.
+
+That is the third category from the parsing/semantics discussion: a **coverage** problem
+wearing the costume of a semantic one. Forcing those 51% into yes/no would make the ground
+truth fiction, and every later comparison would be measuring the guess rather than the method.
+
+**So the binding constraint is not the retrieval method. It is a field our own importer
+drops.** No embedding, LLM or `ts_rank_cd` fix can recover information that was never
+ingested. The repair is a parsing change in `scripts/import_bekendmaking.py` plus a refetch
+limited to the APV and evenement families (~24,000 documents): keep `Looptijd` *end* date,
+and `Tijd van` / `Tijd tot` / `Bezoekers drukste moment` for evenement.
+
+### Revised order of work
+
+1. **Capture the dropped fields.** Converts ~51% of any slice from undeterminable to
+   labellable. Everything below is blocked on it, because "near-exhaustive" is the entire
+   point of the ground truth.
+2. **Then build the ground truth at 1,500 m** — 11,223 rows, ~253 T1+T2 high-confidence
+   positives. T1+T2 scales linearly with the frame (33 → 81 → 253), and 400 m yields only 33,
+   which is too few to compare two retrieval methods on.
+3. **Then test embedding on the free-text families only.** The APV negative result above does
+   not transfer to them, and they are where the `tijdstippen van uitvoering` /
+   `lozen van grondwater` pair lives.
+
+### Rule gap, surfaced
+
+At 400 m, 244 rows (21.8%) matched no rule: 150 `andere vergunning`, 46 `omgevingsvergunning`,
+**24 `evenementenvergunning`**, 13 `andere beschikking`, 8 `omgevingsmelding`, 3 other. The 24
+evenement rows were missed because the rules read `title || abstract` only — `doc_type` was
+never consulted, though it carries the answer. The rule table must match on `doc_type` as well
+as on text patterns. Not fixed; it changes the T3 count upward when it is.
+
+`andere vergunning` being the largest unlabelled bucket is consistent with the earlier finding
+that it is 53% of the whole corpus and carries no usable taxonomy.

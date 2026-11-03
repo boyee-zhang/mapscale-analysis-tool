@@ -129,6 +129,53 @@ And FTS is what you should run, because it is the same answer 76x faster. Whole 
 The 4-row difference is the stemming boundary, not an error. This is the one unambiguous thing
 FTS buys on this corpus: not quality, latency.
 
+### 2a. What each arm actually searches — and `cls_works` barely searches text
+
+The arm suffix is the field: `:ta` is `title || abstract` (what `bekendmaking_fts_tmp` indexes
+in production), `:act` is `activity_text` (the descriptive fields migration 0015 extracts from
+the body), `:body` is the whole document. `cls_works` and `cls_literal` have no suffix, and
+that is not a formatting detail — they go through `noise_impact_rule`, which matches on three
+different things. Splitting their 256 true positives by which one fired:
+
+| matched_on | kind | tp | fp | share of tp |
+|---|---|---|---|---|
+| `activiteit` | structured array | **157** | 12 | **61%** |
+| `doc_type` | structured field | 66 | 24 | 26% |
+| `text` (title‖abstract regex) | text | 33 | 1 | **13%** |
+
+The single largest contributor is one row of the rule table: `activiteit = 'bouwen'`, **125 tp /
+12 fp**. That is a word lookup in an enum array, not a search.
+
+**This corrects the attribution in section 3 below, which was written before this breakdown
+existed.** Run 1 credited the `undeterminable` bucket's strength to its APV text patterns —
+`objectvergunning` / `\yObject\y` / `TVM`. Those rows are almost all `borderline`, so the
+strict universe *removes* them, and in the strict universe `TVM` contributes **1** true
+positive. What carries that bucket is `activiteit = 'bouwen'` at priority 95. So the honest
+reading of 0.845 is: *this publication is tagged as a building activity, or it is an event
+permit, or (13% of the time) its title mentions something loud.* A metadata classifier with a
+small text assist — and listing it in one table beside the FTS arms, as run 1 did, invited
+exactly the wrong comparison.
+
+**The text-only ceiling, three blocks, strict (n=695, base rate 0.450, floor F1 0.621):**
+
+| what is searched | best arm | prec | recall | F1 |
+|---|---|---|---|---|
+| `title + abstract` | `rules_re:ta` | 0.926 | 0.319 | **0.475** |
+| `activity_text` (from the body) | `rules_re:act` | 0.920 | 0.220 | 0.356 |
+| whole `body_text` | `rules_re:body` | 0.636 | 0.262 | 0.371 |
+| structured metadata | `cls_works` | 0.874 | 0.818 | 0.845 |
+
+So **no text method ever cleared the floor.** The best is 0.475 against 0.621. The one arm that
+cleared it was not reading text. Finding 1 above said "every hand-written noise query is worse
+than retrieving everything"; this is the sharper version — *every* text method is, whatever
+field and whatever matcher.
+
+And the smallest field beats the largest two: `title+abstract` (169 chars average) scores 0.475
+where the full body (2453 chars) scores 0.371. The title carries the **permit type name** —
+`evenementenvergunning`, `nachtwerkontheffing` — while the body carries the APV glossary that
+every APV publication prints. More text, worse signal-to-noise. That is also why the embedding
+round must fix its input field by design rather than defaulting to "the longest text available".
+
 ### 3. The best keyword method does not describe the activity at all
 
 `migrations/0012` is a classifier with priorities, and reading it as retrieval means choosing

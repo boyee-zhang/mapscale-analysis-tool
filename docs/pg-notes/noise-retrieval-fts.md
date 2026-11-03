@@ -146,8 +146,15 @@ which classes count as a hit. Scored against the labels on the strict universe:
 `undeterminable` was created as the honest *"the index record cannot answer this"* default for
 `objectvergunning` / `TVM` / `activiteit = bouwen`. It is **91% noisy**, and it is by a wide
 margin the strongest signal in the table. Counting it as a hit (`cls_works`) gives **F1 0.833**
-on strict, against a floor of 0.640 — and it transfers *upward* to the held-out block, 0.786
-Amsterdam -> **0.869 Utrecht**.
+on strict, against a floor of 0.640.
+
+One correction to how that was first written up here. The cross-tab above was computed over
+*both* blocks, so Utrecht was **not** held out for this arm — the decision to count the bucket
+as a positive saw its labels too. The decision is recoverable from the development block alone
+(Amsterdam's `undeterminable` is 22:3, 88.0% noisy, which drives the same choice), but that was
+checked afterwards, not done in that order, and a figure called held-out has to be earned by
+the process rather than by a later audit. The generalisation section below supplies a block
+that genuinely was not seen when this decision was made.
 
 Read that carefully, because the flattering reading is wrong. `cls_works` does not identify
 loud activity. It identifies **that works are happening at all** — a scaffolding permit, a
@@ -185,6 +192,75 @@ a multi-label question.
 
 ---
 
+## The generalisation test: a third block, and a prediction that failed
+
+Run 1 closed with a claim of mine: that `cls_works` is strong only because of the frame — *"in
+a 300 m circle of a Dutch city centre, works are usually loud"* — and that its predictive power
+would fall away in a suburb. That is a falsifiable statement, so it was tested rather than left
+standing.
+
+**The block.** `ams-osdorp-600`: Osdorp, Nieuw-West — post-war garden-city Amsterdam, 600 m
+rather than 300 m because the publication density is about a fifth of the centre's. 362
+publications, 200 distinct activity texts, labelled one at a time with the **identical** rule
+and with precedent taken from the existing labels wherever a phrase already had one. Result:
+**77 noisy / 169 borderline / 116 quiet / 0 unjudgeable**, base rate 0.399 on the strict
+universe. `noise_frame_unlabelled` returns 0.
+
+It is structurally a different corpus, not just a different place:
+
+| | canal belt | Osdorp |
+|---|---|---|
+| `verkeersbesluit` | 5 of 587 (0.9%) | **54 of 362 (15%)** |
+| tree felling | none | 20 rows, 12 distinct texts |
+| `exploitatievergunning` | 96 | 36 |
+| dominant works family | funderingsherstel, werfkelders, dakkapellen | dakopbouwen, woningvorming, maaiveld |
+
+**The result, and it is not what was predicted.** `cls_works` F1 by block:
+
+| universe | canal belt (dev) | Utrecht | **Osdorp (new)** | all three |
+|---|---|---|---|---|
+| strict | 0.786 | 0.869 | **0.880** | 0.845 |
+| wide | 0.336 | 0.611 | **0.441** | 0.454 |
+| lenient | 0.886 | 0.878 | **0.919** | 0.893 |
+
+Osdorp is the **best** of the three under strict and lenient, and `cls_works` clears the `all`
+floor in **9 of 9** block × universe cells. The prediction was wrong: this method does not
+depend on city-centre density. Precision is in fact *higher* in the suburb (0.904 vs 0.786) —
+the canal belt's false positives are event permits for things that are quiet, such as a
+`Tentoonstelling`, and Osdorp's events are kermis, Pride and a festival, which are not.
+
+**The part that is genuinely interesting is the stability.** Strict F1 across the three blocks:
+
+| arm | range | spread |
+|---|---|---|
+| `naive_re:ta` | 0.000 – 0.265 | unbounded |
+| `rules_re:ta` | 0.250 – 0.697 | 2.8x |
+| `cls_literal` | 0.333 – 0.729 | 2.2x |
+| `cls_works` | **0.786 – 0.880** | **1.12x** |
+
+And the components of `cls_works` are *not* stable — `cls_undet_only` recall is 0.247 in Osdorp
+and 0.616 in Utrecht, a 2.5x swing. Each block's publication template files the same physical
+work under a different bucket, and the buckets compensate for each other. **The union is
+robust; no part of it is.** That is an argument for the union and against ever reporting one of
+its components as the finding.
+
+So the bar for any later method is **0.845 over 695 rows and three blocks**, not 0.833 over
+two, and it is a bar that has now survived a deliberate attempt to break it.
+
+### One thing this block caught that the method had been getting away with
+
+Two Osdorp publications share the activity text `het afwijken van het omgevingsplan ten behoeve
+van het realiseren van 4 woongebouwen met 277 appartementen` and differ only in `activiteit`:
+one is `{ruimtelijke ordening}` (the planning deviation, a paper act) and the other is
+`{bouwen}` (the building permit). Labelling keyed on the text alone would have given both the
+same answer, and one of them would have been wrong.
+
+The committed 954 were audited for the same failure: **15 activity texts spanning 70 rows** have
+more than one distinct `activiteit`. In every one of the 15 the label is unchanged across the
+group — the variation is `{bouwen}` vs `{bouwen,bouwen}`, or an added `reclame` /
+`ruimtelijke ordening` on signage, none of which moves the answer. So the existing ground truth
+is unaffected, and the Osdorp pair is labelled per identifier rather than per text.
+
 ## What this does not measure
 
 - **Loud, not disturbing.** The ground truth dropped time on purpose (`noise-groundtruth.md`).
@@ -208,5 +284,9 @@ a multi-label question.
   finding: it filtered the plan text and never noticed the planner had answered `count(*)` from
   an **Index Only Scan**, so the "3.2x under-report" it appeared to show was a different node.
   Cause still unknown. No claim above depends on it; the latency figures are wall clock.
+- **Fixed while building the third block:** `scripts/load_noise_groundtruth.py` read
+  `os.getenv("DATABASE_URL")` directly and never loaded `.env`, so it ran only in a shell that
+  happened to export it — unlike every other script here, which reaches the DSN through
+  `api.main.db`. It now does the same. The CSVs round-trip: export, load, 0 unlabelled.
 - `bekendmaking_fts_tmp` is still in no migration. Every FTS arm here used it, so the
   benchmark is not reproducible on a fresh database until it is promoted.

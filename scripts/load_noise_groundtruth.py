@@ -19,11 +19,17 @@ Usage:
 import argparse
 import asyncio
 import csv
-import os
 import pathlib
 import sys
 
 import asyncpg
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+
+# Through api.main.db rather than os.getenv, so this script reads .env the way every other
+# script in the repo does. Reading the environment directly made it work only in a shell that
+# happened to export DATABASE_URL, which is not how the rest of the project is run.
+from api.main.db import DATABASE_URL  # noqa: E402
 
 NOTES = pathlib.Path(__file__).resolve().parent.parent / "docs" / "pg-notes"
 
@@ -39,7 +45,7 @@ async def main() -> int:
                    help="load the rows whose publication exists instead of refusing")
     args = p.parse_args()
 
-    dsn = os.getenv("DATABASE_URL")
+    dsn = DATABASE_URL
     if not dsn:
         raise SystemExit("DATABASE_URL is not set")
 

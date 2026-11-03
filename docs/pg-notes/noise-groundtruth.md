@@ -479,13 +479,31 @@ Each label carries two further columns, for auditing rather than for scoring:
 `n/a`), and `evidence` holds the substring that decided it. A spot audit can then disagree with
 a specific label without re-reading the document.
 
-# The ground truth, built: 954 publications, labelled one at a time
+# The ground truth, built: 1,316 publications, labelled one at a time
+
+> Grown from 954 to 1,316 on 2026-11-03 by adding a third block, **ams-osdorp-600**, to test
+> whether the retrieval result generalises off the canal belt. The test and its outcome — a
+> prediction of mine that failed — are in `noise-retrieval-fts.md`. Everything below about
+> method applies unchanged to the new block; the figures quoted as "954" are the first two
+> blocks, which is what the measurements in this file were taken on.
 
 ## The frame, and why it is rows rather than a radius
 
-Two 300 m discs, each labelled exhaustively: **ams-centrum-300** (the canal belt, 587
-publications) and **utr-binnenstad-300** (around the Domtoren, 367). 954 in all, out of a
-corpus of 61,853 — 53,712 Amsterdam, 7,287 Utrecht, 848 Diemen and 6 strays, all of 2026.
+Three discs, each labelled exhaustively: **ams-centrum-300** (the canal belt, 587
+publications), **utr-binnenstad-300** (around the Domtoren, 367) and **ams-osdorp-600**
+(Osdorp, Nieuw-West, 362 — 600 m rather than 300 because the publication density out there is
+about a fifth of the centre's). 1,316 in all, out of a corpus of 61,853 — 53,712 Amsterdam,
+7,287 Utrecht, 848 Diemen and 6 strays, all of 2026.
+
+Osdorp's distribution is **77 noisy / 169 borderline / 116 quiet / 0 unjudgeable**. It was
+labelled with the same rule and, wherever a phrase already had one, with the precedent already
+set in the first two blocks — `exploitatievergunning` quiet (99/99), `TVM` borderline (59/59),
+`Nachtwerkontheffing` noisy (10/10), and so on — so that the blocks are comparable rather than
+merely similar. Two families had no precedent and were decided from the rule itself: **tree
+felling** (the rule names it under `noisy`) and **events**, for which the cut had to be written
+down to be applied uniformly — music, amplified sound, a performance, fairground rides, a sports
+tournament or an outdoor market with stalls is `noisy`; an outdoor gathering with none of those
+is `borderline`; a static indoor display or a seated meal is `quiet`.
 
 The frame is defined by geography and time only, never by the concept. A frame narrowed by
 "documents that look noisy" would make recall unmeasurable, which is the whole reason for

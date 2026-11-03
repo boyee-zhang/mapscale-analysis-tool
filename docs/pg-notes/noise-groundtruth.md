@@ -224,3 +224,108 @@ as on text patterns. Not fixed; it changes the T3 count upward when it is.
 
 `andere vergunning` being the largest unlabelled bucket is consistent with the earlier finding
 that it is 53% of the whole corpus and carries no usable taxonomy.
+
+---
+
+# P0 built: the dropped fields are back, and the rules are a table
+
+Three repairs, in the order their results depend on each other.
+
+## A. `bekendmaking_body` — what the document says
+
+Migration `0010`, importer `scripts/import_bekendmaking_body.py`. One row per publication whose
+document was fetched, carrying `start_date` / `end_date` / `start_time` / `end_time` /
+`period_raw` / `visitors_peak` / `body_text` and a `status`.
+
+Source is **`<identifier>.xml`, not the `.html` page** — 5,225 bytes against 27,668 on the same
+document, structured, and free of the navigation chrome that made the HTML scraper fail.
+
+Two fields the brief asked for are **deliberately not stored**:
+
+| asked for | why not | how to get it |
+|---|---|---|
+| all-day / time precision | the source never states it | `start_date IS NOT NULL AND start_time IS NULL` |
+| crosses midnight | ditto, and it is derivable | `end_time < start_time` |
+
+Both are exact functions of the stored columns. A stored copy could only ever disagree with
+the source, and the brief's own second criterion is that nothing be defaulted.
+
+`visitors_peak` was promoted instead. `Bezoekers drukste moment` is the **only quantitative
+intensity figure anywhere in this corpus**, and for a disturbance question a 4,990-person
+event is not a 25-person one.
+
+### Six statuses, not four
+
+`no_period` had to be added: a body that was read successfully and simply says nothing about a
+period is the normal case for omgevingsvergunning, and it is not a failure. Collapsing it into
+`empty_body` would make "the document says nothing" and "we failed to read the document" share
+a branch — the empty-200 lesson in `debugging-lessons.md`. `EXTRACTION_FAILED` likewise splits
+into `fetch_error` and `parse_error` because they retry differently.
+
+Absence of a row is a seventh state — *never attempted*. It is deliberately **not** encoded as
+a status, so `status NOT NULL` means every row present was really tried.
+
+### Acceptance, measured on 60 evenement publications
+
+| criterion | result |
+|---|---|
+| period stored when the document states it | 37/37 `ok` rows carry all four fields; 36/37 carry `visitors_peak` |
+| NULL when it does not, with no defaults | 0 `no_period` rows carry any period value; 0 `ok` rows lack `period_raw` |
+| re-run is idempotent | `INSERT 0, UPDATE 0, unchanged 60` — **and `n_tup_upd = 0`, `n_dead_tup = 0`** |
+| an existing row updates when the source differs | broke one row, re-ran, `UPDATE 1`, values restored |
+
+The third one is the point worth keeping. "Unchanged 60" is the importer's own report; the heap
+counters are independent evidence that no tuple was rewritten. `fetched_at` is excluded from
+the `IS DISTINCT FROM` comparison on purpose — it changes every run by definition, so including
+it would rewrite every tuple and double the heap, the trap stage 1 hit on `poi`.
+
+Richest row so far: `20-06-2026 12:00 → 21-06-2026 01:00`, **4,990 visitors**. Note the
+publisher advanced the end *date* for the midnight crossing, so a rule of
+`end_time < start_time AND end_date = start_date` would have missed it — an earlier version of
+the migration comment said exactly that and was corrected. The honest test is the signed
+interval `(end_date + end_time) - (start_date + start_time)`.
+
+## B. The 6.7% was the scraper, not the data
+
+Both HTML bodies a marker-based extractor could not read — `gmb-2026-403553` and
+`gmb-2026-283118` — **parse cleanly from XML**, into 71 and 20 non-empty `<al>` elements.
+Choosing the structured endpoint removed the failure mode rather than handling it.
+
+The caution against extrapolating 6.7% from n=30 was right, and the resolution is better than
+a corrected rate: no rate is claimed. The status taxonomy stays because a genuine failure path
+exists and a ground truth must not confuse an unread document with a quiet one.
+
+## C. `noise_impact_rule` — the rules as a table
+
+Migrations `0011` (structure + view `bekendmaking_noise`) and `0012` (the rules).
+`match_on ∈ (text, doc_type, activiteit)` makes the field a first-class match target instead of
+a regex over one concatenation, so the gap that lost 24 rows cannot recur, and a benchmark's
+candidate set is reproducible rather than retyped. Modelled on `poi_category_rule`: structure
+and reference data in separate migrations, lowest `priority` wins.
+
+Re-run over the 1,117-row frame against the old text-only rules:
+
+| | |
+|---|---|
+| labelled by the old rules | 867 |
+| labelled by the rule table | 903 |
+| **newly labelled** | **36** |
+| **lost** | **0** |
+
+The 36 are exactly **24 `evenementenvergunning`** matched by `doc_type` — the predicted gap, to
+the row — plus 6 `omgevingsvergunning` via `activiteit` (slopen/kappen) and 6 `verkeersbesluit`.
+
+Revised distribution of the frame:
+
+| impact | count | % |
+|---|---|---|
+| undeterminable | 565 | 50.6 |
+| none | 219 | 19.6 |
+| unlabelled | 214 | 19.2 |
+| event | 79 | 7.1 |
+| explicit | 26 | 2.3 |
+| loud_activity | 14 | 1.3 |
+
+`undeterminable` is still half the frame **as classified from the index record** — that is what
+the rules alone can say. The view joins `bekendmaking_body` so the period resolves it; the
+numbers for that come after the backfill.

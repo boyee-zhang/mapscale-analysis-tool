@@ -329,3 +329,86 @@ Revised distribution of the frame:
 `undeterminable` is still half the frame **as classified from the index record** — that is what
 the rules alone can say. The view joins `bekendmaking_body` so the period resolves it; the
 numbers for that come after the backfill.
+
+## The backfill, and the coverage boundary it draws
+
+`--family all`, 24,313 publications, **7 min 58 s** at concurrency 4 (`etl_run` 23).
+
+| | |
+|---|---|
+| rows in `bekendmaking_body` | 24,373 |
+| `ok` | 23,627 (97.0%) |
+| `no_period` | 746 |
+| `fetch_error` + `parse_error` + `empty_body` + `no_body_element` | **0** |
+| date parse failures among `ok` rows | **0** |
+| time parse failures among rows whose `period_raw` has `Tijd van`/`Tijd tot` | **0 of 1,579** |
+| rows with `end_date` — the field the index dropped | **23,626** |
+| rows with `start_time` | 1,579 |
+| rows with `visitors_peak` | 1,443 |
+| all-day (date, no clock) | 22,048 |
+| `body_text` | 71 MB raw, 63 MB as table + indexes |
+
+A phantom to record, because it was my own query and not the data: a first pass reported
+22,040 time-parse failures. The predicate was `period_raw ~* 'Tijd'`, which matches
+**`Looptijd`**. Measured against `Tijd van` the real figure is 0 of 1,579. A substring test on
+a field label is not a test of the field.
+
+### Two source defects, settled from `period_raw` in one query
+
+- **2 rows (0.008% of 21,802 with a duration) have the end before the start.**
+  `Looptijd :30-08-2026 t/m 12-08-2026` → −17 days. The publication itself says so; the parser
+  is reading it correctly. Left as published, and `days` stays signed: nulling it would hide a
+  source defect behind the same NULL that means "the document does not say".
+- **The longest duration, 1,097 days, is real**: `Looptijd :17-09-2026 t/m 17-09-2029`, a
+  three-year permit, not a misparsed century.
+
+Both would have needed a join to diagnose had `period_raw` stayed out of the view, and the
+cheap guess — "the parser is broken" — would have been the tempting one. Migration `0013`
+appends it (`CREATE OR REPLACE VIEW` can only add columns at the end).
+
+### The corrected midnight rule, now measured
+
+**87 rows cross midnight. 85 have the end date advanced; 2 do not.** The rule this note first
+wrote down — `end_time < start_time AND end_date = start_date` — would have found **2 of 87,
+a recall of 2.3%**. The general test is `end_time < start_time`, and the sign of
+`(end_date + end_time) - (start_date + start_time)` says which of the two encodings a
+publisher used.
+
+### Did it resolve `undeterminable`? Yes, by two thirds
+
+Corpus-wide, 21,802 of 33,693 `undeterminable` rows now carry a duration (**64.7%**), and
+`event` is at 69.2%. On the 1,117-row frame:
+
+| impact | total | no duration | 1–2 d | 3–14 d | 15–60 d | >60 d |
+|---|---|---|---|---|---|---|
+| undeterminable | 565 | 180 | 123 | 78 | 117 | **67** |
+| event | 79 | 3 | 68 | 3 | 5 | 0 |
+| explicit | 26 | 14 | 11 | 1 | 0 | 0 |
+| loud_activity | 14 | **14** | 0 | 0 | 0 | 0 |
+
+385 of 565 now have a duration and they spread across the whole range. The class that was a
+single undifferentiated 51% is now a one-day traffic measure (123), a fortnight of works (78),
+two months of scaffolding (117) and 67 permits running longer than that. Corpus median is
+7 days, p90 71, p99 236.
+
+### The boundary: a period exists if and only if the permit is APV or evenement
+
+`loud_activity` — 2,111 rows, and the class most directly about noise (felling, demolition,
+pile driving) — has **no duration at all** in the frame. That is a property of the source, not
+of the fetch: **0 of 12 sampled omgevingsvergunning / kapvergunning documents carry a period.**
+They state what will be done and when the decision was sent, never when the work happens.
+
+(18 `loud_activity` rows do have one, and they are not counter-examples: they fell inside the
+APV scope because their text names both a loud activity and an object/TVM permit, so the
+period is the APV permit's.)
+
+Their free text carries **scale** instead — `kappen van 1 boom (wilg)` against
+`kappen van 17 bomen verspreid over de openbare ruimte`, `snoeien van 3 houtopstanden` — which
+is real semantic variation and exactly the open-value-space material the embedding question
+needs. It is simply not timing.
+
+So the stated concept — noise *including* unreasonable working hours — is fully evaluable on
+the APV + evenement half and **not** on the other. The ground truth therefore needs a third
+label, not a yes/no: *loud activity, timing unknown*. Collapsing that into either "noisy" or
+"quiet" would put a guess into the measurement, which is the failure this entire narrowing was
+undertaken to avoid.

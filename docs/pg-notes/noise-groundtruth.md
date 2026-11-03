@@ -412,3 +412,299 @@ the APV + evenement half and **not** on the other. The ground truth therefore ne
 label, not a yes/no: *loud activity, timing unknown*. Collapsing that into either "noisy" or
 "quiet" would put a guess into the measurement, which is the failure this entire narrowing was
 undertaken to avoid.
+
+# The concept, without time
+
+Time leaves the concept. The reason is a property of the source, measured in the section
+above: a period exists if and only if the permit is APV or evenement, and 0 of 12 sampled
+`omgevingsvergunning`/`kapvergunning` documents carry one at any depth. A concept that needs
+timing is therefore unanswerable on 53% of the corpus, and the ground truth would have had to
+carry a third label — *loud activity, timing unknown* — for the largest and most noise-relevant
+family. Dropping time makes the label binary and the corpus uniformly judgeable.
+
+What this costs, stated plainly so no later claim overreaches it: the original scope said
+unreasonable working hours are themselves noise ("执行的时间太过分了 也是有噪声的"). That is now
+outside the concept. This ground truth cannot distinguish a three-day daytime demolition from a
+sixty-day permit for night work. It measures **whether the permitted activity is loud**, not
+whether it will disturb a particular person. For comparing retrieval methods that is enough,
+because every method is scored against the same labels. For a product claim about disturbance it
+is not, and the period columns built in the section above are what a later version would use.
+
+## The question each label answers
+
+> Does carrying out the activity this document permits or announces produce loud noise at its
+> location?
+
+Not: does the document contain a noise word. The two come apart in both directions, and both
+directions were measured. A document can say `geluid` and permit nothing loud — the APV
+boilerplate glossary defines `Nachtwerkontheffing` using `lawaai` and `70Db`, so a full-text
+search for `geluid|lawaai` matches 9 of 9 sampled APV bodies, a term with zero discrimination.
+A document can permit something unmistakably loud and contain no noise word at all — `het
+kappen van een magnolia` plus `constructieve aanpassingen` (gmb-2026-287002), where neither the
+title nor any noise vocabulary appears.
+
+## Four labels, because a binary one hides the judgement
+
+The physical range runs from demolishing a building to installing an air conditioner. A binary
+label forces a cut somewhere in the middle, and a reader of the benchmark cannot see where it
+was made or how much the result depends on it. So the stored label has four values and the
+binary is derived from it, with the cut written down:
+
+| label | the test it must pass | examples from the frame |
+|---|---|---|
+| `noisy` | the work touches **structure** (load-bearing walls, foundation, cellar, roof plane, floors), moves **ground or water**, **demolishes**, **fells a tree**, remakes a **whole building**, or produces **amplified sound, performance or a crowd** | funderingsherstel met schroefinjectie, doorbraken in dragende muren, werfkelderherstel, graven in de bodem, open bodemenergiesysteem, tramspoor vervangen, boomstobbe met een knijperauto, kantoor naar 16 appartementen, dakkapel (het dakvlak wordt opengezaagd), live DJ-sets, Brassband Ritmo, nachtwerkontheffing |
+| `borderline` | work on the **skin or the fittings only** — facade, frames, glazing, signage, awnings, solar panels, air-conditioning, non-structural interior — or **occupying space for works** (scaffold, container, street closure), or **filming** | gevelreclame, kozijnen vervangen, airco-buitenunit, zonnepanelen, werksteiger van 16 meter, objectvergunning, TVM, filmmelding, brandwerend plafond |
+| `quiet` | **no physical work at all**: a legal, administrative or paper act, or a change of use, or legalising something already standing | kadastraal splitsen, opkoopbescherming, exploitatievergunning, alcoholwetontheffing, vakantieverhuur, verkeersbesluit, legaliseren van een bestaande warmtepomp, gevelkleur wijzigen |
+| `unjudgeable` | the text names **no activity**, so the question has no answer in the document | `het wijzigen van een eerder verleende vergunning` — which permit, and to do what, is not said |
+
+The rule is written as a test rather than as a list of examples on purpose. An earlier draft of
+this table put `dakkapel` under `borderline` next to `airco-unit`, and that drafting choice was
+the only thing holding it there: building a dormer opens the roof plane, so the structural test
+puts it with the roof work it resembles. Where an example and the test disagreed, the test won
+and the example moved.
+
+The primary metric uses `noisy` as the positive class and `quiet` as the negative, and reports
+`borderline` separately. That is the standard treatment of partial relevance, and it means the
+one genuinely subjective decision in this ground truth — where small works fall — changes a
+number the reader can see rather than the labels underneath it.
+
+`unjudgeable` is a label, never a silent `quiet`. This is the pollution the P0 brief warned
+about: an empty or activity-free document scored as "contains no noise information" would be
+counted as a true negative, and every method would be rewarded for failing to retrieve a
+document whose answer nobody knows. Rows labelled `unjudgeable` are excluded from both classes
+and their count is reported, because that count is the ground truth's own coverage.
+
+Each label carries two further columns, for auditing rather than for scoring:
+`basis` names the physical noise source in the source's own words (`sloop`, `versterkte muziek`,
+`n/a`), and `evidence` holds the substring that decided it. A spot audit can then disagree with
+a specific label without re-reading the document.
+
+# The ground truth, built: 954 publications, labelled one at a time
+
+## The frame, and why it is rows rather than a radius
+
+Two 300 m discs, each labelled exhaustively: **ams-centrum-300** (the canal belt, 587
+publications) and **utr-binnenstad-300** (around the Domtoren, 367). 954 in all, out of a
+corpus of 61,853 — 53,712 Amsterdam, 7,287 Utrecht, 848 Diemen and 6 strays, all of 2026.
+
+The frame is defined by geography and time only, never by the concept. A frame narrowed by
+"documents that look noisy" would make recall unmeasurable, which is the whole reason for
+labelling a small area completely instead of a large sample of likely hits.
+
+Membership is **materialised as rows** in `noise_frame_member`, not left as a `ST_DWithin`
+predicate. The claim the benchmark rests on is exhaustiveness: if the frame were a query, the
+next `import_bekendmaking.py` run would add publications inside that radius, the denominator
+would shift under the labels, and the set would quietly stop being exhaustive with nothing in
+the schema noticing. `noise_frame_unlabelled` is the check, and it must return zero rows before
+any metric is computed. It does.
+
+Two blocks rather than one larger disc, because a method tuned to canal-belt renovation
+vocabulary would score well on Amsterdam alone and the benchmark could not tell. Keeping the
+blocks named and separate makes a gap between them a finding instead of an invisible bias — and
+there already is one, see below.
+
+## The labels were NOT produced by rules, and that is the point
+
+The obvious way to label 954 documents is to write regular expressions and let them fly. That
+would have invalidated the experiment. A regex over document text **is** a keyword retrieval
+method, so a ground truth built from patterns would hand full marks to full-text search by
+construction and measure every other method against a keyword-derived truth. The rule table in
+`noise_impact_rule` (migrations 0011/0012) remains the right tool for *candidate generation*;
+as ground truth it would have rigged the comparison.
+
+So every one of the 954 rows carries `labelled_by = 'manual'`: each distinct `activity_text` was
+read and judged. Deduplication made that affordable rather than approximate — 954 rows hold 560
+distinct activity texts, of which 109 recur (503 rows) and 451 are unique. Labelling a repeated
+text once and propagating it is not sampling: for those rows the text *is* the whole of what the
+document says about its activity, so reading it once reads them all.
+
+Where a term's meaning was set by the issuing authority, that definition was used instead of an
+impression. The Amsterdam APV boilerplate defines its own permit subtypes, verbatim:
+
+> `Nachtwerkontheffing`: Het wordt toegestaan onder voorwaarden in de avonduren of het weekeinde
+> (door) te werken en **een zekere mate van lawaai te genereren, maar nooit meer dan 70Db**.
+> `TVM`: ... parkeervakken zijn afgezet voor werkzaamheden of een gehele straat vanwege kraanwerk.
+> `Object`: er wordt een steiger, container, puinbak of mobiel toilet geplaatst voor werkzaamheden.
+
+`Nachtwerkontheffing` is therefore `noisy` by the municipality's own words, not by inference.
+`TVM`, `RVV` and `Object` assert that works are happening and never say what they are, which is
+why they are `borderline` and not a guess in either direction.
+
+For events named but not described (Utrecht publishes `Naam evenement` alone), the policy was:
+`noisy` only when the **name itself denotes a noise source** — parade, concert, aubade,
+dansparade, "Utrecht Blaast Buiten" — and `borderline` otherwise, however likely outside
+knowledge might make it. `UIT-Week Janskerkhof` is `borderline` for that reason even though it
+is in fact a stage festival: the document does not say so, and a label that needs knowledge the
+document lacks is not a label a retrieval method can be scored against.
+
+## What is in it
+
+| | ams-centrum-300 | utr-binnenstad-300 |
+|---|---|---|
+| `noisy` | 98 | 138 |
+| `borderline` | 307 | 138 |
+| `quiet` | 182 | 84 |
+| `unjudgeable` | 0 | 7 |
+| total | 587 | 367 |
+
+The primary metric scores **236 `noisy` against 266 `quiet`** — 502 rows — and reports the 445
+`borderline` separately; the 7 `unjudgeable` belong to neither class and their count is the
+ground truth's own coverage, 99.3%.
+
+**Utrecht is 37.6% `noisy`, Amsterdam 16.7%, and the cities are not the difference — the
+templates are.** The Amsterdam disc is dominated by APV objectvergunning (125 rows, all
+`borderline` because the subtype never names the works) and by hospitality permits (`quiet`),
+while Utrecht's omgevingsvergunning carries a `Toelichting` that describes the building work
+plainly. A benchmark reported as one pooled number would read this template difference as a
+property of the method. Per-block reporting is not optional here.
+
+## Two checks that the labels are internally consistent
+
+**The same activity, published twice, got the same label.** Dutch municipalities publish an
+`Aanvraag` and later a `Besluit` for one activity, with the activity text otherwise identical.
+Stripping the procedural prefix leaves 142 groups holding two or more rows, and **0 of them
+disagree** — so the judgement did not drift with the wording around it.
+
+**The operational rule was applied uniformly.** Eight probes (structural terms, demolition,
+trees, groundwork, skin-only terms, legalisation, paper acts, traffic orders) were run against
+`activity_text` and their labels compared with what the rule predicts. 15 rows deviated, and on
+inspection **all 15 are artefacts of the coarse probe, not label errors** — which is itself
+worth recording, because two of them reproduce a known bug class independently:
+
+- `Gravenstraat` matches the groundwork probe's `graven`. Five hospitality permits were flagged
+  as excavation **by a street name** — the open ledger item about addresses in indexed text,
+  caught here by accident.
+- `blindkappen` (the blanking caps on a traffic light) matches the tree probe's `kappen`. Same
+  shape as the earlier `Looptijd` matching a test for `Tijd`: **a substring test on a word is
+  not a test for that word.**
+- Four rows matched the skin-only probe on `kozijn` while their `noisy` basis sat elsewhere in
+  the same sentence (`funderingsherstel`, `toevoegen van dakramen`, `vernieuwen van het dak`).
+
+What this audit establishes is that the rule was applied **consistently**, not that the rule is
+**correct**. Those are different claims and only the first was measured. A random re-read of 18
+rows found nothing to change, which is a sanity check and not a precision estimate.
+
+## The headline measurement: keyword search cannot reach these positives
+
+Searching the obvious noise vocabulary — `geluid|lawaai|herrie|muziek|nachtwerk|decibel|db` —
+against the labelled set:
+
+| | rows | hits in `title`+`abstract` | hits in `activity_text` | hits in `body_text` |
+|---|---|---|---|---|
+| `noisy` | 236 | **15** | 26 | 36 |
+| `borderline` | 445 | 1 | 1 | 222 |
+| `quiet` | 266 | 1 | 1 | 33 |
+| `unjudgeable` | 7 | 0 | 0 | 0 |
+
+**89–94% of genuinely noisy publications contain no noise word anywhere in the text an index
+would hold.** A keyword search of the indexed text reaches 15 of 236 — recall 6.4%. The activity
+field raises that to 26 of 236, 11.0%.
+
+Going to the full body makes it worse, not better: 291 documents match, of which 36 are `noisy`
+— **precision 12.4%**. That is the APV glossary doing the damage, now quantified on labels
+rather than on a 9-document sample: every APV publication prints the definition of
+`Nachtwerkontheffing`, complete with `lawaai` and `70Db`, so the term carries no information
+about the document that contains it.
+
+This is what makes the comparison worth running. The positives are things like
+`het inzetten van een mobiele hijskraan voor hijswerkzaamheden ten behoeve van renovatie van het
+Paleis op de Dam`, `boomstobbe verwijderen met een knijperauto`, `het vervangen van Tramspoor`,
+`Kungfu demonstratie & diverse vuurwerk show` and `funderingsherstel doormiddel van
+schroefinjectie` — unmistakably loud, and not one of them contains a word a noise query would
+think to ask for. Whether embeddings can close that gap is now a measurable question with a
+fixed answer key. **No retrieval method has been run against it yet; the numbers above are
+properties of the corpus, not a result.**
+
+## Where it lives, and the limits to state with it
+
+`migrations/0014_noise_label.sql` creates `noise_frame`, `noise_frame_member`, `noise_label` and
+the `noise_frame_unlabelled` check. The data is **not** a seed migration, unlike
+`0004_poi_category_seed.sql` and `0012_noise_impact_rule_seed.sql`: both label tables carry a
+foreign key to `bekendmaking`, migrations run on every api boot, and a seed holding 954
+identifiers would fail the boot on any database where the bekendmaking import has not run. It
+lives in `docs/pg-notes/noise-frame.csv`, `noise-frame-member.csv` and `noise-labels.csv`
+(diffable, 144 KB) and is loaded by `scripts/load_noise_groundtruth.py`, which refuses a partial
+load rather than coming up silently short. Re-running it is idempotent — verified, same
+distribution and zero unlabelled. The refusal path itself has not been exercised.
+
+Limits, so no later claim overreaches them:
+
+- **It measures whether the activity is loud, not whether it will disturb anyone.** Time is
+  outside the concept by design, so a three-day daytime demolition and a sixty-day night-work
+  permit score alike. The period columns from the section above are what a later version uses.
+  The clearest cost: a horeca `exploitatievergunning` reading `Openingstijden Vrij-Za: 7.00 tot
+  4.00` is `quiet` here, and a bar open until four is exactly what a resident would complain
+  about.
+- **`borderline` is 46.6% of the frame.** The two largest blocks of it are structural, not
+  hedging: 125 Amsterdam objectvergunning rows whose subtype asserts works without naming them,
+  and the facade/frames/signage family. The primary metric excludes them and says so; a reader
+  who wants a binary can collapse them either way and see how much moves.
+- **A withdrawn or refused application is labelled on the activity it describes, not on the
+  outcome.** `Afgebroken (Ingetrokken): het houden van event Koningsdag ... | Buurtfeest` is
+  `noisy`. Labelling it `quiet` would punish a method for correctly retrieving a document about
+  a loud event, and "will it actually happen" is a second concept needing its own parse of the
+  `Besluit:` states. `basis` records the withdrawal on each such row.
+- **Two 300 m city-centre discs are not the Netherlands.** Both are dense pre-war centres heavy
+  on renovation. Nothing here speaks to suburbs, industry or new-build areas.
+- **The source truncates.** Amsterdam's `Activiteiten` field ends mid-sentence in the published
+  XML itself (`Er wordt gedanst op kleine schaal binnen de beschikbare`) — verified against the
+  raw `<al>` element, so it is an upstream limit on what any method can know, not our loss.
+
+## The extractor this needed, and three defects in it
+
+`migrations/0015_bekendmaking_activity.sql` is the view that answers "what is being done", and
+it was the real prerequisite: `title` + `abstract` average 174 characters and for 43.1% of
+Amsterdam's 12,882 omgevingsvergunning rows name no activity at all.
+
+Getting it to that point needed the body of every publication, so the body importer's scope was
+widened. The scope named `all` was a lie — it meant `apv OR evenement` and skipped 37,480 rows,
+61% of the corpus, including the whole omgevingsvergunning family. It is now `period` (the
+honest name for what it selected) plus a real `corpus`, which is the default. The widened run
+fetched **37,480 bodies, 36,560 `no_period`, 919 `ok`, 1 `empty_body`** — the first non-ok status
+in the corpus, 0.0016% — so all 61,853 publications now have a body.
+
+The view went through three revisions, and the first two were avoidable:
+
+1. **`(.+)` instead of `([^\n]+)`.** In Postgres regex `.` matches a newline unless the `n` flag
+   is set, so each field captured itself *and the entire rest of the document*: a mean
+   `activity_text` of 1208 characters where the field is 82. Boilerplate swamping the signal
+   again, this time self-inflicted.
+2. **One field, discovered one at a time.** The first version read only `Omschrijving`,
+   `Toelichting` and `Naam evenement`, and then `Activiteiten` turned up — the field that says
+   `live DJ-sets`, `Buurtfeest`, `Buiten muziek en een tap`, `Kungfu demonstratie & diverse
+   vuurwerk show`, i.e. the entire basis for judging events. Finding fields by sampling was the
+   error. A census fixed it: every `^<Capitalised label>:` line across all 61,853 bodies,
+   counted. Six are descriptive (`Omschrijving` 15050, `Toelichting` 4628, `Onderwerp` 1742,
+   `Activiteiten` 1590, `Betreft` 915, `Naam evenement` 479); the high-frequency ones —
+   `Object`, `TVM`, `Nachtwerkontheffing`, `Winkeltijdenontheffing`, each in 22,664 bodies — are
+   the APV glossary, printed in every APV publication. **Enumerate the closed set once instead
+   of discovering it a field at a time.**
+3. **The fallback threw away the only distinguishing text.** With no labelled field the view
+   took the body's first line, which is sometimes pure boilerplate: 8 frame rows all opened
+   `Het college van burgemeester en wethouders van Amsterdam,` and were indistinguishable,
+   while their titles separated a disabled-parking-bay order from `Mededeling opruimen gezonken
+   vaartuig` — salvaging a sunk vessel from a canal, which is crane work. The title now goes in
+   front of the body line, and those 8 rows split into 8 distinct texts.
+
+Coverage after all three: **91.1% of the corpus gets a labelled descriptive field**, 8.9% falls
+back to title plus first body line.
+
+## The one quantitative field does not order the corpus by noise
+
+`bekendmaking_body.visitors_peak` is the only number in this corpus that looks like a noise
+proxy, and every Amsterdam event publication carries it. The temptation is to set a threshold
+and be done. The data refuses:
+
+| event | visitors at peak | what the `Activiteiten` field says | label |
+|---|---|---|---|
+| Food For Thought | 1000 | barbecue, live muziek optredens, dansen | `noisy` |
+| The Sweet Spot – ADE | **75** | Bezoekers kunnen luisteren naar **live DJ-sets** | `noisy` |
+| Lichtjes aan Kerstboom | 250 | speech, **Brassband Ritmo en de Gospel Queens** | `noisy` |
+| Koningsdag – Weinlokal Stern | 50 | **barbecue en tappunt** | `borderline` |
+| Capture360 De Dam | 5 | fotostage met robotarm, max 4 personen | `quiet` |
+
+A 75-person Amsterdam Dance Event party is louder than a 1000-person food market, and the count
+cannot say so. Crowd size and sound are different axes, so no threshold on `visitors_peak`
+reproduces these labels — the free-text `Activiteiten` field does. Recorded because it closes
+off the cheapest-looking shortcut: **the structured number cannot substitute for reading the
+text**, which is another reason the retrieval question here is a real one.

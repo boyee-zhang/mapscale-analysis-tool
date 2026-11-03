@@ -65,16 +65,25 @@ WHERE (bekendmaking_body.status, bekendmaking_body.start_date, bekendmaking_body
 RETURNING (xmax = 0) AS inserted
 """
 
-# The two families whose fields the index drops. `activiteit`/`doc_type` alone do not identify
-# them -- the APV family is recognisable only from the abstract's own prefix -- so this matches
-# the same way the tier rules in noise-groundtruth.md do, text first and doc_type as well.
+# `activiteit`/`doc_type` alone do not identify the APV family -- it is recognisable only from
+# the abstract's own prefix -- so these match the way the tier rules in noise-groundtruth.md do,
+# text first and doc_type as well.
+#
+# `period` was called `all` until 2026-11-03, which was a lie: it is the union of the two
+# families that carry a Looptijd/Tijd field, and it excludes 9,320 rows (28% of the corpus),
+# among them 17,813 omgevingsvergunning -- the largest family and the one whose body carries the
+# `Omschrijving:` line that says what is actually being built or demolished. A scope named `all`
+# that silently skips the majority of the corpus misleads the next reader. `corpus` is the
+# honest all, and it is the default, because a body is worth having for every publication:
+# for the non-period families the parser simply reports `no_period`, which is a real answer.
 _SCOPE = {
     "apv": "(coalesce(b.title,'')||' '||coalesce(b.abstract,'')) ~* "
            "'objectvergunning|\\yObject\\y|tijdelijke verkeersmaatregel|\\yTVM\\y|nachtwerk'",
     "evenement": "b.doc_type ~* 'evenement' OR "
                  "(coalesce(b.title,'')||' '||coalesce(b.abstract,'')) ~* 'evenement'",
 }
-_SCOPE["all"] = f"({_SCOPE['apv']}) OR ({_SCOPE['evenement']})"
+_SCOPE["period"] = f"({_SCOPE['apv']}) OR ({_SCOPE['evenement']})"
+_SCOPE["corpus"] = "true"
 
 _AL = re.compile(r"<al\b[^>]*>(.*?)</al>", re.S)
 _TAG = re.compile(r"<[^>]+>")
@@ -190,7 +199,7 @@ async def _one(client: httpx.AsyncClient, sem: asyncio.Semaphore, ident: str) ->
 
 async def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--family", choices=sorted(_SCOPE), default="all")
+    p.add_argument("--family", choices=sorted(_SCOPE), default="corpus")
     p.add_argument("--limit", type=int, default=0, help="stop after N publications (0 = all)")
     p.add_argument("--retry", action="store_true",
                    help="re-attempt rows stored as fetch_error/parse_error/empty_body")

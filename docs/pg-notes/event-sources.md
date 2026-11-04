@@ -87,12 +87,91 @@ The one thing none of the phases gets from here is indoor cultural programming. 
 wanted, it is a separate source with separate terms, and it should be decided as such rather
 than discovered as a hole later.
 
-## 6. Not yet checked
+## 6. Paging and import cost — measured 2026-11-04
 
-- Whether SRU paginates a 34,481-row type-scoped query to completion, or caps out. Only a
-  12-record page and `maximumRecords=0` counts were pulled.
-- Rate limits and etiquette for a national import. The current importer's politeness settings
-  were sized for one municipality at a time.
+### A national query is not paged to completion, and does not need to be
+
+The wall is on `startRecord`, and it is exact: **`startRecord >= 10000` returns HTTP 504**,
+while 9999 and below are served normally. It is a limit on the *offset asked for*, not on the
+record reached — `startRecord=9990&maximumRecords=50` answers 200 and hands back records 9990
+to 10039, past 10,000.
+
+That does not block a national import, because `_plan()` already cuts a range into windows that
+each stay under the ceiling, and the national windows fit:
+
+| scope | per month | verdict |
+|---|---|---|
+| evenementenvergunning, national | 1,830 / 3,901 / 3,527 / 3,031 / 2,206 (Jan/Mar/May/Jul/Sep) | **month windows are enough** |
+| omgevingsvergunning, national | 30,319 (Mar), 25,349 (Sep) | over the ceiling → day windows |
+| omgevingsvergunning, one day | 1,207 (2026-03-10) | comfortable |
+
+So phase 1 needs no new mechanism at all, and phase 2 uses the day cascade that already exists.
+
+### Two comments in `import_bekendmaking.py` are now wrong
+
+**`PAGE = 100  # the service's own maximum per request` — it is not.** `maximumRecords=1000` is
+honoured: the response grows from 455 KB to 4.7 MB, i.e. ten times the payload, so this is not a
+silent truncation. 1000 is the real cap, and **asking for more fails in a shape worth knowing**:
+2000, 5000 and 10000 all return HTTP **200** with a 971-byte body that echoes
+`<maximumRecords>10</maximumRecords>` and contains neither `numberOfRecords` nor a single
+record. A client counting records would read that as "no results". Ours survives only by
+accident of a guard written for a different case — `_page()` raises when `numberOfRecords` is
+missing — which is luck, not design.
+
+**The 9900 ceiling comment describes behaviour that has changed.** It records that
+`startRecord 9901` answers 200 with an *empty* page. It no longer does: 9901 returns a full
+page of 100. Only the 504 half still holds. `PAGE_CEILING = 9900` stays correct as a
+conservative value; its justification needs rewriting.
+
+### Cost of going national, measured
+
+Three sequential requests each, same query window:
+
+| `maximumRecords` | per page | payload | per record |
+|---|---|---|---|
+| 100 | 0.51 s | 455 KB | 5.1 ms |
+| 1000 | 3.09 s | 4.7 MB | 3.1 ms |
+
+Server time scales with records, not with requests, so 1000 buys about 1.6x per record rather
+than 10x — but it cuts request *count* by ten, which is what politeness is counted in.
+
+| phase | records | requests @1000 | wall time | transfer |
+|---|---|---|---|---|
+| 1 — events | 34,481 | ~35 + 12 probes | ~2 min | ~160 MB |
+| 2 — construction | 303,186 | ~304 + 365 probes | ~16 min | ~1.4 GB |
+
+(The record-per-page counts in that run were miscounted by a `grep -c`, which counts matching
+*lines* and the XML is one line. Payload size is the evidence that 1000 was served, and it is
+unambiguous.)
+
+### Rate limits: none published, and one policy question that is not mine to settle
+
+No `ratelimit-*`, `retry-after` or equivalent header is returned. The endpoint sets
+`access-control-allow-origin: *` and allows GET/POST/OPTIONS/HEAD, i.e. cross-origin browser
+calls were deliberately enabled — this is meant to be called by programs.
+
+**But `https://repository.overheid.nl/robots.txt` is `User-agent: *` / `Disallow: /`** — a
+blanket disallow on the host serving the SRU API, and we have already imported 61,853 records
+from it. The context cuts both ways and the user should decide, not me:
+
+- against: the literal rule covers the whole host, with no API carve-out.
+- for: the same body's human-facing mirror `zoek.officielebekendmakingen.nl` disallows only
+  search-result pages and leaves the content open, which reads as "do not crawl search
+  results" rather than "no machine access"; `koopoverheid.nl` disallows nothing; and the
+  wide-open CORS headers on the SRU endpoint are hard to read as anything but an invitation to
+  call it from code.
+
+This is the same shape as the `woningnet.nl` finding in `data-sources.md`, and it gets the same
+treatment: **recorded, flagged, and left to the user.** Do not scale up the import until it is
+answered.
+
+## 7. Still not checked
+
+- Whether `evenementenvergunning` publication reliably *precedes* the event outside the three
+  municipalities already imported — i.e. whether it works as a forward calendar nationally.
+- Ticketmaster's licence terms for storing and re-serving event data.
+- Whether a 1.4 GB phase-2 transfer should be rate-limited on our side regardless of the
+  absence of a published limit. On the evidence above, it should.
 - Whether `evenementenvergunning` publication *predates* the event reliably enough to be useful
   as a forward calendar everywhere, or only in the municipalities already imported.
 - Ticketmaster's licence terms for storing and re-serving event data.

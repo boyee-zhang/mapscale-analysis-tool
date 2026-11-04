@@ -8,7 +8,8 @@ from . import db, http_client, metrics
 from .errors import ExternalServiceError, InternalError
 from .logger import RequestLoggingMiddleware
 from .logger import get_logger
-from .routers import isochrone, pois, bekendmakingen, directions, region, traffic, search, health
+from .routers import (isochrone, pois, bekendmakingen, directions, region, traffic, search,
+                      notice_search, health)
 
 logger = get_logger("app")
 
@@ -90,4 +91,8 @@ app.include_router(directions.router)
 app.include_router(region.router)
 app.include_router(traffic.router)
 app.include_router(search.router)
+# Address search and publication search are different things on purpose: `search` resolves a
+# place name to a coordinate, `notice_search` finds publications by meaning. Sharing a prefix
+# would make one look like a mode of the other.
+app.include_router(notice_search.router)
 

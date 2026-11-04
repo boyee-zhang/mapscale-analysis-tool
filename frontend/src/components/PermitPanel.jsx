@@ -15,8 +15,13 @@ import {
  * like a bug otherwise.
  */
 const PermitPanel = ({ data, loading, windowMonths, onSetWindow,
-                       noiseFilter, onSetNoiseFilter, onClose }) => {
+                       noiseFilter, onSetNoiseFilter, notice, onSearchNotices, onClose }) => {
   const [month, setMonth] = useState(null);
+  const [draft, setDraft] = useState('');
+  // When a search is active its ranked results replace the window's list. The month
+  // histogram above keeps describing the WINDOW, not the search, so the heading says which
+  // of the two the list below it is — otherwise the bars and the list silently disagree.
+  const searching = Boolean(notice?.items || notice?.loading || notice?.error);
 
   const months = data?.months || [];
   const peak = useMemo(() => Math.max(1, ...months.map(m => m.count)), [months]);
@@ -51,6 +56,28 @@ const PermitPanel = ({ data, loading, windowMonths, onSetWindow,
         </div>
         <button onClick={onClose} style={closeStyle} aria-label="Close">×</button>
       </div>
+
+      <form
+        style={searchRowStyle}
+        onSubmit={(e) => { e.preventDefault(); onSearchNotices(draft.trim()); }}
+      >
+        <input
+          type="search"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="Search by meaning — e.g. pile driving at night"
+          style={searchInputStyle}
+        />
+        {searching && (
+          <button type="button" style={clearBtnStyle}
+                  onClick={() => { setDraft(''); onSearchNotices(''); }}>
+            Clear
+          </button>
+        )}
+      </form>
+
+      {notice?.error && <p style={noticeStyle}>{notice.error}</p>}
+      {notice?.loading && <p style={noticeStyle}>Searching…</p>}
 
       <div style={windowRowStyle}>
         {WINDOWS.map(w => (
@@ -216,8 +243,15 @@ const PermitPanel = ({ data, loading, windowMonths, onSetWindow,
             </p>
           )}
 
+          {searching && notice.items && (
+            <p style={filterNoteStyle}>
+              {notice.items.length} ranked by similarity to “{notice.q}”. The bars above still
+              describe the whole window, not this search.
+            </p>
+          )}
+
           <ul style={listStyle}>
-            {items.slice(0, 200).map(it => (
+            {(searching && notice.items ? notice.items : items.slice(0, 200)).map(it => (
               <li key={it.identifier} style={itemStyle}>
                 <span style={{ ...swatchStyle, background: noiseColor(it.noise_score),
                                marginTop: '5px' }} />
@@ -240,6 +274,13 @@ const PermitPanel = ({ data, loading, windowMonths, onSetWindow,
                         channel — and they say "noisier than most" rather than a percentage,
                         because the score is a logistic output on 695 rows, not a calibrated
                         probability. */}
+                    {/* Similarity is shown as a plain number and only while searching.
+                        It is a cosine against the query, not a probability, and the list
+                        order already carries the ranking — the number is here so a reader
+                        can see WHERE the relevance falls off, not as a score to trust. */}
+                    {it.similarity != null && (
+                      <span style={simStyle}>{it.similarity.toFixed(3)}</span>
+                    )}
                     <span style={{ color: noiseColor(it.noise_score), fontWeight: 600 }}>
                       {noiseBand(it.noise_score)}
                       {it.noise_score == null ? '' : ` ${it.noise_score}`}
@@ -280,6 +321,21 @@ const windowRowStyle = { display: 'flex', gap: '4px', margin: '12px 0 6px' };
 const noiseRowStyle = { display: 'flex', gap: '4px', margin: '0 0 8px' };
 const modelNoteStyle = {
   margin: '0 0 8px', fontSize: '10px', lineHeight: 1.45, color: '#86868b',
+};
+const simStyle = {
+  display: 'inline-block', marginRight: '5px', padding: '0 4px', borderRadius: '4px',
+  background: 'rgba(0,0,0,0.05)', color: '#1d1d1f', fontWeight: 600, fontSize: '10px',
+};
+const searchRowStyle = { display: 'flex', gap: '6px', margin: '12px 0 2px' };
+const searchInputStyle = {
+  flex: 1, minWidth: 0, padding: '6px 9px', borderRadius: '9px',
+  borderWidth: '1px', borderStyle: 'solid', borderColor: 'rgba(0,0,0,0.12)',
+  fontSize: '12px', color: '#1d1d1f', background: 'white',
+};
+const clearBtnStyle = {
+  padding: '0 9px', borderRadius: '9px', cursor: 'pointer',
+  borderWidth: '1px', borderStyle: 'solid', borderColor: 'rgba(0,0,0,0.12)',
+  background: 'rgba(0,0,0,0.03)', fontSize: '11px', fontWeight: 600, color: '#1d1d1f',
 };
 const eventDateStyle = {
   display: 'flex', alignItems: 'center', gap: '6px',

@@ -37,6 +37,10 @@ const MapContainer = () => {
   // `items` is capped at 500: filtering the page we were given would show "the noisy ones
   // among the 500 most recent", which is not the question and would disagree with the facets.
   const [permitNoise, setPermitNoise] = useState(null);
+  // Semantic search results, when a query is active. Held here rather than in the panel so
+  // the MAP shows what was searched for too — a ranked list the dots disagree with would be
+  // two answers to one question.
+  const [notice, setNotice] = useState({ q: '', items: null, loading: false, error: null });
   const [permits, setPermits] = useState({ data: null, loading: false });
 
   // 1. 统一状态
@@ -325,7 +329,7 @@ const MapContainer = () => {
       <PermitLayer
         map={map}
         isReady={isReady}
-        items={permits.data?.items}
+        items={notice.items || permits.data?.items}
         visible={showPermits}
       />
       {showPermits && (
@@ -333,6 +337,28 @@ const MapContainer = () => {
           data={permits.data}
           loading={permits.loading}
           windowMonths={permitWindow}
+          notice={notice}
+          onSearchNotices={async (q) => {
+            if (!q) { setNotice({ q: '', items: null, loading: false, error: null }); return; }
+            setNotice(n => ({ ...n, q, loading: true, error: null }));
+            try {
+              const to = new Date();
+              const from = new Date(to);
+              from.setMonth(from.getMonth() - permitWindow);
+              const iso = (d) => d.toISOString().slice(0, 10);
+              const r = await api.searchNotices({
+                q, lng: params.center.lng, lat: params.center.lat,
+                minutes: params.minutes, profile: params.mode,
+                dateFrom: iso(from), dateTo: iso(to), limit: 30,
+              });
+              setNotice({ q, items: r.items, loading: false, error: null });
+            } catch (e) {
+              // `unavailable` is carried through from a 503 so the panel can say the encoder
+              // is missing instead of showing "no results", which would be a different fact.
+              setNotice({ q, items: null, loading: false,
+                          error: e.unavailable ? e.message : 'Search failed' });
+            }
+          }}
           noiseFilter={permitNoise}
           onSetNoiseFilter={setPermitNoise}
           onSetWindow={setPermitWindow}

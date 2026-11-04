@@ -93,6 +93,47 @@ export const api = {
   },
 
   /**
+   * Semantic search over publications: ranked by meaning, not by wording.
+   *
+   * Separate from `searchAddress`, which resolves a place name to a coordinate. Sharing a
+   * method would make one look like a mode of the other.
+   *
+   * Throws on 503 with the server's reason attached. That is deliberate: the encoder is an
+   * optional dependency, and "search is unavailable" must reach the user as itself rather
+   * than as an empty result list.
+   *
+   * @param {{ q: string, lng?: number, lat?: number, minutes?: number, profile?: string,
+   *           dateFrom?: string, dateTo?: string, limit?: number }} opts
+   * @returns {Promise<{ shape: string, total: number, items: object[] }>}
+   */
+  searchNotices: async ({ q, lng, lat, minutes, profile, dateFrom, dateTo, limit }) => {
+    const params = new URLSearchParams({ q });
+    if (lng != null && lat != null) {
+      params.append('lng', lng);
+      params.append('lat', lat);
+      if (minutes) params.append('minutes', minutes);
+      if (profile) params.append('profile', profile);
+    }
+    if (dateFrom) params.append('date_from', dateFrom);
+    if (dateTo) params.append('date_to', dateTo);
+    if (limit) params.append('limit', limit);
+    try {
+      const res = await client.get('/api/main/search/notices', { params });
+      console.log('[api] searchNotices', {
+        q, shape: res.data.shape, total: res.data.total,
+        top: res.data.items?.[0]?.similarity,
+      });
+      return res.data;
+    } catch (err) {
+      const detail = err.response?.data?.detail;
+      console.error('[api] searchNotices failed', detail || err.message);
+      const e = new Error(detail || 'Search failed');
+      e.unavailable = err.response?.status === 503;
+      throw e;
+    }
+  },
+
+  /**
    * @param {{ lng: number, lat: number }} start
    * @param {{ lng: number, lat: number }} end
    * @param {'walking'|'cycling'|'driving'} mode

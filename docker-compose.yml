@@ -19,7 +19,15 @@ services:
   postgres:
     # arm64 mirror of postgis/postgis:16-3.4 — the official image is amd64-only and
     # would run under emulation on Apple Silicon, distorting every EXPLAIN timing.
-    image: imresamu/postgis:16-3.4
+    #
+    # BUILT, not pulled, since semantic search needs pgvector as well: no multi-arch image
+    # ships PostGIS and pgvector together, so the one extension is added on top of the
+    # arch-native base rather than giving the base up. docker/postgres.Dockerfile says why
+    # this does not reinitialise the data directory.
+    build:
+      context: .
+      dockerfile: docker/postgres.Dockerfile
+    image: mapscale-postgis-pgvector:16-3.4
     container_name: mapscale-pg
     environment:
       POSTGRES_USER: mapscale

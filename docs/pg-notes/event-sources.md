@@ -165,7 +165,59 @@ This is the same shape as the `woningnet.nl` finding in `data-sources.md`, and i
 treatment: **recorded, flagged, and left to the user.** Do not scale up the import until it is
 answered.
 
-## 7. Still not checked
+## 7. The national import, run 2026-11-04 — and the limit it exposed
+
+`import_bekendmaking.py --doc-type evenementenvergunning --from 2026-01-01` imported
+**34,481 of 34,481 publications, 0 unparseable**, in 11 monthly windows. `bekendmaking` went
+61,853 -> **94,183** rows, `bekendmaking_locatie` -> 160,477, and coverage went from **9
+municipalities to 294**. Event publications: 2,153 -> 34,481.
+
+The degradation path held up under its first real test. All 32,330 new rows arrive with no
+score, and they surface as `is_noisy = NULL` -> `unscored`, never as `quiet`. Checked end to
+end at Rotterdam, which had no data at all before: 17 event permits in a 10-minute shape,
+every one of them `noise: "unscored"`, `noise_score: null` — `Koningsdag Stadhuisplein`,
+`Koningsdag Terras DJ`, `CECE Kingsday Borrel`.
+
+### The periods do not come, and that is a template problem
+
+Body fetching is fast and works nationally: 50 documents in **1.38 s** at concurrency 4, so
+all 32,330 would take roughly 15 minutes. But of those 50 — a genuine national spread across
+Achtkarspelen, Alphen aan den Rijn, Barendrecht, Echt-Susteren, Katwijk, Helmond, Purmerend,
+Dijk en Waard, Ede and Twenterand — **50 of 50 came back `no_period`.**
+
+The cause is visible in the text. Amsterdam publishes a labelled APV template, which is where
+every one of the 1,587 start dates and 1,443 crowd figures in this repo came from:
+
+    Datum van: 05-05-2026
+    Datum t/m: 05-05-2026
+    Tijd van: 12:00
+    Bezoekers drukste moment: 30000
+
+Everywhere else it is prose, and the date is inside a sentence:
+
+    Op 02-03-2026 is de volgende aanvraag voor een vergunning/ontheffing binnengekomen:
+    Singelland VO Surhuisterveen schooltriatlon
+
+`import_bekendmaking_body.py`'s extractors look for `Looptijd:`, `Datum van:`, `Tijd van:` —
+Amsterdam's labels. They are not wrong; they are **local**, and nobody had reason to know that
+until there was a second template to compare against.
+
+**So the honest statement of what the national corpus supports today:** event name, location
+and publication date everywhere; event *date* and crowd size **in Amsterdam only**. An event
+map outside Amsterdam is a map of permit addresses, not a calendar. Publication date is not a
+substitute — a permit is published weeks to months before the event.
+
+Three ways out, none of them started:
+- extend the extractor per municipality template. Bounded but open-ended; there are 294.
+- extract dates from prose with the model we already run offline. Generalises by construction,
+  and is unverified — it would need its own labelled sample before any date is shown to a user.
+- show no date outside Amsterdam and say so. Correct today, and the weakest product.
+
+Fetching the bodies is still worth doing regardless of dates: it replaces a title-only
+`activity_text` (all 32,330 new rows fell back to the title, mean 104 chars) with real prose,
+which is the input phase 2's semantic search actually reads.
+
+## 8. Still not checked
 
 - Whether `evenementenvergunning` publication reliably *precedes* the event outside the three
   municipalities already imported — i.e. whether it works as a forward calendar nationally.

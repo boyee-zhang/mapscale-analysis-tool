@@ -37,13 +37,29 @@ ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
 
 SRU = "https://repository.overheid.nl/sru"
-PAGE = 100  # the service's own maximum per request
+# MEASURED 2026-11-04, correcting a comment that said 100 was "the service's own maximum":
+# it is not. 1000 is honoured and is the real cap — the payload goes 455 KB -> 4.7 MB, so it
+# is served, not silently truncated. Asking for MORE than 1000 fails in a shape worth knowing:
+# 2000, 5000 and 10000 all answer HTTP 200 with a 971-byte body that echoes
+# `<maximumRecords>10</maximumRecords>` and carries neither `numberOfRecords` nor a record. A
+# client that counts records reads that as "no results"; `_page()` survives it only because it
+# raises when `numberOfRecords` is absent, which is luck rather than design.
+#
+# Server time scales with records rather than with requests (5.1 ms/record at 100, 3.1 ms at
+# 1000), so this buys ~1.6x throughput — but it cuts the request COUNT tenfold, and that is
+# what politeness toward a public service is counted in.
+PAGE = 1000
 
-# Deep paging is refused, and not politely: startRecord 9901 answers 200 with an empty page
-# while 10000 and beyond answer HTTP 504 Gateway Time-out. Measured, after an Amsterdam import
-# died at exactly that offset with 53,719 records still to go. So a result set is only
-# reachable to its first 10,000 records and anything larger has to be cut into windows that
-# each stay below the ceiling — by date, which is the only axis that partitions cleanly.
+# Deep paging is refused: `startRecord >= 10000` answers HTTP 504 Gateway Time-out. Found when
+# an Amsterdam import died at exactly that offset with 53,719 records still to go, so a result
+# set is only reachable to its first ~10,000 records and anything larger has to be cut into
+# windows that each stay below the ceiling — by date, the only axis that partitions cleanly.
+#
+# RE-MEASURED 2026-11-04 and one half of the original note no longer holds: it recorded that
+# `startRecord 9901` answers 200 with an EMPTY page. It now returns a full page. The limit is
+# on the offset asked for, not on the record reached — `startRecord=9990&maximumRecords=50`
+# serves records 9990 to 10039 without complaint. Only the 504 at 10000 still stands, and
+# 9900 is kept as the ceiling because it is below it with room to spare.
 PAGE_CEILING = 9900
 
 _CLAIM_RUN = "INSERT INTO etl_run (source, note) VALUES ($1, $2) RETURNING id"
@@ -229,8 +245,22 @@ async def _plan(client: httpx.AsyncClient, scope: str, lo: date, hi: date) -> li
 
 
 def _scope_cql(args) -> str:
+    """The CQL that selects a scope. Place-based, or — since 2026-11-04 — national by type.
+
+    The module docstring and CLAUDE.md both used to say there was "no national mode" because
+    SRU narrows by place in only two ways. That was true of narrowing BY PLACE and false as a
+    statement about the service: a query that names no place at all is answered for the whole
+    country. MEASURED: `dt.type=="evenementenvergunning" and dt.date>="2026-01-01"` returns
+    34,481 records spread over small municipalities (Het Hogeland, Alphen-Chaam, Son en
+    Breugel) as well as the large ones, so it is not a big-city artefact.
+
+    This matters because the false half was load-bearing: it made national coverage look like
+    342 separate imports instead of one argument.
+    """
     if args.gemeente:
         return f'w.ligtInGemeente=="{args.gemeente}"'
+    if args.doc_type:
+        return f'dt.type=="{args.doc_type}"'
     return f'w.locatiepunt within/rijksdriehoek "{args.rd}"'
 
 
@@ -279,6 +309,11 @@ async def main() -> None:
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--gemeente", help='municipality name, e.g. "Amsterdam"')
     g.add_argument("--rd", help='RD New circle: "X Y radius_km"')
+    g.add_argument("--doc-type", dest="doc_type",
+                   help='NATIONAL, scoped by publication type instead of by place, e.g. '
+                        '"evenementenvergunning". No place filter at all — see _scope_cql.')
+    p.add_argument("--plan-only", action="store_true",
+                   help="print the window plan and upstream counts, import nothing")
     p.add_argument("--from", dest="date_from", required=True, help="YYYY-MM-DD, inclusive")
     p.add_argument("--to", dest="date_to", help="YYYY-MM-DD, exclusive")
     p.add_argument("--max", type=int, default=0, help="stop after N records (0 = all)")
@@ -289,7 +324,8 @@ async def main() -> None:
         raise SystemExit("DATABASE_URL is not set")
 
     cql = _scope_cql(args) + f' and dt.date>="{args.date_from}"'
-    source = f"bekendmaking:{args.gemeente or args.rd}"
+    source = (f"bekendmaking:type={args.doc_type}" if args.doc_type
+              else f"bekendmaking:{args.gemeente or args.rd}")
     conn = await asyncpg.connect(dsn)
     try:
         try:
@@ -307,6 +343,16 @@ async def main() -> None:
                                    date.fromisoformat(args.date_from), hi)
                 grand = sum(n for _, n in plan)
                 print(f"  {len(plan)} window(s), {grand} records upstream")
+                if args.plan_only:
+                    for wcql, wtotal in plan:
+                        print(f"    {wtotal:7}  {wcql}")
+                    # Release the etl_run claim rather than leaving it open: the partial
+                    # unique index is predicated on `finished_at IS NULL`, so an abandoned
+                    # row would block the real import that follows.
+                    await conn.execute(
+                        "UPDATE etl_run SET status='succeeded', finished_at=now(), "
+                        "row_count=0, note='plan-only' WHERE id=$1", run_id)
+                    return
                 for wcql, wtotal in plan:
                     n, m, bad = await _import_window(client, conn, run_id, wcql, wtotal, seen, grand)
                     seen += n

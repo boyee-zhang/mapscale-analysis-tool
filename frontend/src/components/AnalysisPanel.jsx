@@ -75,7 +75,7 @@ const AnalysisPanel = ({ params, setParams, poiCount, loading, onAIAnalysis, sho
         >
           <span style={{ fontSize: '14px' }}>🏗️</span>
           <span style={{ marginLeft: '8px' }}>
-            {showPermits ? 'Hide Permits' : 'Building Permits'}
+            {showPermits ? 'Hide Notices' : 'Public Notices'}
           </span>
         </button>
       </div>

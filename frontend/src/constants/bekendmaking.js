@@ -23,6 +23,36 @@ export const STAGE_ORDER = ['aanvraag', 'ontwerp', 'besluit', 'overig'];
 export const stageColor = (stage) => (STAGE[stage] || STAGE.overig).color;
 export const stageLabel = (stage) => (STAGE[stage] || STAGE.overig).label;
 
+/**
+ * `doc_type` → an English label. The full published vocabulary is 15 values; these are the
+ * ones that occur often enough to name, and anything else falls through to its own Dutch
+ * name, which is the documented cost of keeping this map in the frontend (see the note at
+ * the top of this file) rather than behind a lookup endpoint.
+ *
+ * This became the panel's primary breakdown when the hard-coded `building_permits=true`
+ * filter was lifted. Before that the panel only ever saw one doc_type, so breaking down BY
+ * doc_type would have drawn a single bar; `activiteit` was the only axis with any variation
+ * in view. Now that every type is in scope it is the other way round — `activiteit` is
+ * populated for omgevingsvergunning alone, i.e. 29% of the corpus.
+ */
+export const DOC_TYPE_LABEL = {
+  'andere vergunning': 'Other permit',
+  'omgevingsvergunning': 'Building / environment',
+  'verkeersbesluit of -mededeling': 'Traffic order',
+  'exploitatievergunning': 'Business licence',
+  'evenementenvergunning': 'Event',
+  'omgevingsmelding': 'Works notification',
+  'andere beschikking': 'Other decision',
+  'ander besluit van algemene strekking': 'General order',
+  'andere voorlichtingsinformatie': 'Public information',
+  'overige overheidsinformatie': 'Other official info',
+  'andere melding': 'Other notification',
+  'participatie': 'Participation',
+  'vergunning voor activiteiten op of in oppervlaktewater': 'Surface water',
+  'ruimtelijk plan of omgevingsdocument': 'Zoning document',
+  'evenementmelding': 'Event notification',
+};
+
 /** The activities an omgevingsvergunning can carry. Only that doc_type has any. */
 export const ACTIVITEIT_LABEL = {
   bouwen: 'Building',

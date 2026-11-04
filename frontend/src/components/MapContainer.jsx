@@ -123,16 +123,27 @@ const MapContainer = () => {
       setPermits(p => ({ ...p, loading: true }));
       try {
         const data = await api.fetchBekendmakingen({
-          // Always ordered by score, not by date. This panel is pinned to
-          // building_permits=true, and within that one class the binary verdict carries no
-          // information at all -- the model flags 17,804 of 17,813 omgevingsvergunningen. The
-          // RANKING does: inside that same class it separates hand-labelled noisy from quiet
-          // at AUC 0.911 (docs/pg-notes/noise-serving.md). With `items` capped at 500, a date
-          // order would also mean the loudest permits may simply never be returned.
-          noise: permitNoise, sort: 'noise',
+          // Sort by score ONLY while a noise filter is on. `items` is capped at 500 server
+          // side, and an unfiltered isochrone matches ~2,500, so sorting the whole set by
+          // score means the 500 returned are the 500 loudest and the map can never draw a
+          // quiet dot — the map goes solid red again, for a new reason. Measured at
+          // Nieuwmarkt: 2,481 matches, 803 noisy / 1,678 quiet, of which an unfiltered
+          // score-sorted page shows 500 noisy and 0 quiet.
+          //
+          // So: no filter means "show me what is around here", which wants a date order and
+          // a representative sample; picking Noisy means "show me the loudest", which wants
+          // the ranking and for the cap to select on it. The caption follows `data.sort` and
+          // says which of the two the list is.
+          noise: permitNoise, sort: permitNoise ? 'noise' : 'recent',
           lng: params.center.lng, lat: params.center.lat,
           minutes: params.minutes, profile: params.mode,
-          dateFrom: iso(from), dateTo: iso(to), buildingPermits: true,
+          // No doc_type filter. This used to send `buildingPermits: true`, which pinned the
+          // panel to omgevingsvergunning + bouwen — and that is precisely the class the noise
+          // model flags at 99.95%, so every dot was red and the Quiet filter always returned
+          // zero. MEASURED at one coordinate: with the filter, 476 matches and 476 noisy;
+          // without it, 2,547 matches split 834 noisy / 1,713 quiet. The filter, not the
+          // model, was what made the verdict carry no information.
+          dateFrom: iso(from), dateTo: iso(to),
         });
         if (!cancelled) setPermits({ data, loading: false });
       } catch (err) {

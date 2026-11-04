@@ -1,8 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   STAGE_ORDER, STAGE, stageColor, stageLabel,
   noiseColor, noiseBand, NOISE_FILTERS, NOISE_RAMP,
-  ACTIVITEIT_LABEL, WINDOWS, monthTick,
+  ACTIVITEIT_LABEL, DOC_TYPE_LABEL, WINDOWS, monthTick,
 } from '../constants/bekendmaking';
 
 /**
@@ -25,10 +25,17 @@ const PermitPanel = ({ data, loading, windowMonths, onSetWindow,
     [data, month]
   );
   const monthTotal = months.find(m => m.month === month)?.count ?? null;
-  const byNoise = useMemo(
-    () => Object.fromEntries((data?.by_noise || []).map(b => [b.noise, b.count])),
-    [data]
-  );
+  // The counts on the filter buttons come from the last UNFILTERED response, not from the
+  // current one. `by_noise` is computed over the filtered set, so reading it live made
+  // "Quiet" show 0 the moment "Noisy" was selected — the button said there were no quiet
+  // notices while 1,678 of them had just been filtered out. A button's count has to describe
+  // what clicking it would give you, which is a property of the unfiltered set.
+  const unfilteredNoise = useRef({});
+  const byNoise = useMemo(() => {
+    const live = Object.fromEntries((data?.by_noise || []).map(b => [b.noise, b.count]));
+    if (data && !noiseFilter) unfilteredNoise.current = live;
+    return unfilteredNoise.current;
+  }, [data, noiseFilter]);
   // A list, because a partial rescore can leave two model versions in play. One is normal.
   const model = data?.noise_models?.[0] || null;
 
@@ -36,7 +43,7 @@ const PermitPanel = ({ data, loading, windowMonths, onSetWindow,
     <div style={panelStyle}>
       <div style={headerStyle}>
         <div>
-          <h3 style={titleStyle}>Building permits</h3>
+          <h3 style={titleStyle}>Public notices</h3>
           <span style={subtitleStyle}>
             {data?.window ? `${data.window.from} → ${data.window.to}` : '—'}
           </span>
@@ -149,7 +156,23 @@ const PermitPanel = ({ data, loading, windowMonths, onSetWindow,
             </div>
           )}
 
-          {/* activity mix. These do NOT sum to the total: one permit can carry several. */}
+          {/* What KIND of notice. This IS a partition — one publication has exactly one
+              doc_type — so unlike the activity row below, these sum to the total. It is the
+              primary breakdown since the building-permit filter was lifted: before that
+              every row shared one doc_type and this would have been a single chip. */}
+          {(data.by_type || []).length > 1 && (
+            <div style={actRowStyle}>
+              {data.by_type.map(t => (
+                <span key={t.doc_type} style={actChipStyle}>
+                  {DOC_TYPE_LABEL[t.doc_type] || t.doc_type} {t.count}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* activity mix. These do NOT sum to the total: one permit can carry several, AND
+              only omgevingsvergunning rows carry any at all — so with every doc_type in
+              scope this covers a minority of the list, which is what the note says. */}
           {(data.by_activiteit || []).length > 1 && (
             <div style={actRowStyle}>
               {data.by_activiteit.map(a => (
@@ -157,7 +180,10 @@ const PermitPanel = ({ data, loading, windowMonths, onSetWindow,
                   {ACTIVITEIT_LABEL[a.activiteit] || a.activiteit} {a.count}
                 </span>
               ))}
-              <span style={derivedNoteStyle}>One permit can cover several activities, so these overlap.</span>
+              <span style={derivedNoteStyle}>
+                Building/environment permits only, and one can carry several — these overlap
+                and do not sum to the total.
+              </span>
             </div>
           )}
 

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   STAGE_ORDER, STAGE, stageColor, stageLabel,
-  noiseColor, noiseLabel, NOISE_FILTERS,
+  noiseColor, noiseBand, NOISE_FILTERS, NOISE_RAMP,
   ACTIVITEIT_LABEL, WINDOWS, monthTick,
 } from '../constants/bekendmaking';
 
@@ -83,6 +83,20 @@ const PermitPanel = ({ data, loading, windowMonths, onSetWindow,
           The score ranks within a permit type; the noisy/quiet cut itself is close to a
           permit-type lookup.
         </p>
+      )}
+
+      {model && (
+        <div style={legendStyle}>
+          <div style={{
+            ...legendBarStyle,
+            backgroundImage: `linear-gradient(to right, ${NOISE_RAMP.map(
+              ([v, c]) => `${c} ${Math.round(v * 100)}%`).join(', ')})`,
+          }} />
+          <div style={legendLabelRowStyle}>
+            <span>Quieter</span>
+            <span>Noisier</span>
+          </div>
+        </div>
       )}
 
       {data?.shape === 'unavailable' && (
@@ -168,14 +182,19 @@ const PermitPanel = ({ data, loading, windowMonths, onSetWindow,
           <ul style={listStyle}>
             {items.slice(0, 200).map(it => (
               <li key={it.identifier} style={itemStyle}>
-                <span style={{ ...swatchStyle, background: noiseColor(it.noise), marginTop: '5px' }} />
+                <span style={{ ...swatchStyle, background: noiseColor(it.noise_score),
+                               marginTop: '5px' }} />
                 <div style={{ minWidth: 0 }}>
                   <a href={it.url} target="_blank" rel="noreferrer" style={itemTitleStyle}>
                     {it.title}
                   </a>
                   <div style={itemMetaStyle}>
-                    <span style={{ color: noiseColor(it.noise), fontWeight: 600 }}>
-                      {noiseLabel(it.noise)}
+                    {/* The words carry the ranking too, so the colour is never the only
+                        channel — and they say "noisier than most" rather than a percentage,
+                        because the score is a logistic output on 695 rows, not a calibrated
+                        probability. */}
+                    <span style={{ color: noiseColor(it.noise_score), fontWeight: 600 }}>
+                      {noiseBand(it.noise_score)}
                       {it.noise_score == null ? '' : ` ${it.noise_score}`}
                     </span>
                     {' · '}{it.published_at} · {stageLabel(it.stage)} (from title)
@@ -213,7 +232,15 @@ const closeStyle = {
 const windowRowStyle = { display: 'flex', gap: '4px', margin: '12px 0 6px' };
 const noiseRowStyle = { display: 'flex', gap: '4px', margin: '0 0 8px' };
 const modelNoteStyle = {
-  margin: '0 0 10px', fontSize: '10px', lineHeight: 1.45, color: '#86868b',
+  margin: '0 0 8px', fontSize: '10px', lineHeight: 1.45, color: '#86868b',
+};
+const legendStyle = { margin: '0 0 10px' };
+// The gradient's stops are placed at the ramp's own score positions, not spread evenly, so
+// the legend is a true picture of the encoding rather than a decorative swatch.
+const legendBarStyle = { height: '6px', borderRadius: '3px' };
+const legendLabelRowStyle = {
+  display: 'flex', justifyContent: 'space-between',
+  fontSize: '9px', color: '#86868b', marginTop: '3px',
 };
 // Longhand border properties, not the `border` shorthand: pillOnStyle overrides only the
 // colour, and React warns (and can mis-apply) when a rerender drops a longhand while a

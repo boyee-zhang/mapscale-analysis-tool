@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import maplibregl from 'maplibre-gl';
 import {
-  STAGE, stageLabel,
-  NOISE, noiseLabel,
+  stageLabel,
+  noiseBand, noiseColor, NOISE_RAMP, NOISE_UNSCORED_COLOR,
 } from '../constants/bekendmaking';
 
 /**
@@ -46,22 +46,29 @@ export const PERMIT_LAYER_IDS = [LAYER, LAYER_HALO];
 // carries no information at all, it separates hand-labelled noisy from quiet at AUC 0.911
 // (omgevingsvergunning, 202 vs 36), 0.965 (evenementenvergunning) and 1.000 (andere
 // vergunning). That ranking is the part the embedding actually earned, so the map shows the
-// ranking: colour ramps with the score instead of snapping at the threshold.
+// ranking: one hue, pale for quiet and deep for loud, with the stops at measured quantiles
+// of the corpus. The ramp and the reasoning behind its stops live in
+// constants/bekendmaking.js — do not inline a different one here.
 const NOISE_COLOR = [
   'case',
-  ['<', ['get', 'noise_p'], 0], NOISE.unscored.color,
-  ['interpolate', ['linear'], ['get', 'noise_p'],
-    0,    '#8E8E93',
-    0.35, '#C7B299',
-    0.6,  '#FF9500',
-    0.85, '#FF3B30'],
+  ['<', ['get', 'noise_p'], 0], NOISE_UNSCORED_COLOR,
+  ['interpolate', ['linear'], ['get', 'noise_p'], ...NOISE_RAMP.flat()],
 ];
 
-// Unscored dots are drawn hollow as well as pale. Colour alone would make "no prediction"
-// a lighter shade of "quiet", and those two must not be a matter of degree — one is an
-// answer and the other is the absence of one.
+// The second channel. Unscored dots are hollow — white fill, grey ring — so "no prediction"
+// is not merely a paler step of "quiet". Colour alone would make the two a matter of degree,
+// and they are a difference in kind: one is an answer and the other is the absence of one.
+const NOISE_STROKE = [
+  'case', ['<', ['get', 'noise_p'], 0], NOISE_UNSCORED_COLOR, '#ffffff',
+];
+const NOISE_FILL = [
+  'case', ['<', ['get', 'noise_p'], 0], '#ffffff', NOISE_COLOR,
+];
+
+// Unscored dots are also held back in opacity, so they recede behind the scored ones
+// instead of competing with them for attention.
 const NOISE_OPACITY = [
-  'case', ['<', ['get', 'noise_p'], 0], 0.35, 1,
+  'case', ['<', ['get', 'noise_p'], 0], 0.45, 1,
 ];
 
 const toFeatureCollection = (items) => ({
@@ -102,9 +109,9 @@ const popupHtml = (p) => {
   return `
     <div style="font:13px/1.45 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:280px">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-        <span style="width:8px;height:8px;border-radius:50%;background:${NOISE[p.noise]?.color || NOISE.unscored.color}"></span>
+        <span style="width:8px;height:8px;border-radius:50%;background:${noiseColor(p.noise_score === '' ? null : Number(p.noise_score))}"></span>
         <strong style="font-size:11px;letter-spacing:.3px;text-transform:uppercase;color:#86868b">
-          ${esc(noiseLabel(p.noise))}${p.noise_score ? ` · p=${esc(p.noise_score)}` : ''}
+          ${esc(noiseBand(p.noise_score === '' ? null : Number(p.noise_score)))}${p.noise_score ? ` · ${esc(p.noise_score)}` : ''}
         </strong>
         <span style="margin-left:auto;font-size:11px;color:#86868b">${esc(p.published_at)}</span>
       </div>
@@ -113,8 +120,8 @@ const popupHtml = (p) => {
         ${esc(stageLabel(p.stage))} (from title) · ${esc(p.activiteit || '—')}${p.gemeente ? ` · ${esc(p.gemeente)}` : ''}
       </div>
       <div style="font-size:10px;color:#aeaeb2;margin-top:4px">
-        Model prediction, not a published field. The score ranks within a permit type;
-        the noisy/quiet cut itself is close to a permit-type lookup.
+        Model prediction, not a published field. The score ranks against other
+        publications; the noisy/quiet cut itself is close to a permit-type lookup.
       </div>
       <a href="${esc(p.url)}" target="_blank" rel="noreferrer"
          style="display:inline-block;margin-top:8px;font-size:11px;font-weight:600;color:#007AFF;text-decoration:none">
@@ -140,7 +147,7 @@ const PermitLayer = ({ map, isReady, items, visible }) => {
         paint: {
           'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 4, 14, 10, 17, 18],
           'circle-color': NOISE_COLOR,
-          'circle-opacity': ['*', 0.18, NOISE_OPACITY],
+          'circle-opacity': ['*', 0.2, NOISE_OPACITY],
         },
       });
       map.addLayer({
@@ -149,10 +156,10 @@ const PermitLayer = ({ map, isReady, items, visible }) => {
         source: SOURCE,
         paint: {
           'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 2, 14, 4.5, 17, 7],
-          'circle-color': NOISE_COLOR,
+          'circle-color': NOISE_FILL,
           'circle-opacity': NOISE_OPACITY,
-          'circle-stroke-width': 1,
-          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 1.2,
+          'circle-stroke-color': NOISE_STROKE,
         },
       });
     }

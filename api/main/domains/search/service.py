@@ -118,6 +118,51 @@ def _sql(spatial: bool, shape_expr: str, limit: int) -> str:
             + _DECORATE.format(point=_ANY_POINT))
 
 
+# ------------------------------------------------------------------------------------------
+# The HNSW index silently returns ZERO rows for a filtered search, and this is the guard.
+#
+# MEASURED, 10-minute isochrone over central Amsterdam, 3,292 publications inside it:
+#
+#     LIMIT   default   iterative_scan=strict_order
+#         1         0                             1
+#         3         0                             3
+#         5         5                             5
+#        10+   correct                       correct
+#
+# The plan says why. The planner drives the join from the HNSW index as the OUTER loop —
+# walking global nearest neighbours in distance order and testing each against the isochrone —
+# so it reports `Rows Removed by Join Filter: 131680` and then runs out. An HNSW scan returns a
+# BOUNDED number of candidates (ef_search, 40 by default); when none of them fall inside the
+# filter, the query ends with no rows rather than looking further. The result is not slow, it
+# is WRONG, and it is wrong only at small LIMIT and only when the planner happens to choose
+# that shape — which is the worst way for a bug to behave.
+#
+# `hnsw.iterative_scan` is pgvector's answer: keep scanning until enough rows survive the
+# filter. `strict_order` rather than `relaxed_order` because the endpoint returns a similarity
+# per row and sorts by it; relaxed may emit rows slightly out of distance order, which would
+# make the numbers disagree with the ordering they are printed in.
+#
+# Set per query rather than pool-wide in db.py: `hnsw.*` does not exist as a parameter until
+# the extension is loaded into the session, so a SET at connection setup fails outright. It is
+# applied only to the filtered branch because that is the only one that can be wrong — the
+# corpus-wide query has no filter for the index to lose rows against.
+_ITERATIVE_SCAN = "SET LOCAL hnsw.iterative_scan = strict_order"
+
+
+async def _fetch(conn, sql: str, args, spatial: bool):
+    if not spatial:
+        return await conn.fetch(sql, *args)
+    async with conn.transaction():
+        try:
+            await conn.execute(_ITERATIVE_SCAN)
+        except Exception as e:
+            # Older pgvector has no iterative scan. Say so once, loudly: the query still runs
+            # and may silently under-return, which is exactly what must not pass unnoticed.
+            logger.warning("hnsw.iterative_scan unavailable; a filtered search may return "
+                           "fewer rows than exist", extra={"error": str(e)})
+        return await conn.fetch(sql, *args)
+
+
 async def _shape(lng: float, lat: float, minutes: int, profile: str):
     try:
         iso = await get_isochrone(lng, lat, minutes, profile)
@@ -169,7 +214,7 @@ async def search(
         sql, args = _sql(True, expr, limit), [qvec, date_from, date_to, doc_type, *geom]
 
     async with db.acquire() as conn:
-        rows = await conn.fetch(sql, *args)
+        rows = await _fetch(conn, sql, args, spatial=shape != "corpus")
 
     items = [{
         "identifier": r["identifier"], "title": r["title"], "doc_type": r["doc_type"],

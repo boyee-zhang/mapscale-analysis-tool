@@ -95,14 +95,59 @@ That judged set does not exist yet, so no claim is made about retrieval quality 
 FTS baseline. `noise-retrieval-fts.md` has FTS at F1 0.475 on a different task with a different
 ground truth; the two are **not comparable** and are not compared here.
 
-## 5. One performance defect in my own query, found by EXPLAIN
+## 5. The index silently returned ZERO rows for a filtered search
+
+The worst finding here, and it only appeared because the endpoint was exercised after 0019
+rather than before. Adding the HNSW index turned a working spatially-filtered search into no
+results at all — not slower, **wrong** — and only at small LIMIT:
+
+| LIMIT | default | `hnsw.iterative_scan=strict_order` |
+|---|---|---|
+| 1 | **0** | 1 |
+| 3 | **0** | 3 |
+| 5 | 5 | 5 |
+| 10, 20, 30, 50 | correct | correct |
+
+The plan says why:
+
+    Nested Loop
+      Join Filter: (e.identifier = hit.identifier)
+      Rows Removed by Join Filter: 131680
+      ->  Index Scan using bekendmaking_embedding_hnsw on bekendmaking_embedding e
+      ->  Materialize   (hit, 3292 rows)
+
+The planner drives the join from the **HNSW index as the outer loop** — walking global nearest
+neighbours in distance order and testing each against the isochrone. An HNSW scan returns a
+BOUNDED number of candidates (`ef_search`, 40 by default); when none of them fall inside the
+filter it stops and the query ends with no rows instead of looking further. 131,680 rows
+removed by the join filter and nothing left.
+
+Three things make this the nastiest bug of the session:
+- **It is a wrong answer, not a slow one.** An empty result and "nothing matches here" are
+  indistinguishable to the caller — the failure this codebase refuses everywhere else.
+- **It depends on LIMIT and on which plan the planner happens to pick.** At LIMIT 5 it is
+  correct; at 3 it is empty. The same SQL on a plain connection returned rows while the pooled
+  one did not, because the row estimates differed.
+- **It did not exist before the index.** 0018's comment predicted the index "may simply never
+  be chosen"; being chosen and being wrong was not on the list.
+
+Fixed with pgvector's own mechanism: `SET LOCAL hnsw.iterative_scan = strict_order` on the
+filtered branch, which keeps scanning until enough rows survive the filter. `strict_order`
+rather than `relaxed_order` because the endpoint prints a similarity per row and sorts by it;
+relaxed may emit rows slightly out of distance order and the numbers would then disagree with
+the order they appear in. It is set per query, not pool-wide in `db.py`, because `hnsw.*` is
+not a known parameter until the extension loads into the session — a SET at connection setup
+fails outright. If it is ever unavailable the service logs a warning rather than proceeding
+quietly, since under-returning is precisely what must not pass unnoticed.
+
+## 6. One performance defect in my own query, found by EXPLAIN
 
 The endpoint joined `bekendmaking_activity` alongside the ranking. That view reassembles
 `activity_text` with six regexes per row, so it ran them over every candidate to build snippets
 for the twenty rows that survive — the vector sort was 787 ms and the view was the rest.
 Ranking now takes its LIMIT first and the expensive joins run on what is left.
 
-## 6. Decisions, and what is left
+## 7. Decisions, and what is left
 
 - `vector(768)` lives in its own table (0018), not on `bekendmaking_noise_score`, which 0016
   keeps narrow on purpose. The row carries the model and the **sha1 of the text encoded**:
@@ -112,6 +157,8 @@ Ranking now takes its LIMIT first and the expensive joins run on what is left.
 - The encoder is optional (`requirements-local.txt`) and `/search/notices` answers **503 with
   the reason**, never an empty 200 — an unavailable encoder and a query with no matches are
   different facts.
+- `ef_search` is left at its default; `hnsw.iterative_scan=strict_order` is set on the
+  filtered branch and is not optional — see §5.
 - `ef_search` is left at its default. Raising it costs the index entirely unless the planner is
   forced, and the recall it buys is partly an artefact of the metric.
 

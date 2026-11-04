@@ -198,3 +198,27 @@ export const NOISE_FILTERS = [
   { value: ['noisy'], label: 'Noisy' },
   { value: ['quiet'], label: 'Quiet' },
 ];
+
+/**
+ * The event's own date, which is NOT `published_at`.
+ *
+ * A permit is published weeks to months before the thing happens — `Electric Fireworks 2026`
+ * was published in February for 31 December — so showing the publication date where a reader
+ * expects the event date is not a cosmetic error, it is a wrong answer to the question they
+ * asked. The two are rendered differently and labelled.
+ *
+ * `derived` says HOW the date was obtained, and the distinction is kept all the way to the
+ * reader. `stated` means the publisher wrote it into a labelled field. `derived` means it was
+ * read out of a sentence by scripts/event_dates.py — measured at precision 100.0%, recall
+ * 65.5%, zero hallucinations on 30 municipalities it was not built against, which is good and
+ * is still a different kind of fact from a value someone typed into a form.
+ *
+ * 65.5% recall is the reason `by_event_date` exists in the response and is shown: a calendar
+ * that silently drops a third of its entries looks complete and is not.
+ */
+export const fmtEventDate = (start, end) => {
+  if (!start) return null;
+  const d = (x) => new Date(x + 'T00:00:00').toLocaleDateString('en-GB',
+    { day: 'numeric', month: 'short', year: 'numeric' });
+  return !end || end === start ? d(start) : `${d(start)} – ${d(end)}`;
+};

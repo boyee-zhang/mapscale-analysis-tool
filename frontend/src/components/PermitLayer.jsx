@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import maplibregl from 'maplibre-gl';
 import {
   stageLabel,
-  noiseBand, noiseColor, NOISE_RAMP, NOISE_UNSCORED_COLOR,
+  noiseBand, noiseColor, NOISE_RAMP, NOISE_UNSCORED_COLOR, fmtEventDate,
 } from '../constants/bekendmaking';
 
 /**
@@ -94,6 +94,10 @@ const toFeatureCollection = (items) => ({
       // `unscored` bucket exists to prevent. A sentinel below the domain is caught by the
       // `case` above before interpolation ever sees it.
       noise_p: it.noise_score == null ? -1 : it.noise_score,
+      // Empty string, not null: MapLibre turns a null property into something `esc()` would
+      // print as "null". The popup tests for emptiness.
+      event_when: fmtEventDate(it.event_start, it.event_end) || '',
+      date_derived: it.date_derived ? '1' : '',
       published_at: it.published_at,
       gemeente: it.gemeente || '',
       activiteit: (it.activiteit || []).join(', '),
@@ -113,8 +117,11 @@ const popupHtml = (p) => {
         <strong style="font-size:11px;letter-spacing:.3px;text-transform:uppercase;color:#86868b">
           ${esc(noiseBand(p.noise_score === '' ? null : Number(p.noise_score)))}${p.noise_score ? ` · ${esc(p.noise_score)}` : ''}
         </strong>
-        <span style="margin-left:auto;font-size:11px;color:#86868b">${esc(p.published_at)}</span>
+        <span style="margin-left:auto;font-size:11px;color:#86868b">pub. ${esc(p.published_at)}</span>
       </div>
+      ${p.event_when ? `<div style="font-weight:600;color:#1d1d1f;margin-bottom:2px">
+        ${esc(p.event_when)}${p.date_derived ? ' <span style="font-size:9px;font-weight:600;text-transform:uppercase;color:#86868b;border:1px solid rgba(0,0,0,.12);border-radius:4px;padding:0 3px">from text</span>' : ''}
+      </div>` : ''}
       <div style="color:#1d1d1f;margin-bottom:6px">${esc(p.title)}</div>
       <div style="font-size:11px;color:#86868b">
         ${esc(stageLabel(p.stage))} (from title) · ${esc(p.activiteit || '—')}${p.gemeente ? ` · ${esc(p.gemeente)}` : ''}

@@ -22,8 +22,8 @@ from datetime import date
 import asyncpg
 from dotenv import dotenv_values
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from event_date_extract import classify, detect, extract  # noqa: E402
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+from event_dates import classify, detect, extract  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 DATABASE_URL = dotenv_values(ROOT / ".env").get("DATABASE_URL")

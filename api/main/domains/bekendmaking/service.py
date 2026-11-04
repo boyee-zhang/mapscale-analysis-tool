@@ -108,6 +108,13 @@ scored AS (
                ELSE 'overig'
            END AS stage,
            n.score AS noise_score, n.is_noisy, n.model_version,
+           bb.start_date AS event_start, bb.end_date AS event_end,
+           -- How the date was obtained, carried all the way to the caller. 'ok' means the
+           -- publisher wrote it into a labelled field; 'ok_derived' means it was read out of
+           -- a sentence by scripts/event_dates.py, measured at 100% precision / 65.5% recall
+           -- on municipalities it was not built against. Those are different kinds of fact
+           -- and the UI says so rather than presenting both as published data.
+           bb.status AS date_status, bb.period_basis AS date_basis,
            -- Three buckets, and `unscored` is a bucket of its own rather than folded into
            -- `quiet`. A publication imported after the last scoring run has no score, and
            -- "we have not judged this" must not be served as "this is quiet" -- the same
@@ -119,6 +126,9 @@ scored AS (
     -- here would silently shrink `total` after every import until the scorer is re-run, which
     -- is the worst version of this bug -- the count would look plausible.
     LEFT JOIN bekendmaking_noise_rank n ON n.identifier = b.identifier
+    -- The event's own dates, which are NOT `published_at`: a permit is published weeks to
+    -- months before the thing happens, so the two must never be conflated in the UI.
+    LEFT JOIN bekendmaking_body bb ON bb.identifier = b.identifier
     WHERE ($3::text[] IS NULL OR b.doc_type = ANY($3::text[]))
       AND ($4::text[] IS NULL OR b.activiteit && $4::text[])
 ),
@@ -192,6 +202,14 @@ SELECT
     (SELECT coalesce(jsonb_agg(n ORDER BY (n->>'count')::int DESC), '[]'::jsonb) FROM (
         SELECT jsonb_build_object('noise', noise, 'count', count(*)) AS n
         FROM matched GROUP BY noise) s) AS by_noise,
+    -- How many of the matches carry an event date at all, split by how it was obtained.
+    -- Printed because the derived figure is only 65.5% recall: a caller showing a calendar
+    -- needs to know what fraction of the set it is leaving out, not just plot what it has.
+    (SELECT jsonb_build_object(
+         'stated', count(*) FILTER (WHERE date_status = 'ok' AND event_start IS NOT NULL),
+         'derived', count(*) FILTER (WHERE date_status = 'ok_derived'),
+         'none', count(*) FILTER (WHERE event_start IS NULL))
+     FROM matched) AS by_event_date,
     -- The model behind the badges, so a caller can state how much to trust them instead of
     -- presenting a 0.891 F1 classifier as ground truth. A list rather than one object because
     -- a partial rescore leaves two versions in play, and hiding that would make a mixed
@@ -218,6 +236,10 @@ SELECT
                    -- boolean is the product decision and the number is why, so a UI can sort
                    -- by confidence and still show one badge. NULL where `noise` is 'unscored'.
                    'noise_score', round(noise_score::numeric, 3),
+                   'event_start', event_start,
+                   'event_end', event_end,
+                   'date_derived', date_status = 'ok_derived',
+                   'date_basis', date_basis,
                    'lon', ST_X(pt),
                    'lat', ST_Y(pt)) AS i
         FROM matched ORDER BY {order} LIMIT {limit}) s) AS items
@@ -259,7 +281,8 @@ async def get_bekendmakingen(
     """
     empty = {
         "total": 0, "months": [], "by_type": [], "by_activiteit": [], "by_stage": [],
-        "by_noise": [], "noise_models": [], "items": [], "truncated": False,
+        "by_noise": [], "noise_models": [], "by_event_date": {},
+        "items": [], "truncated": False,
         "window": {"from": date_from.isoformat(), "to": date_to.isoformat()},
     }
     if doc_type is not None and not doc_type:
@@ -309,6 +332,7 @@ async def get_bekendmakingen(
         "by_stage": row["by_stage"],
         "by_noise": row["by_noise"],
         "noise_models": row["noise_models"],
+        "by_event_date": row["by_event_date"],
         "truncated": total > len(items),
         "items": items,
     }

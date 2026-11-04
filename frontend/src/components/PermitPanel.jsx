@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import {
   STAGE_ORDER, STAGE, stageColor, stageLabel,
-  noiseColor, noiseBand, NOISE_FILTERS, NOISE_RAMP,
+  noiseColor, noiseBand, NOISE_FILTERS, NOISE_RAMP, fmtEventDate,
   ACTIVITEIT_LABEL, DOC_TYPE_LABEL, WINDOWS, monthTick,
 } from '../constants/bekendmaking';
 
@@ -38,6 +38,7 @@ const PermitPanel = ({ data, loading, windowMonths, onSetWindow,
   }, [data, noiseFilter]);
   // A list, because a partial rescore can leave two model versions in play. One is normal.
   const model = data?.noise_models?.[0] || null;
+  const byEventDate = data?.by_event_date || null;
 
   return (
     <div style={panelStyle}>
@@ -89,6 +90,16 @@ const PermitPanel = ({ data, loading, windowMonths, onSetWindow,
           ? `${model.n_train ?? 695} hand-labelled publications` : 'a hand-labelled sample'}.
           The score ranks within a permit type; the noisy/quiet cut itself is close to a
           permit-type lookup.
+        </p>
+      )}
+
+      {byEventDate && (byEventDate.stated + byEventDate.derived) > 0 && (
+        <p style={modelNoteStyle}>
+          Event dates: {byEventDate.stated + byEventDate.derived} of{' '}
+          {byEventDate.stated + byEventDate.derived + byEventDate.none}.{' '}
+          {byEventDate.derived > 0 && `${byEventDate.derived} read from the notice text`}
+          {byEventDate.none > 0 && `${byEventDate.derived > 0 ? '; ' : ''}${byEventDate.none} `}
+          {byEventDate.none > 0 && 'publish no date, so they are missing from any calendar.'}
         </p>
       )}
 
@@ -214,6 +225,16 @@ const PermitPanel = ({ data, loading, windowMonths, onSetWindow,
                   <a href={it.url} target="_blank" rel="noreferrer" style={itemTitleStyle}>
                     {it.title}
                   </a>
+                  {/* The EVENT date, separate from and above the publication date, because
+                      a permit is published weeks to months ahead and a reader looking for
+                      "when is this" must not be handed "when was this announced". Derived
+                      dates say so rather than passing as published data. */}
+                  {it.event_start && (
+                    <div style={eventDateStyle}>
+                      {fmtEventDate(it.event_start, it.event_end)}
+                      {it.date_derived && <span style={derivedTagStyle}>from text</span>}
+                    </div>
+                  )}
                   <div style={itemMetaStyle}>
                     {/* The words carry the ranking too, so the colour is never the only
                         channel — and they say "noisier than most" rather than a percentage,
@@ -223,7 +244,7 @@ const PermitPanel = ({ data, loading, windowMonths, onSetWindow,
                       {noiseBand(it.noise_score)}
                       {it.noise_score == null ? '' : ` ${it.noise_score}`}
                     </span>
-                    {' · '}{it.published_at} · {stageLabel(it.stage)} (from title)
+                    {' · '}pub. {it.published_at} · {stageLabel(it.stage)} (from title)
                     {it.gemeente ? ` · ${it.gemeente}` : ''}
                   </div>
                 </div>
@@ -259,6 +280,15 @@ const windowRowStyle = { display: 'flex', gap: '4px', margin: '12px 0 6px' };
 const noiseRowStyle = { display: 'flex', gap: '4px', margin: '0 0 8px' };
 const modelNoteStyle = {
   margin: '0 0 8px', fontSize: '10px', lineHeight: 1.45, color: '#86868b',
+};
+const eventDateStyle = {
+  display: 'flex', alignItems: 'center', gap: '6px',
+  fontSize: '12px', fontWeight: 600, color: '#1d1d1f', marginBottom: '1px',
+};
+const derivedTagStyle = {
+  fontSize: '9px', fontWeight: 600, letterSpacing: '.2px', textTransform: 'uppercase',
+  color: '#86868b', border: '1px solid rgba(0,0,0,0.12)', borderRadius: '4px',
+  padding: '0 3px',
 };
 const legendStyle = { margin: '0 0 10px' };
 // The gradient's stops are placed at the ramp's own score positions, not spread evenly, so

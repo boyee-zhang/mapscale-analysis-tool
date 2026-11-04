@@ -83,6 +83,7 @@ export const api = {
         shape: res.data.shape, total: res.data.total, truncated: res.data.truncated,
         sort: res.data.sort,
         byNoise: Object.fromEntries((res.data.by_noise || []).map(b => [b.noise, b.count])),
+        byEventDate: res.data.by_event_date,
       });
       return res.data;
     } catch (err) {

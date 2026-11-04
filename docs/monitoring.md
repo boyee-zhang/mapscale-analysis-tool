@@ -6,8 +6,52 @@
 ## 起停
 
 ```bash
+./scripts/monitoring.sh up       # 起,然后打印每个 target 真实的抓取状态
+./scripts/monitoring.sh down     # 只停这三个
+./scripts/monitoring.sh status
+```
+
+脚本包的就是下面这条,外加一个它学会的教训:
+
+```bash
 docker compose up -d prometheus grafana postgres-exporter
 ```
+
+**裸 `docker compose down` 两头都不对 —— 实测 2026-10-30,此前这里写错了。**
+它的目标集只有*没有 profile* 的 service,所以一条裸 `down` 的真实结果是:
+
+```
+Container mapscale-pg  Removed
+Network mapscale-analysis-tool_default  Resource is still in use
+```
+
+`mapscale-pg` 被删了(连续运行 11 天的那个),而 `ors` / `prometheus` / `grafana` /
+`postgres-exporter` 四个带 profile 的**一个都没动**,网络还因为它们仍挂着而删不掉。
+所以用它"停监控"根本停不下来,它只会顺手把数据库带走——**唯一正确的部分是"别用它停监控"**。
+
+这里原先写的是"项目级的,会连 mapscale-pg 和 mapscale-ors 一起删掉"。`ors` 那半句是错的,
+而且错得有方向:它让人以为裸 `down` 会清掉更多东西,实际是清得更少、且清错了。
+`docker compose ps -a` 会列出全部五个 service,这正是误判的来源 —— **`ps` 的视野比
+`down` 的目标集大**。
+
+`monitoring.sh down` 显式点名这三个 service,这是唯一只停监控、不碰数据库的写法。
+反过来,**要把整套停掉就必须把 profile 都带上**:
+
+```bash
+docker compose --profile ors --profile monitoring down   # 五个容器 + 网络,volume 全保留
+```
+
+不加 `-v`,七个 volume(pgdata / ors_graphs / ors_elevation / promdata / grafanadata /
+两个 esdata)一个不少 —— 实测前后 `docker volume ls` 无差异。加了 `-v` 才是真正要付
+40 分钟建图代价的那条命令。
+
+还有一条:**容器 Up 不等于在抓**。后端跑在宿主机的 uvicorn 上,它不在时 Prometheus
+自己完全健康,而 `mapscale-api` 这个 target 是 down、面板全空。所以 `up` 和 `status`
+最后都会去读 `/api/v1/targets` 并把每个 job 的真实状态打出来 —— 容器列表不是答案。
+写这个检查时自己踩了两次同一个坑:`/-/ready` 在 target 注册**之前**就变 true,而
+**空 target 列表里同样没有 `"unknown"`**,所以 grep 式等待会立刻退出并打印空白。
+条件必须是"有 target 且没有 unknown",不是"没有 unknown"——和"空 200 不能和真答案
+共用一个分支"是同一个形状。
 
 显式点名 service 会自动激活它的 profile。三个服务都挂了 `profiles: ["monitoring"]`,
 **这才是真正把它们排除在裸 `docker compose up -d` 之外的东西** —— 一句注释不行,

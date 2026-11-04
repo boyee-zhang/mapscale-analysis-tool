@@ -3,19 +3,34 @@
 -- WHY THE SCORE IS PRECOMPUTED. The winning design measured in docs/pg-notes/noise-embedding.md
 -- is logistic regression over 18 metadata features concatenated with a 768-d
 -- `intfloat/multilingual-e5-base` embedding of `bekendmaking_activity.activity_text`
--- (F1 0.891 against 0.845 for the hand-written rule table in 0012). Producing that embedding
--- needs torch + sentence-transformers, about 1.1 GB installed. This repo deploys as a single
--- Mangum-wrapped Vercel function, so that dependency cannot enter the request path at all --
--- not as a slow path, not behind a flag. The model therefore runs offline in
--- `scripts/score_noise_embedding.py` against its own throwaway venv, and the request path
--- joins one `real` per publication.
+-- (F1 0.891 against 0.845 for the hand-written rule table in 0012).
 --
--- WHY NOT STORE THE EMBEDDINGS TOO. 768 float4 per row over 61,853 rows is ~190 MB, against
--- ~1.5 MB for the scores. This container runs shared_buffers=128MB on purpose, so the vectors
--- would evict everything else to serve a column no query reads: the request path needs the
--- score, and retraining re-embeds from `activity_text`, which is already stored. pgvector is
--- not installed and is not needed for a dot product that happens offline. If an ANN search over
--- publications is ever wanted, that is when to add the extension and the column.
+-- The reason is the corpus, not the deployment. An earlier version of this comment blamed
+-- Vercel's function size limit; that was wrong -- this project runs its own Postgres and its
+-- own containers, and nothing stops torch living beside the API. What a request genuinely
+-- cannot do is EMBED THE DOCUMENTS IT MATCHES: a 10-minute walk over a year returns 3,291
+-- publications, and re-encoding them per request would be 3,291 forward passes to answer a
+-- question whose answer has not changed since the import. Document vectors are a property of
+-- the document, so they are computed once, by `scripts/score_noise_embedding.py`, and the
+-- request path joins one `real` per publication. That holds on any host.
+--
+-- Embedding a QUERY at request time is a different matter and is cheap -- one short text. It
+-- is what a semantic search over publications would need, and it is now open to us; see the
+-- note on pgvector below.
+--
+-- WHY NOT STORE THE EMBEDDINGS TOO -- for now. 768 float4 per row over 61,853 rows is ~190 MB
+-- against ~1.5 MB for the scores, and this container runs shared_buffers=128MB on purpose, so
+-- the vectors would evict everything else to serve a column no CURRENT query reads: the
+-- request path needs the score, and retraining re-embeds from `activity_text`, which is
+-- already stored. The npz cache in the gitignored `data/` covers retraining.
+--
+-- This is a "not yet", not a "no". pgvector is not installed, but nothing prevents it here --
+-- the database is ours. The moment a query wants nearest-neighbour search over publications
+-- ("anything like pile driving at night") rather than one precomputed score, the right move is
+-- the extension, a `vector(768)` column and an HNSW index, and this table's `score` becomes
+-- one derived column beside it rather than the only thing stored. Worth noting that 190 MB
+-- against a 128 MB buffer pool is exactly the regime where an HNSW index's behaviour is
+-- visible rather than hidden by cache, which makes it measurable here.
 --
 -- WHY THE THRESHOLD IS NOT STORED PER ROW. A cosine-style score needs a cutoff, and the cutoff
 -- is a product decision that will be revisited; `is_noisy` as a stored boolean would make

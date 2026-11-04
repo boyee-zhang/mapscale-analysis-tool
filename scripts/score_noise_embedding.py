@@ -5,10 +5,15 @@ WHY THIS IS A SCRIPT AND NOT A REQUEST PATH. The design this implements is the o
 docs/pg-notes/noise-embedding.md: logistic regression over 18 metadata features concatenated
 with a 768-d `intfloat/multilingual-e5-base` embedding of `bekendmaking_activity.activity_text`
 (cross-validated F1 0.891, against 0.845 for the hand-written rule table in migration 0012 and
-0.621 for retrieving everything). Producing the embedding needs torch and sentence-transformers,
-~1.1 GB installed, and this repo deploys as one Mangum-wrapped Vercel function. So the model
-cannot live in the request path on any terms, and the request path instead joins the one `real`
-per publication that this script writes.
+0.621 for retrieving everything). It runs here rather than in the request path because a
+request cannot re-embed the documents it matches: a 10-minute walk over a year returns ~3,300
+publications, and their vectors are a property of the document, unchanged since the import. So
+they are computed once and the request path joins one `real`.
+
+(An earlier version of this docstring said the reason was Vercel's function size limit. That
+was wrong -- this project runs its own Postgres and its own containers. The corpus argument
+above is the real one and does not depend on the host. Embedding a QUERY at request time is
+cheap and is a separate question; see the pgvector note in migration 0016.)
 
     python3 -m venv /tmp/embvenv
     /tmp/embvenv/bin/pip install sentence-transformers==3.4.1 scikit-learn==1.6.1 \
@@ -59,9 +64,13 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import average_precision_score, roc_auc_score
 
 # Read .env directly rather than through api.main.db, which is how the other scripts here get
-# the DSN. This one cannot: it runs in a throwaway venv that deliberately does not have the
-# application's dependencies, and importing api.main.db pulls in api.main.logger, which pulls
-# in starlette -- the whole web stack, to read one string.
+# the DSN. This one cannot: it runs in a throwaway venv holding torch and sentence-transformers
+# (~1.1 GB) and NOT the application's dependencies, and importing api.main.db pulls in
+# api.main.logger, which pulls in starlette -- the whole web stack, to read one string.
+#
+# The separate venv is a tidiness choice, not a constraint: nothing stops torch being installed
+# beside the API here. Keep them apart while only this batch job needs it; merge them the day
+# the API itself embeds queries.
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DATABASE_URL = dotenv_values(ROOT / ".env").get("DATABASE_URL")
 

@@ -19,15 +19,24 @@ Run date 2026-11-04. Raw output: `raw/noise-serving-run1.txt`.
   a `by_noise` facet, a `noise=` filter, a `sort=noise` option and `noise_models` provenance.
 - `PermitLayer` colours by score.
 
-**The model cannot run in the request path and this is structural, not a preference.** It needs
-torch + sentence-transformers, ~1.1 GB, and this repo deploys as one Mangum-wrapped Vercel
-function. So the score is precomputed and the request path joins one `real`. Measured cost of
-the join at a 10-minute walk over a year: 3,291 matches, no change in the shape of the plan.
+**Why the score is precomputed.** A request cannot embed the documents it matches: a 10-minute
+walk over a year returns 3,291 publications, and a vector is a property of the document,
+unchanged since the import. So document vectors are computed once and the request path joins
+one `real`. Measured cost of that join: no change in the shape of the plan.
 
-Embeddings are **not** stored. 768 float4 × 61,853 is ~190 MB against ~1.5 MB for the scores,
-in a container running `shared_buffers=128MB` on purpose. Nothing reads them at request time
-and a retrain re-embeds from `activity_text`, which is already stored. The npz cache lives in
-the gitignored `data/`.
+> **Correction, after the first version of this note.** I originally gave the reason as
+> Vercel's function size limit — "torch is 1.1 GB and this deploys as one Mangum-wrapped
+> function". That is wrong. `vercel.json` and `mangum` are still in the repo, but they are
+> legacy: this project runs its own Postgres and its own containers
+> (`docker-compose.deploy.yml`), so nothing stops torch living beside the API. The corpus
+> argument above is the real one, and unlike the Vercel one it does not depend on the host.
+> **Nothing in sections 2–5 changes** — those are measurements of what the model knows, not of
+> where it runs. What changes is section 7.
+
+Embeddings are **not yet** stored. 768 float4 × 61,853 is ~190 MB against ~1.5 MB for the
+scores, in a container running `shared_buffers=128MB` on purpose, and no current query reads
+them — the request path needs the score, and a retrain re-embeds from `activity_text`, which is
+already stored. The npz cache lives in the gitignored `data/`. This is a "not yet": see §7.
 
 ## 2. The threshold, and a rule of mine that was invalid
 
@@ -185,6 +194,18 @@ Two narrower caveats:
   batch, and scores new rows the moment they are imported. The embedding should be kept for
   the ranking. Shipped as-is pending that call, because the ranking is real and the plumbing is
   the same either way.
+- **pgvector is available and is the obvious next step, now that the Vercel premise is gone.**
+  Storing `vector(768)` beside the score opens the thing this whole line of work was heading
+  toward: nearest-neighbour search over publications, where the query is free text a resident
+  types rather than one of my six hand-written clauses. That also removes the weakest part of
+  `noise-embedding.md` — that the six query clauses are mine — because the user supplies the
+  query instead. Two things make it worth doing here specifically: embedding a *query* at
+  request time is one short forward pass, not 3,291; and 190 MB of vectors against a 128 MB
+  buffer pool is exactly the regime where an HNSW index's behaviour is measurable rather than
+  hidden by cache.
+- **Stage 2 of `docs/postgres-refactor-plan.md` is also unblocked by the same correction.** It
+  was recorded as needing a long-lived process and therefore blocked on the backend leaving
+  Vercel. It has.
 - `unjudgeable`: 7 of 7 flagged, mean score 0.860. The model has no abstain mechanism and is
   confident on rows whose record does not say enough to judge.
 - Only one embedding model has ever been tried (`multilingual-e5-base`). A second would tell

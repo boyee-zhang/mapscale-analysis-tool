@@ -95,7 +95,23 @@ preconditions and the three things to measure after the build are in `docs/ors-s
 
 ### Monitoring (optional) — Prometheus + Grafana
 ```bash
-docker compose up -d prometheus grafana postgres-exporter   # :9090, :3000
+./scripts/monitoring.sh up       # :9090 Prometheus, :3000 Grafana, then prints target health
+./scripts/monitoring.sh down     # stops ONLY these three. A bare `docker compose down`
+                                 # removes mapscale-pg and leaves all four profiled
+                                 # containers running — see below.
+./scripts/monitoring.sh status
+
+# Stopping EVERYTHING. The profiles are not optional here: a bare `docker compose down`
+# targets only the services WITHOUT a profile, so it removes mapscale-pg and then fails
+# with "Network ... Resource is still in use" because ors/prometheus/grafana/
+# postgres-exporter are still attached (measured 2026-10-30; an earlier note in this file
+# claimed it took ors with it, which was wrong in the direction that matters — it cleans
+# up LESS than it looks, and the one thing it does clean up is the database).
+# `docker compose ps -a` lists all five, which is exactly what made that easy to get
+# wrong: ps sees more than down targets.
+docker compose --profile ors --profile monitoring down   # 5 containers + network
+# No -v, so all seven volumes survive (verified: identical `docker volume ls` before and
+# after). `-v` is the command that actually costs 40 minutes of graph rebuilding.
 .venv/bin/python scripts/loadtest.py --scenario all         # every LOCAL endpoint
 .venv/bin/python scripts/loadtest.py --scenario search --probe 5   # third-party: timed, not loaded
 ```
@@ -178,6 +194,47 @@ UPSTASH_REDIS_REST_TOKEN=      # COMMENTED OUT locally 2026-10-29: the instance 
                                # and-failing, and buys zero throughput — see docs/monitoring.md.
                                # .env is gitignored, so PRODUCTION ON VERCEL STILL HAS IT SET.
 ```
+
+### Portable deployment (another machine)
+
+`docker-compose.yml` is the DEVELOPMENT stack: Postgres in a container, API and frontend
+on the host via `scripts/dev.sh`, Postgres parameters deliberately small so bloat and
+buffer reads show up at 10-20M rows. `docker-compose.deploy.yml` is the portable one:
+API and frontend containerised too, its own project name (`mapscale-deploy`) and its own
+volumes, so both can run side by side.
+
+```bash
+./scripts/package.sh                 # dist/mapscale-bundle-<date>.tar.gz: source + 35 MB dump
+./scripts/package.sh --with-extract  # also the 181 MB NH extract, for self-hosted ORS
+# on the target:
+cp deploy/env.example .env && docker compose -f docker-compose.deploy.yml up -d --build
+```
+
+Full operator notes, including the three routing options and what each missing key
+degrades: `deploy/README.md`. Measured: 37 s cold start (22 s of it restoring the dump),
+16 s warm, 914 MB of images, 335 MB of restored database.
+
+It ships SOURCE, not images — `docker save` archives are locked to the architecture that
+built them, and all three base images are multi-arch, so building on the target is the
+thing that works on an arm64 laptop and an amd64 server alike.
+
+Two healthcheck bugs were measured and fixed while building it, both the same shape:
+**the probe answered from a different surface than the real client.**
+  - `pg_isready` with no `-h` probes the UNIX SOCKET. During initdb the entrypoint runs a
+    temporary server with `listen_addresses=''`, so the socket says "accepting
+    connections" while TCP is not listening at all. Compose called Postgres healthy 22 s
+    before the dump finished restoring, started `api`, and asyncpg exited 1 on
+    ECONNREFUSED. The deploy stack now probes `-h 127.0.0.1`. **`docker-compose.yml` still
+    has the socket-only probe** — harmless there only because nothing restores a dump
+    during its initdb, so the window is ~1 s instead of 22.
+  - busybox `wget http://localhost/` resolves `::1` first and `listen 80` is IPv4-only, so
+    nginx reported `unhealthy` while its own access log showed 200s. Probe `127.0.0.1`.
+
+Running it on THIS machine needs `--env-file`: `docker compose -f
+docker-compose.deploy.yml` reads `./.env` for substitution, and this repo's `.env` points
+`ORS_BASE_URL` at the host's `:8080`, which inside a container is the container.
+`deploy/api-entrypoint.sh` warns at boot when it sees a localhost URL, because the symptom
+otherwise is a working map with a silently wrong catchment.
 
 ## Architecture
 

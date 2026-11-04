@@ -92,7 +92,63 @@ The two fold-B date errors are the same defect, not two:
 Both are admin dates leaking past the veto, which is the failure mode that costs a user
 something: a wrong date is worse than no date. The ten misses cost only coverage.
 
-## 6. Decision owed
+## 6. v3 — three layers, and a genuinely independent measurement
+
+Rebuilt as three layers instead of one regex accumulating exceptions:
+
+| layer | does | why separate |
+|---|---|---|
+| **detect** | every date-like token plus the text either side | no judgement at all, so a cue change cannot alter what is found |
+| **classify** | event / admin / correction / unknown, recording the cue | a new municipal phrasing is one row in one table |
+| **decide** | which classified candidate to return, or NULL | precedence stated once, not implied by code order |
+
+Three things fixed, one per layer, each found by printing candidates rather than guessing:
+
+- **detect** — a RUN of dates sharing one month/year tail. `14 mei, 11 juli en 12 september
+  2026`, `27, 29 en 30 april en 1 mei 2026`. Detecting only the complete trailing date made
+  the LAST day the candidate, which is the end and never the start.
+- **classify** — an administrative cue may FOLLOW its date. Dutch puts the participle at the
+  end of the clause: `heeft op maandag 15 december 2025 een verzoek ONTVANGEN`. Looking only
+  backwards read that as an event date and returned the day the request came in, eight months
+  early.
+- **classify** — the connector between an event noun and its date is not only a preposition.
+  `Kermis Den Burg, 8 t/m 12 juli 2026`, `"Zomermarkt, 27-06-2026"`, `Pinksterfietstocht (25
+  mei 2026)`. Demanding `op|van` cost 14 of 19 fold-A misses and bought nothing — what keeps
+  this honest is the admin veto in front, not a narrow connector.
+
+### Fold C — 30 municipalities used in neither dev, nor A, nor B
+
+| | precision | recall | null rate | hallucination |
+|---|---|---|---|---|
+| fold A (dev from v3 on) | 100.0% | 73.8% | 29.5% | 0.0% |
+| fold B (dev from v3 on) | 92.0% | 79.3% | 16.7% | 0.0% |
+| **fold C — sealed** | **100.0%** | **65.5%** | **36.7%** | **0.0%** |
+
+19 of 19 returned dates correct, 10 honest NULLs, 1 correct silence. **Every error is a
+miss.** The NULL policy held: nothing was invented and no administrative date was served as an
+event date on any of the three folds.
+
+Null rate is printed beside precision on purpose — 100% precision is purchasable with silence,
+and 36.7% is the price being paid for it here.
+
+### The three remaining misses are nameable, and fixing them costs fold C
+
+Diagnosed by printing candidates, not by guessing:
+
+- **Veendam** `heeft verleend: Datum evenement: zaterdag 7 maart 2026` → classified admin.
+  `verleend` falls inside the 45-character veto window, and the veto outranks the label even
+  though `Datum evenement:` sits closer and is far more specific. Precedence bug, not a
+  vocabulary gap.
+- **Midden-Delfland** `van Koningsdag 27 april 2026` and **Drechterland** `Kermisborrel
+  27-6-2026` → unknown. An event NAME followed directly by a date with no connector at all.
+  Very common in titles, and currently unreachable because the prose rule requires a
+  connector.
+
+Both are one-table changes in layer 2. **Neither is made here**: fold C has now been read, so
+any number quoted after a fix needs a fold D. There are 49 unused test municipalities left,
+so that is available and cheap.
+
+## 7. Decision owed
 
 Not wired into anything yet. Three options, in the order I would take them:
 

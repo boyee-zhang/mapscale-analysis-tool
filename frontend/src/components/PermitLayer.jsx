@@ -1,6 +1,9 @@
 import { useEffect } from 'react';
 import maplibregl from 'maplibre-gl';
-import { STAGE_ORDER, STAGE, stageLabel } from '../constants/bekendmaking';
+import {
+  STAGE, stageLabel,
+  NOISE, noiseLabel,
+} from '../constants/bekendmaking';
 
 /**
  * Announcements as a MapLibre circle layer, not as `<PermitMarker>` DOM elements.
@@ -25,12 +28,40 @@ const LAYER_HALO = 'permits-halo';
 // found by clicking one in the browser, not by reading the code.
 export const PERMIT_LAYER_IDS = [LAYER, LAYER_HALO];
 
-// stage → colour, as a MapLibre `match` expression. Built from the same constant the
-// legend and the panel read, so a colour cannot drift between the three.
-const STAGE_COLOR = [
-  'match', ['get', 'stage'],
-  ...STAGE_ORDER.flatMap(s => [s, STAGE[s].color]),
-  STAGE.overig.color,
+// noise → colour, as a MapLibre `match` expression. Built from the same constant the legend
+// and the panel read, so a colour cannot drift between the three.
+//
+// The dots used to be coloured by `stage` (applied / draft / decided). They are coloured by
+// the noise prediction instead because that is the question the layer now answers, and two
+// categorical colour scales on one set of dots would mean neither is readable. `stage` did not
+// go away: it is in the popup and in the panel list, where a label can say what it is.
+// MEASURED, and it is why this is a gradient and not three buckets: the model's BINARY
+// verdict is a four-value doc_type lookup. `doc_type IN (omgevingsvergunning,
+// evenementenvergunning, omgevingsmelding, andere beschikking)` agrees with it on 99.61% of
+// the corpus (61,611 of 61,853) and scores the identical precision 0.821 / recall 0.936 /
+// F1 0.875 on the 695 hand-labelled rows. So a red/grey dot would dress a permit-type lookup
+// up as a prediction.
+//
+// The SCORE is a different matter. Inside one doc_type, where the lookup is constant and
+// carries no information at all, it separates hand-labelled noisy from quiet at AUC 0.911
+// (omgevingsvergunning, 202 vs 36), 0.965 (evenementenvergunning) and 1.000 (andere
+// vergunning). That ranking is the part the embedding actually earned, so the map shows the
+// ranking: colour ramps with the score instead of snapping at the threshold.
+const NOISE_COLOR = [
+  'case',
+  ['<', ['get', 'noise_p'], 0], NOISE.unscored.color,
+  ['interpolate', ['linear'], ['get', 'noise_p'],
+    0,    '#8E8E93',
+    0.35, '#C7B299',
+    0.6,  '#FF9500',
+    0.85, '#FF3B30'],
+];
+
+// Unscored dots are drawn hollow as well as pale. Colour alone would make "no prediction"
+// a lighter shade of "quiet", and those two must not be a matter of degree — one is an
+// answer and the other is the absence of one.
+const NOISE_OPACITY = [
+  'case', ['<', ['get', 'noise_p'], 0], 0.35, 1,
 ];
 
 const toFeatureCollection = (items) => ({
@@ -44,6 +75,18 @@ const toFeatureCollection = (items) => ({
       identifier: it.identifier,
       title: it.title,
       stage: it.stage,
+      noise: it.noise || 'unscored',
+      // `noise_score` is null for an unscored row, and MapLibre coerces null in a feature
+      // property to 0 inside an expression — which would read as "confidently quiet". It is
+      // only ever displayed, never used in a paint expression, and the popup tests for the
+      // empty string rather than for a falsy number.
+      noise_score: it.noise_score == null ? '' : String(it.noise_score),
+      // The numeric the paint ramp reads. -1, not null: MapLibre coerces a null feature
+      // property to 0 inside an expression, and 0 on this ramp is "confidently quiet" --
+      // the exact confusion between "no prediction" and "a negative prediction" that the
+      // `unscored` bucket exists to prevent. A sentinel below the domain is caught by the
+      // `case` above before interpolation ever sees it.
+      noise_p: it.noise_score == null ? -1 : it.noise_score,
       published_at: it.published_at,
       gemeente: it.gemeente || '',
       activiteit: (it.activiteit || []).join(', '),
@@ -59,15 +102,19 @@ const popupHtml = (p) => {
   return `
     <div style="font:13px/1.45 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:280px">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-        <span style="width:8px;height:8px;border-radius:50%;background:${STAGE[p.stage]?.color || STAGE.overig.color}"></span>
+        <span style="width:8px;height:8px;border-radius:50%;background:${NOISE[p.noise]?.color || NOISE.unscored.color}"></span>
         <strong style="font-size:11px;letter-spacing:.3px;text-transform:uppercase;color:#86868b">
-          ${esc(stageLabel(p.stage))}
+          ${esc(noiseLabel(p.noise))}${p.noise_score ? ` · p=${esc(p.noise_score)}` : ''}
         </strong>
         <span style="margin-left:auto;font-size:11px;color:#86868b">${esc(p.published_at)}</span>
       </div>
       <div style="color:#1d1d1f;margin-bottom:6px">${esc(p.title)}</div>
       <div style="font-size:11px;color:#86868b">
-        ${esc(p.activiteit || '—')}${p.gemeente ? ` · ${esc(p.gemeente)}` : ''}
+        ${esc(stageLabel(p.stage))} (from title) · ${esc(p.activiteit || '—')}${p.gemeente ? ` · ${esc(p.gemeente)}` : ''}
+      </div>
+      <div style="font-size:10px;color:#aeaeb2;margin-top:4px">
+        Model prediction, not a published field. The score ranks within a permit type;
+        the noisy/quiet cut itself is close to a permit-type lookup.
       </div>
       <a href="${esc(p.url)}" target="_blank" rel="noreferrer"
          style="display:inline-block;margin-top:8px;font-size:11px;font-weight:600;color:#007AFF;text-decoration:none">
@@ -92,8 +139,8 @@ const PermitLayer = ({ map, isReady, items, visible }) => {
         source: SOURCE,
         paint: {
           'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 4, 14, 10, 17, 18],
-          'circle-color': STAGE_COLOR,
-          'circle-opacity': 0.18,
+          'circle-color': NOISE_COLOR,
+          'circle-opacity': ['*', 0.18, NOISE_OPACITY],
         },
       });
       map.addLayer({
@@ -102,7 +149,8 @@ const PermitLayer = ({ map, isReady, items, visible }) => {
         source: SOURCE,
         paint: {
           'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 2, 14, 4.5, 17, 7],
-          'circle-color': STAGE_COLOR,
+          'circle-color': NOISE_COLOR,
+          'circle-opacity': NOISE_OPACITY,
           'circle-stroke-width': 1,
           'circle-stroke-color': '#ffffff',
         },

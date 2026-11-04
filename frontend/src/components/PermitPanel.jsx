@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   STAGE_ORDER, STAGE, stageColor, stageLabel,
+  noiseColor, noiseLabel, NOISE_FILTERS,
   ACTIVITEIT_LABEL, WINDOWS, monthTick,
 } from '../constants/bekendmaking';
 
@@ -13,7 +14,8 @@ import {
  * when the two disagree, because a filtered list shorter than the bar it came from looks
  * like a bug otherwise.
  */
-const PermitPanel = ({ data, loading, windowMonths, onSetWindow, onClose }) => {
+const PermitPanel = ({ data, loading, windowMonths, onSetWindow,
+                       noiseFilter, onSetNoiseFilter, onClose }) => {
   const [month, setMonth] = useState(null);
 
   const months = data?.months || [];
@@ -23,6 +25,12 @@ const PermitPanel = ({ data, loading, windowMonths, onSetWindow, onClose }) => {
     [data, month]
   );
   const monthTotal = months.find(m => m.month === month)?.count ?? null;
+  const byNoise = useMemo(
+    () => Object.fromEntries((data?.by_noise || []).map(b => [b.noise, b.count])),
+    [data]
+  );
+  // A list, because a partial rescore can leave two model versions in play. One is normal.
+  const model = data?.noise_models?.[0] || null;
 
   return (
     <div style={panelStyle}>
@@ -47,6 +55,35 @@ const PermitPanel = ({ data, loading, windowMonths, onSetWindow, onClose }) => {
           </button>
         ))}
       </div>
+
+      <div style={noiseRowStyle}>
+        {NOISE_FILTERS.map(f => {
+          const on = JSON.stringify(f.value) === JSON.stringify(noiseFilter);
+          return (
+            <button
+              key={f.label}
+              onClick={() => { setMonth(null); onSetNoiseFilter(f.value); }}
+              style={{ ...pillStyle, ...(on ? pillOnStyle : null) }}
+            >
+              {f.label}
+              {byNoise && f.value?.length === 1 ? ` ${byNoise[f.value[0]] ?? 0}` : ''}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Said in the panel, not only in a code comment, because the number next to a
+          publication looks like a fact unless something says otherwise. The binary cut is
+          close to a permit-type lookup; the score's real power is ordering within a type. */}
+      {model && (
+        <p style={modelNoteStyle}>
+          Noise is predicted, not published — precision {model.metrics.precision.toFixed(2)},
+          recall {model.metrics.recall.toFixed(2)} on {model.metrics.n_noisy
+          ? `${model.n_train ?? 695} hand-labelled publications` : 'a hand-labelled sample'}.
+          The score ranks within a permit type; the noisy/quiet cut itself is close to a
+          permit-type lookup.
+        </p>
+      )}
 
       {data?.shape === 'unavailable' && (
         <p style={noticeStyle}>
@@ -123,20 +160,25 @@ const PermitPanel = ({ data, loading, windowMonths, onSetWindow, onClose }) => {
 
           {data.truncated && !month && (
             <p style={filterNoteStyle}>
-              Listing the 500 most recent of {data.total}. The bars above count all of them.
+              Listing {data.sort === 'noise' ? 'the 500 highest-scoring' : 'the 500 most recent'}
+              {' '}of {data.total}. The bars above count all of them.
             </p>
           )}
 
           <ul style={listStyle}>
             {items.slice(0, 200).map(it => (
               <li key={it.identifier} style={itemStyle}>
-                <span style={{ ...swatchStyle, background: stageColor(it.stage), marginTop: '5px' }} />
+                <span style={{ ...swatchStyle, background: noiseColor(it.noise), marginTop: '5px' }} />
                 <div style={{ minWidth: 0 }}>
                   <a href={it.url} target="_blank" rel="noreferrer" style={itemTitleStyle}>
                     {it.title}
                   </a>
                   <div style={itemMetaStyle}>
-                    {it.published_at} · {stageLabel(it.stage)}
+                    <span style={{ color: noiseColor(it.noise), fontWeight: 600 }}>
+                      {noiseLabel(it.noise)}
+                      {it.noise_score == null ? '' : ` ${it.noise_score}`}
+                    </span>
+                    {' · '}{it.published_at} · {stageLabel(it.stage)} (from title)
                     {it.gemeente ? ` · ${it.gemeente}` : ''}
                   </div>
                 </div>
@@ -168,7 +210,11 @@ const closeStyle = {
   fontSize: '22px', lineHeight: 1, color: '#86868b', padding: 0,
 };
 
-const windowRowStyle = { display: 'flex', gap: '4px', margin: '12px 0 10px' };
+const windowRowStyle = { display: 'flex', gap: '4px', margin: '12px 0 6px' };
+const noiseRowStyle = { display: 'flex', gap: '4px', margin: '0 0 8px' };
+const modelNoteStyle = {
+  margin: '0 0 10px', fontSize: '10px', lineHeight: 1.45, color: '#86868b',
+};
 // Longhand border properties, not the `border` shorthand: pillOnStyle overrides only the
 // colour, and React warns (and can mis-apply) when a rerender drops a longhand while a
 // conflicting shorthand is set. Caught from the browser console, not from the diff.

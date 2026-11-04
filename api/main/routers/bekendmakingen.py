@@ -39,6 +39,21 @@ async def get_bekendmakingen(
         description="`bekendmaking.activiteit` values, matched as an overlap; repeat the "
         "param. Only omgevingsvergunning rows carry any, so e.g. `bouwen` implies that type.",
     ),
+    noise: list[str] | None = Query(
+        None,
+        description="Filter by the noise classifier: `noisy`, `quiet` or `unscored`; repeat "
+        "the param. Omitting it means every bucket. `unscored` is its own bucket, not part "
+        "of `quiet` — it means no score exists yet, e.g. a publication imported after the "
+        "last run of scripts/score_noise_embedding.py. The response's `noise_models` carries "
+        "the threshold and its measured precision/recall, so a caller can weight the verdict.",
+    ),
+    sort: str = Query(
+        "recent",
+        pattern="^(recent|noise)$",
+        description="`recent` (default) or `noise`. This matters because `items` is capped at "
+        "500: ordering by date fills the cap with the newest publications, so asking for the "
+        "loudest requires `sort=noise`. `total` and the facets are unaffected either way.",
+    ),
     building_permits: bool = Query(
         False,
         description="Shorthand for doc_type=omgevingsvergunning & activiteit=bouwen. "
@@ -62,12 +77,13 @@ async def get_bekendmakingen(
         extra={
             "lng": lng, "lat": lat, "minutes": minutes, "profile": profile,
             "date_from": from_date.isoformat(), "date_to": to_date.isoformat(),
-            "doc_type": doc_type, "activiteit": activiteit,
+            "doc_type": doc_type, "activiteit": activiteit, "noise": noise,
+            "sort": sort,
         },
     )
     try:
         return await service.get_bekendmakingen(
-            lng, lat, from_date, to_date, minutes, profile, doc_type, activiteit
+            lng, lat, from_date, to_date, minutes, profile, doc_type, activiteit, noise, sort
         )
     except (ExternalServiceError, HTTPException):
         raise

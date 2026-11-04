@@ -33,6 +33,10 @@ const MapContainer = () => {
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
   const [showPermits, setShowPermits] = useState(false);
   const [permitWindow, setPermitWindow] = useState(DEFAULT_WINDOW_MONTHS);
+  // null = every bucket. Server-side rather than filtering `items` in the browser, because
+  // `items` is capped at 500: filtering the page we were given would show "the noisy ones
+  // among the 500 most recent", which is not the question and would disagree with the facets.
+  const [permitNoise, setPermitNoise] = useState(null);
   const [permits, setPermits] = useState({ data: null, loading: false });
 
   // 1. 统一状态
@@ -119,6 +123,13 @@ const MapContainer = () => {
       setPermits(p => ({ ...p, loading: true }));
       try {
         const data = await api.fetchBekendmakingen({
+          // Always ordered by score, not by date. This panel is pinned to
+          // building_permits=true, and within that one class the binary verdict carries no
+          // information at all -- the model flags 17,804 of 17,813 omgevingsvergunningen. The
+          // RANKING does: inside that same class it separates hand-labelled noisy from quiet
+          // at AUC 0.911 (docs/pg-notes/noise-serving.md). With `items` capped at 500, a date
+          // order would also mean the loudest permits may simply never be returned.
+          noise: permitNoise, sort: 'noise',
           lng: params.center.lng, lat: params.center.lat,
           minutes: params.minutes, profile: params.mode,
           dateFrom: iso(from), dateTo: iso(to), buildingPermits: true,
@@ -131,7 +142,8 @@ const MapContainer = () => {
     }, 300);
 
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [isReady, showPermits, permitWindow, params.center, params.minutes, params.mode]);
+  }, [isReady, showPermits, permitWindow, permitNoise,
+      params.center, params.minutes, params.mode]);
 
   // 3. 点击地图更新中心点
   useEffect(() => {
@@ -310,6 +322,8 @@ const MapContainer = () => {
           data={permits.data}
           loading={permits.loading}
           windowMonths={permitWindow}
+          noiseFilter={permitNoise}
+          onSetNoiseFilter={setPermitNoise}
           onSetWindow={setPermitWindow}
           onClose={() => setShowPermits(false)}
         />

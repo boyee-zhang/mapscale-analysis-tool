@@ -97,7 +97,7 @@ hit AS (
       AND ST_Intersects(shape.g, l.geom)
     ORDER BY l.identifier, (GeometryType(l.geom) <> 'POINT'), ST_Area(l.geom) DESC
 ),
-matched AS (
+scored AS (
     SELECT b.identifier, b.title, b.doc_type, b.published_at, b.activiteit,
            b.url, b.gemeente, b.authority, hit.pt,
            CASE
@@ -106,10 +106,29 @@ matched AS (
                     OR b.title ~* 'toestemming|geen vergunning nodig' THEN 'besluit'
                WHEN b.title ~* 'aanvraag|aanvragen|ingekomen' THEN 'aanvraag'
                ELSE 'overig'
-           END AS stage
+           END AS stage,
+           n.score AS noise_score, n.is_noisy, n.model_version,
+           -- Three buckets, and `unscored` is a bucket of its own rather than folded into
+           -- `quiet`. A publication imported after the last scoring run has no score, and
+           -- "we have not judged this" must not be served as "this is quiet" -- the same
+           -- rule this endpoint already follows for `shape: "unavailable"` against `total: 0`.
+           CASE WHEN n.is_noisy IS NULL THEN 'unscored'
+                WHEN n.is_noisy THEN 'noisy' ELSE 'quiet' END AS noise
     FROM hit JOIN bekendmaking b USING (identifier)
+    -- LEFT, not INNER: an unscored publication must still appear on the map. An inner join
+    -- here would silently shrink `total` after every import until the scorer is re-run, which
+    -- is the worst version of this bug -- the count would look plausible.
+    LEFT JOIN bekendmaking_noise_rank n ON n.identifier = b.identifier
     WHERE ($3::text[] IS NULL OR b.doc_type = ANY($3::text[]))
       AND ($4::text[] IS NULL OR b.activiteit && $4::text[])
+),
+-- The noise filter is applied one level out because a CASE alias cannot be referenced from
+-- the WHERE of the same SELECT, and repeating the expression is how the two drift apart.
+-- Everything downstream reads `matched`, so `total` and the histogram count the filtered set,
+-- which is what makes the facets agree with the list.
+matched AS (
+    SELECT * FROM scored
+    WHERE ($5::text[] IS NULL OR noise = ANY($5::text[]))
 )
 """
 
@@ -117,13 +136,24 @@ matched AS (
 # isochrone is a concave hull and ORS can emit a self-intersecting ring, which
 # ST_Intersects answers *undefined* rather than refusing.
 _SHAPE_FROM_GEOJSON = (
-    "ST_CollectionExtract(ST_MakeValid(ST_SetSRID(ST_GeomFromGeoJSON($5), 4326)), 3)"
+    "ST_CollectionExtract(ST_MakeValid(ST_SetSRID(ST_GeomFromGeoJSON($6), 4326)), 3)"
 )
 # Geodesic buffer polygon rather than ST_DWithin(geom::geography, …): the cast
 # leaves the geometry GiST unusable, measured in docs/pg-notes/stage1-poi-import.md.
 _SHAPE_FROM_RADIUS = (
-    "ST_Buffer(ST_SetSRID(ST_MakePoint($5, $6), 4326)::geography, $7)::geometry"
+    "ST_Buffer(ST_SetSRID(ST_MakePoint($6, $7), 4326)::geography, $8)::geometry"
 )
+
+# `sort` exists because of the item cap, not as a convenience. `items` is capped at 500 and
+# `ORDER BY published_at DESC` fills that cap with the most RECENT publications -- so a caller
+# asking "what is loudest around here" would get the 500 newest and a noise column, which is a
+# different question answered in the same shape. Ordering by score makes the cap select the
+# rows the caller asked for. NULLS LAST on either ordering keeps unscored rows from taking the
+# top slots on a question they cannot answer.
+_ORDERS = {
+    "recent": "published_at DESC, identifier",
+    "noise": "noise_score DESC NULLS LAST, published_at DESC, identifier",
+}
 
 # One query, not two. The facets and the item list both need `matched`, and as separate
 # statements each parsed the ORS polygon and walked the GiST index again. The merge is
@@ -157,6 +187,22 @@ SELECT
     (SELECT coalesce(jsonb_agg(g ORDER BY (g->>'count')::int DESC), '[]'::jsonb) FROM (
         SELECT jsonb_build_object('stage', stage, 'count', count(*)) AS g
         FROM matched GROUP BY stage) s) AS by_stage,
+    -- Unlike `by_activiteit`, this one IS a partition: every matched row lands in exactly one
+    -- of noisy / quiet / unscored, so these counts sum to `total` and a pie chart is correct.
+    (SELECT coalesce(jsonb_agg(n ORDER BY (n->>'count')::int DESC), '[]'::jsonb) FROM (
+        SELECT jsonb_build_object('noise', noise, 'count', count(*)) AS n
+        FROM matched GROUP BY noise) s) AS by_noise,
+    -- The model behind the badges, so a caller can state how much to trust them instead of
+    -- presenting a 0.891 F1 classifier as ground truth. A list rather than one object because
+    -- a partial rescore leaves two versions in play, and hiding that would make a mixed
+    -- population look uniform; one element is the normal case.
+    (SELECT coalesce(jsonb_agg(jsonb_build_object(
+                'version', m.version, 'embed_model', m.embed_model,
+                'threshold', m.threshold, 'threshold_basis', m.threshold_basis,
+                'trained_at', m.trained_at, 'metrics', m.metrics)), '[]'::jsonb)
+     FROM noise_model m
+     WHERE m.version IN (SELECT model_version FROM matched
+                         WHERE model_version IS NOT NULL)) AS noise_models,
     (SELECT coalesce(jsonb_agg(i), '[]'::jsonb) FROM (
         SELECT jsonb_build_object(
                    'identifier', identifier,
@@ -167,9 +213,14 @@ SELECT
                    'stage', stage,
                    'gemeente', coalesce(gemeente, authority),
                    'url', url,
+                   'noise', noise,
+                   -- Rounded, and sent alongside the verdict rather than instead of it: the
+                   -- boolean is the product decision and the number is why, so a UI can sort
+                   -- by confidence and still show one badge. NULL where `noise` is 'unscored'.
+                   'noise_score', round(noise_score::numeric, 3),
                    'lon', ST_X(pt),
                    'lat', ST_Y(pt)) AS i
-        FROM matched ORDER BY published_at DESC, identifier LIMIT {limit}) s) AS items
+        FROM matched ORDER BY {order} LIMIT {limit}) s) AS items
 """
 
 
@@ -194,6 +245,8 @@ async def get_bekendmakingen(
     profile: str = "walking",
     doc_type: list[str] | None = None,
     activiteit: list[str] | None = None,
+    noise: list[str] | None = None,
+    sort: str = "recent",
 ) -> dict:
     """
     Announcements whose geometry meets the (lng, lat, minutes, profile) isochrone and
@@ -206,13 +259,15 @@ async def get_bekendmakingen(
     """
     empty = {
         "total": 0, "months": [], "by_type": [], "by_activiteit": [], "by_stage": [],
-        "items": [], "truncated": False,
+        "by_noise": [], "noise_models": [], "items": [], "truncated": False,
         "window": {"from": date_from.isoformat(), "to": date_to.isoformat()},
     }
     if doc_type is not None and not doc_type:
         return {**empty, "shape": "none", "reason": "empty doc_type filter"}
     if activiteit is not None and not activiteit:
         return {**empty, "shape": "none", "reason": "empty activiteit filter"}
+    if noise is not None and not noise:
+        return {**empty, "shape": "none", "reason": "empty noise filter"}
     if not db.enabled():
         # No Overpass-equivalent exists for this data, so say so instead of
         # answering 0 — an empty list and "we have no source" look identical to a
@@ -228,24 +283,32 @@ async def get_bekendmakingen(
         geom_args = [lng, lat, minutes * SPEED_MAP.get(profile, 80)]
         prefix = _HIT_CTE.format(shape_expr=_SHAPE_FROM_RADIUS)
 
-    args = [date_from, date_to, doc_type, activiteit, *geom_args]
-    sql = prefix + _FACETS_AND_ITEMS.format(limit=MAX_ITEMS)
+    args = [date_from, date_to, doc_type, activiteit, noise, *geom_args]
+    # Interpolated, not parameterised, because an ORDER BY cannot be a bind parameter -- and
+    # it is a lookup in a fixed dict, never caller text, so there is still exactly one query
+    # text per branch for the planner to cache.
+    sql = prefix + _FACETS_AND_ITEMS.format(
+        limit=MAX_ITEMS, order=_ORDERS.get(sort, _ORDERS["recent"]))
     async with db.acquire() as conn:
         row = await conn.fetchrow(sql, *args)
 
     total, items = row["total"], row["items"]
     logger.info(
         "\u2190 bekendmakingen",
-        extra={"shape": shape, "total": total, "returned": len(items)},
+        extra={"shape": shape, "total": total, "returned": len(items),
+               "by_noise": {b["noise"]: b["count"] for b in row["by_noise"]}},
     )
     return {
         "shape": shape,
+        "sort": sort if sort in _ORDERS else "recent",
         "window": {"from": date_from.isoformat(), "to": date_to.isoformat()},
         "total": total,
         "months": row["months"],
         "by_type": row["by_type"],
         "by_activiteit": row["by_activiteit"],
         "by_stage": row["by_stage"],
+        "by_noise": row["by_noise"],
+        "noise_models": row["noise_models"],
         "truncated": total > len(items),
         "items": items,
     }

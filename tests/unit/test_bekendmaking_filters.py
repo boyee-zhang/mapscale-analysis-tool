@@ -84,15 +84,42 @@ def test_shorthand_does_not_override_an_explicit_filter(monkeypatch):
     """
     seen = {}
 
-    async def spy(lng, lat, date_from, date_to, minutes, profile, doc_type, activiteit):
-        seen.update(doc_type=doc_type, activiteit=activiteit)
+    # **kwargs as well as the positional list: the router passes positionally, and this spy
+    # silently became wrong the moment the service grew `noise` and `sort` -- it raised
+    # TypeError, the router wrapped it in a 500, and the assertion then failed on an empty
+    # dict rather than on the thing under test. Accepting the extras keeps a future parameter
+    # from being reported as a filter-precedence bug.
+    async def spy(lng, lat, date_from, date_to, minutes, profile, doc_type, activiteit,
+                  noise=None, sort="recent", **kwargs):
+        seen.update(doc_type=doc_type, activiteit=activiteit, noise=noise, sort=sort)
         return {"shape": "none", "total": 0, "items": []}
 
     monkeypatch.setattr("api.main.routers.bekendmakingen.service.get_bekendmakingen", spy)
 
     client.get(f"{BASE}&building_permits=true&doc_type=verkeersbesluit%20of%20-mededeling")
-    assert seen == {"doc_type": ["verkeersbesluit of -mededeling"], "activiteit": None}
+    assert seen == {"doc_type": ["verkeersbesluit of -mededeling"], "activiteit": None,
+                    "noise": None, "sort": "recent"}
 
     seen.clear()
     client.get(f"{BASE}&building_permits=true")
-    assert seen == {"doc_type": ["omgevingsvergunning"], "activiteit": ["bouwen"]}
+    assert seen == {"doc_type": ["omgevingsvergunning"], "activiteit": ["bouwen"],
+                    "noise": None, "sort": "recent"}
+
+    # The noise filter and the sort reach the service as given, and neither is touched by the
+    # building_permits shorthand.
+    seen.clear()
+    client.get(f"{BASE}&noise=noisy&sort=noise")
+    assert seen == {"doc_type": None, "activiteit": None,
+                    "noise": ["noisy"], "sort": "noise"}
+
+
+def test_noise_and_sort_are_validated():
+    """`sort` is interpolated into the ORDER BY, so the router must reject anything else.
+
+    It is a `pattern=` on the Query rather than a check in the service because the service
+    also has a dict lookup with a default -- two layers, and this one is what makes a bad
+    value a 422 instead of a silent fallback to `recent`.
+    """
+    assert client.get(f"{BASE}&sort=published_at%3B%20DROP%20TABLE").status_code == 422
+    assert client.get(f"{BASE}&sort=noise").status_code != 422
+    assert client.get(f"{BASE}&sort=recent").status_code != 422

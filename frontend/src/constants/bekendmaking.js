@@ -56,3 +56,37 @@ export const monthTick = (ym) => {
                 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][Number(m) - 1];
   return `${name} '${y.slice(2)}`;
 };
+
+/**
+ * The noise classifier's verdict, as the map presents it.
+ *
+ * `noise` is a MODEL OUTPUT, not a published field, and is labelled as such everywhere it
+ * surfaces — the same discipline `stage` already gets for being derived from the title. The
+ * model is logistic regression over 18 metadata features plus a 768-d multilingual-e5-base
+ * embedding of the publication's activity description, measured at precision 0.919 / recall
+ * 0.866 (F1 0.891) against 695 hand-labelled publications in three Amsterdam/Utrecht blocks.
+ * The response's `noise_models[0].metrics` carries the live figures; these labels carry the
+ * caveat so a red dot never reads as a fact.
+ *
+ * `unscored` is its OWN bucket and must stay that way. It means no score exists — a
+ * publication imported after the last scoring run — and rendering it as `quiet` would turn
+ * "we have not judged this" into "this is fine", which is the one error a resident would
+ * actually act on.
+ */
+export const NOISE = {
+  noisy:    { label: 'Likely noisy', color: '#FF3B30', hint: 'Model predicts works or an event a neighbour would hear' },
+  quiet:    { label: 'Likely quiet', color: '#8E8E93', hint: 'Model predicts no audible works' },
+  unscored: { label: 'Not scored',   color: '#C7C7CC', hint: 'No prediction yet — not a verdict of quiet' },
+};
+
+export const NOISE_ORDER = ['noisy', 'quiet', 'unscored'];
+
+export const noiseColor = (noise) => (NOISE[noise] || NOISE.unscored).color;
+export const noiseLabel = (noise) => (NOISE[noise] || NOISE.unscored).label;
+
+/** The panel's filter. `null` sends no param, so the backend returns every bucket. */
+export const NOISE_FILTERS = [
+  { value: null, label: 'All' },
+  { value: ['noisy'], label: 'Noisy' },
+  { value: ['quiet'], label: 'Quiet' },
+];

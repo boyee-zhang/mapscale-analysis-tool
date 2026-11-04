@@ -1,0 +1,20 @@
+# noise serving, 2026-11-04 — see noise-serving.md
+
+train: 695 rows, 313 noisy, base rate 0.450, blocks [np.str_('ams-centrum-300'), np.str_('ams-osdorp-600'), np.str_('utr-binnenstad-300')]
+corpus: 61853 rows
+features: 10 doc_type one-hot + 8 activiteit multi-hot = 18, + 768 embedding
+corpus rows with an unseen doc_type (scored without that block): 77
+encoding 61853 publications
+
+embeddings cached to data/noise_emb_cache.npz
+
+out-of-fold  AUC 0.950  AP 0.920
+threshold 0.4783 (median of per-fold argmax [0.4783, 0.5425, 0.394])
+  precision 0.825  recall 0.936  F1 0.877
+  per-block F1 {np.str_('ams-centrum-300'): 0.79, np.str_('ams-osdorp-600'): 0.907, np.str_('utr-binnenstad-300'): 0.92}
+
+scored 61853 publications; 21884 (35.4%) at or above the threshold
+model written to /Users/zby/Documents/personalProject/mapscale-analysis-tool/models/noise_meta_emb_v1.json
+upsert: INSERT 0 61853
+
+[exited with code 0]

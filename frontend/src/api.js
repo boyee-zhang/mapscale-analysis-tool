@@ -62,7 +62,8 @@ export const api = {
    * says whether that happened. The month histogram is computed over all matches, so a
    * truncated list does not under-report a month — do not re-derive it from `items`.
    */
-  fetchBekendmakingen: async ({ lng, lat, minutes, profile, dateFrom, dateTo, buildingPermits }) => {
+  fetchBekendmakingen: async ({ lng, lat, minutes, profile, dateFrom, dateTo, buildingPermits,
+                               noise, sort }) => {
     // Hand-built for the same reason as fetchPOIs: axios would send `doc_type[]=`, which
     // FastAPI's repeated-param reader ignores. No array params are sent today, but the
     // shorthand flag is here instead precisely so callers are not tempted to pass one.
@@ -70,10 +71,18 @@ export const api = {
     if (dateFrom) params.append('date_from', dateFrom);
     if (dateTo) params.append('date_to', dateTo);
     if (buildingPermits) params.append('building_permits', 'true');
+    // Repeated param, not `noise[]=` — same reason as the comment above. `noise` is an array
+    // of buckets (`noisy` / `quiet` / `unscored`); omitting it means every bucket.
+    (noise || []).forEach(n => params.append('noise', n));
+    // `sort=noise` is not cosmetic: `items` is capped at 500 server-side, so a date order
+    // fills the cap with the newest publications and the loudest ones may never be returned.
+    if (sort) params.append('sort', sort);
     try {
       const res = await client.get('/api/main/bekendmakingen', { params });
       console.log('[api] fetchBekendmakingen', {
         shape: res.data.shape, total: res.data.total, truncated: res.data.truncated,
+        sort: res.data.sort,
+        byNoise: Object.fromEntries((res.data.by_noise || []).map(b => [b.noise, b.count])),
       });
       return res.data;
     } catch (err) {

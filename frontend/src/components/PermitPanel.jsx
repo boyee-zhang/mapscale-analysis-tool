@@ -37,17 +37,12 @@ const PermitPanel = ({ data, loading, windowMonths, onSetWindow,
   // A search's results split at the backend's relevance floor: `strong` of them are the
   // answer and the rest is the page-filling tail. `strong` is a COUNT, not a flag per item,
   // because `items` arrives ranked by similarity — so the answer is always a prefix.
-  // `strong == null` means the baseline could not be measured and the split is UNKNOWN, which
-  // is not the same as empty: everything is shown and nothing is called padding.
-  const splitKnown = notice?.strong != null;
-  const strongItems = useMemo(
-    () => (splitKnown ? (notice.items || []).slice(0, notice.strong) : (notice?.items || [])),
-    [notice, splitKnown]
-  );
-  const weakItems = useMemo(
-    () => (splitKnown ? (notice.items || []).slice(notice.strong) : []),
-    [notice, splitKnown]
-  );
+  // The backend already split them: `items` is the answers, `weaker` the near-misses. A null
+  // `background` means the split could not be measured, which is NOT the same as empty --
+  // everything then arrives in `items` and nothing is called padding.
+  const splitKnown = notice?.background != null;
+  const strongItems = notice?.items || [];
+  const weakItems = notice?.weaker || [];
   const shownItems = showWeak ? [...strongItems, ...weakItems] : strongItems;
 
   const monthTotal = months.find(m => m.month === month)?.count ?? null;
@@ -267,13 +262,14 @@ const PermitPanel = ({ data, loading, windowMonths, onSetWindow,
           {searching && notice.items && (
             <p style={filterNoteStyle}>
               {!splitKnown
-                ? `${notice.items.length} ranked by similarity to “${notice.q}” — could not measure
+                ? `${strongItems.length} ranked by similarity to “${notice.q}” — could not measure
                    how many are real matches, so all of them are shown.`
                 : strongItems.length === 0
-                  ? `Nothing here matches “${notice.q}” well.`
+                  ? `Nothing in reach matches “${notice.q}”.`
                   : `${strongItems.length} ${strongItems.length === 1 ? 'match' : 'matches'} for “${notice.q}”.`}
-              {splitKnown && ' A similarity search always returns a full page, so anything too far'
-                + ' from the query is left out rather than used to fill one.'}
+              {splitKnown && ` Searched the ${data?.total ?? 0} publications inside this isochrone`
+                + ' and kept the ones close enough to the query, rather than filling a page with'
+                + ' the nearest leftovers.'}
               {' '}The bars above still describe the whole window, not this search.
             </p>
           )}

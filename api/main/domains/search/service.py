@@ -354,19 +354,35 @@ async def search(
         "lon": r["lon"], "lat": r["lat"],
     } for r in rows]
 
-    # `items` is ordered by similarity, so the answers are a prefix of it. `strong` is None,
-    # not 0, when the baseline could not be measured: "we cannot tell which of these are
-    # answers" and "none of these are answers" must not collapse into the same value.
-    strong = (None if background is None else
-              sum(1 for it in items if it["similarity"] - background >= RELEVANCE_MARGIN))
+    # `items` CARRIES THE ANSWERS ONLY, and the near-misses go in `weaker`. The first version of
+    # this returned one combined list with a `strong` count saying where to cut it, and that was
+    # a bad contract: a caller reading `items` and `total` got 30 rows for a query with no
+    # answers, while the UI built from the same response showed none. "What the endpoint returns"
+    # and "what a reader is shown" have to be the same list, or every consumer has to re-derive
+    # the split and one of them will forget.
+    #
+    # The tail is still SERVED rather than dropped -- just not mixed in. Dropping it would make
+    # "nothing matched well" indistinguishable from "the search broke", and re-fetching it would
+    # cost another query plus ~200 ms of query encoding for a disclosure the reader may open.
+    #
+    # With no baseline there is no split to make: everything is an answer, because silently
+    # withholding results when a DIAGNOSTIC failed is the worse of the two errors. `background`
+    # is null in that case, which is how a caller tells "nothing cleared the bar" (background
+    # present, items empty) from "the bar could not be measured" (background null).
+    if background is None:
+        answers, weaker = items, []
+    else:
+        cut = sum(1 for it in items if it["similarity"] - background >= RELEVANCE_MARGIN)
+        answers, weaker = items[:cut], items[cut:]
 
-    logger.info("← search", extra={"shape": shape, "q": q, "returned": len(items),
-                                   "strong": strong, "background": background,
+    logger.info("← search", extra={"shape": shape, "q": q, "scanned": len(items),
+                                   "returned": len(answers), "weaker": len(weaker),
+                                   "background": background,
                                    "top": items[0]["similarity"] if items else None})
-    return {**empty, "shape": shape, "total": len(items), "items": items,
-            # The split is served, not applied: dropping the tail here would make "nothing
-            # matched well" indistinguishable from "the search broke", and would cost another
-            # 200 ms query to get back. `background` is returned so the cut is inspectable --
-            # it is the one number that explains why a given row fell on its side of the line.
-            "strong": strong, "relevance_margin": RELEVANCE_MARGIN,
+    return {**empty, "shape": shape,
+            "total": len(answers), "items": answers,
+            "weaker": weaker, "weaker_total": len(weaker),
+            # `background` is returned so the cut is inspectable: it is the one number that
+            # explains why a given row fell on its side of the line.
+            "relevance_margin": RELEVANCE_MARGIN,
             "background": round(background, 4) if background is not None else None}

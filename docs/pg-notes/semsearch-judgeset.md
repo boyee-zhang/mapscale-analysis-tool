@@ -287,3 +287,52 @@ indistinguishable from "the search broke".
 Verified in the browser: `muziekfestival` at the default centre now offers **2 matches** with
 their event dates instead of 30 rows, and `braderie of rommelmarkt` says "Nothing here matches …
 well" with 30 weaker matches behind a click, where it previously listed 30 night-work exemptions.
+
+## Follow-up: the contract was wrong, and one real miss (2026-11-05)
+
+Reported from use, searching `braderie` in a 10-minute walk of Diemen over three months: the
+endpoint returned 22 items and the panel showed none. Two separate things, and only one of them
+was a defect.
+
+**The suppression was correct.** Checked every returned row for `braderie|markt|rommel|kraam|
+vlooien|evenement`: not one hit. The 22 were tree felling, a wall opening, window stickers and
+camera-surveillance designations. There is no braderie in that isochrone in that window, and
+offering none is the right answer.
+
+**The contract was the defect.** `items` carried all 22 with a `strong: 0` count saying where to
+cut, so "what the endpoint returns" and "what a reader is shown" were different lists and every
+consumer had to re-derive the split. Fixed: `items` is the answers, `weaker` is the near-misses,
+`total` counts the answers. The tail is still served so the disclosure costs no second request,
+and `background: null` still distinguishes "could not measure the bar" from "nothing cleared it".
+
+**A measured non-problem, recorded so it is not re-investigated.** The baseline in spatial mode is
+computed over the documents in the shape, and in this case that is only 64 (three months) or 178
+(twelve) — small enough to suspect a noisy mean. Measured against the corpus baseline for two
+queries × two windows: the difference is **±0.006**. It is stable; no fallback is needed.
+
+### The real miss, and it is the threshold's fault
+
+`muziekfestival` in the same isochrone returns **nothing**, and the top near-miss is:
+
+> *Aanvraag evenementenvergunning — Upload_Wintermarkt in Betondorp 2026 — "Luisteren naar
+> muziek, handgemaakte producten kopen"*
+
+A market, with live music. Margin **0.0491** against a threshold of 0.050 — cut by 0.0009 — and
+the drop to the next row is 0.0491 → 0.0192, so there is a clean cliff with exactly one answer
+above it. That document is also the right answer for `braderie`.
+
+The cause is the scale this was calibrated on. The judged set is corpus-wide, where a query's
+top-10 are the best documents in the country and margins run large — so large that every
+threshold from 0.030 to 0.045 cuts **nothing at all** there (400/400 kept, P 0.695 unchanged) and
+0.050 is the first that bites. Inside one isochrone the best available document is weaker in
+absolute terms, so real answers land near 0.05 rather than well above it, and a threshold chosen
+where corpus-mode margins are comfortable sits right on top of the spatial mode's answers.
+
+Lowering the constant is not the fix: 0.045 measures strictly worse corpus-wide (P 0.698 against
+0.740, i.e. barely cutting). **The two modes need two values, and the spatial one cannot be
+calibrated from this set** — it needs its own judged set, built from isochrone searches. Roughly
+15-20 queries at depth 10 would do it, since the population per query is 64-178 rather than 94,183.
+
+Until then the behaviour is: conservative in the spatial mode, with the near-misses one click
+away. Stated rather than hidden, because "no results" for a query that has one is the failure a
+reader cannot see.

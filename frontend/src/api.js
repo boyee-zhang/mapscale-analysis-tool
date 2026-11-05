@@ -104,13 +104,15 @@ export const api = {
    *
    * @param {{ q: string, lng?: number, lat?: number, minutes?: number, profile?: string,
    *           dateFrom?: string, dateTo?: string, limit?: number }} opts
-   * @returns {Promise<{ shape: string, total: number, items: object[], strong: number,
-   *                      relevance_floor: number }>}
-   *   `items` is every result, ranked. `strong` is how many of them cleared the relevance
-   *   floor — a nearest-neighbour query always returns `limit` rows, so the tail after
-   *   `strong` is padding and must not be presented as an answer. The split is served rather
-   *   than applied server-side so "nothing matched well" stays distinguishable from "the
-   *   search failed".
+   * @returns {Promise<{ shape: string, total: number, items: object[], weaker: object[],
+   *                      weaker_total: number, relevance_margin: number,
+   *                      background: number|null }>}
+   *   `items` is the ANSWERS and nothing else, so it is what a reader should be shown.
+   *   A nearest-neighbour query always returns `limit` rows, so the near-misses it also
+   *   produced are in `weaker` instead of being mixed in — served, not dropped, so the
+   *   "show weaker matches" disclosure costs no second request. `background` is the query's
+   *   baseline similarity: null means the split could not be measured (everything is then in
+   *   `items`), which is a different fact from an empty `items` with a baseline present.
    */
   searchNotices: async ({ q, lng, lat, minutes, profile, dateFrom, dateTo, limit }) => {
     const params = new URLSearchParams({ q });
@@ -126,8 +128,8 @@ export const api = {
     try {
       const res = await client.get('/api/main/search/notices', { params });
       console.log('[api] searchNotices', {
-        q, shape: res.data.shape, total: res.data.total, strong: res.data.strong,
-        top: res.data.items?.[0]?.similarity,
+        q, shape: res.data.shape, total: res.data.total,
+        weaker: res.data.weaker_total, top: res.data.items?.[0]?.similarity,
       });
       return res.data;
     } catch (err) {

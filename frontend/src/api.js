@@ -104,7 +104,13 @@ export const api = {
    *
    * @param {{ q: string, lng?: number, lat?: number, minutes?: number, profile?: string,
    *           dateFrom?: string, dateTo?: string, limit?: number }} opts
-   * @returns {Promise<{ shape: string, total: number, items: object[] }>}
+   * @returns {Promise<{ shape: string, total: number, items: object[], strong: number,
+   *                      relevance_floor: number }>}
+   *   `items` is every result, ranked. `strong` is how many of them cleared the relevance
+   *   floor — a nearest-neighbour query always returns `limit` rows, so the tail after
+   *   `strong` is padding and must not be presented as an answer. The split is served rather
+   *   than applied server-side so "nothing matched well" stays distinguishable from "the
+   *   search failed".
    */
   searchNotices: async ({ q, lng, lat, minutes, profile, dateFrom, dateTo, limit }) => {
     const params = new URLSearchParams({ q });
@@ -120,7 +126,7 @@ export const api = {
     try {
       const res = await client.get('/api/main/search/notices', { params });
       console.log('[api] searchNotices', {
-        q, shape: res.data.shape, total: res.data.total,
+        q, shape: res.data.shape, total: res.data.total, strong: res.data.strong,
         top: res.data.items?.[0]?.similarity,
       });
       return res.data;

@@ -206,3 +206,84 @@ either experiment surfaced it" — is now retrieved, by the vector arm, at nDCG 
 corpus; they are not an absolute quality figure and they will move with the corpus. What should
 survive a corpus change is the ordering, the near-zero overlap, and the `fts_body` control — the
 first two because they are properties of the methods and the third because it is a null result.
+
+---
+
+# Using the set: where to stop returning results (2026-11-05)
+
+A nearest-neighbour query always returns `limit` rows. It has no notion of "nothing here
+matches", so inside a 15-minute walk that holds three music events, ranks 4-30 come back anyway
+and the answer reads as broken although the ranking was right. The judged set is the instrument
+for deciding where to stop, and it changed the answer twice.
+
+## Four rule families, measured on the vec arm's judged top-10 (400 rows, 278 relevant)
+
+At matched operating points:
+
+| rule | kept | P@kept | relevant lost | queries left with nothing |
+|---|---|---|---|---|
+| no cut (what shipped first) | 400 | 0.695 | 0 | 0 |
+| `sim >= top − δ` (δ = .005–.030) | 215–400 | **0.688–0.694** | up to 76 | 0 |
+| cut at the first gap > .004–.012 | 289–391 | **0.684–0.692** | up to 48 | 0 |
+| `sim >= 0.810` absolute | 340 | 0.732 | 29 | 2 |
+| `sim − background >= 0.050` | 369 | **0.740** | **5** | **1** |
+| `(sim − background) / sd >= 2.5` | 387 | 0.703 | 6 | 1 |
+
+**The two reflex rules are worthless.** "Within δ of the top" and "cut at the biggest gap" both
+leave precision where no cut at all leaves it, because they discard relevant and irrelevant rows
+in the same proportion. The score ordering is noisy, so a gap is not a relevance boundary. This
+is the kind of rule that looks principled and measures as nothing.
+
+## Correction 1: an absolute floor is language-biased
+
+The first version shipped was `similarity >= 0.810`, and it is wrong in a way the judged set
+could not show, because every query in the set is Chinese. The same question in three languages,
+same isochrone:
+
+| query | top similarity | verdict at 0.810 |
+|---|---|---|
+| `muziekfestival` | 0.850 | kept |
+| `music festival` | 0.822 | kept |
+| `音乐节` | 0.782 | **cut — and its top hit was a correct Hofjesconcert** |
+
+The ranking is right in all three. What moves is the absolute scale: multilingual-e5 places a
+cross-language pair further apart than a same-language pair about the same thing. A single
+constant therefore makes the cut strictest for whoever is not writing Dutch.
+
+The fix is to measure the offset rather than assume it away: subtract the query's mean similarity
+to the population being searched. That baseline moves **0.731–0.780** across those queries — a
+0.050 spread, the same size as the threshold itself — and it tracks the language exactly (Dutch
+0.753–0.780, English 0.742–0.757, Chinese 0.731–0.767).
+
+## Correction 2: normalising by the spread makes it worse
+
+Centring corrects the location but not the scale, and cross-language matching compresses the
+whole distribution, so a z-score was the obvious next move. Measured, it loses: P 0.703 against
+the margin's 0.740 at matched loss, and 66 relevant rows lost against 38 at matched precision.
+The background sd moves 0.013–0.030 across queries and that movement is not aligned with
+relevance. **The plain margin wins**; the better-motivated rule was the worse one.
+
+## The baseline is the population searched, and it is not free
+
+Within a shape the baseline is the mean over the documents inside that shape; corpus-wide it is
+the mean over a fixed `hashtext` sample (3,090 rows across 227 of 294 municipalities). Measured
+over 6 queries × 2 cities, the local and corpus baselines differ by −0.009 to **+0.025** — half
+the threshold — so a corpus baseline near Utrecht makes a felling query look 0.025 more relevant
+than it is, which lets padding through in exactly the direction the cut exists to stop. The price
+is a second pass over the filtered set: **120–350 ms warm** (846 ms cold; discard that one).
+One pass would do both, via a `scored` CTE referenced twice, but that rewrites the SQL whose plan
+shape the `hnsw.iterative_scan` guard depends on, and that guard was bought with a zero-rows bug.
+
+## What shipped
+
+`RELEVANCE_MARGIN = 0.050` over the per-query baseline. The response carries `strong` (how many
+cleared it) and `background`, and **drops nothing** — the UI shows the answers and keeps the tail
+behind "Show N weaker matches", off the map. Three reasons nothing is dropped: the margin is
+calibrated corpus-wide and only carried over to the spatial mode; a short cross-language query in
+a small isochrone can still come back with nothing offered (`音乐节` sits at margin 0.038 with a
+correct result on top); and server-side truncation would make "nothing matched well"
+indistinguishable from "the search broke".
+
+Verified in the browser: `muziekfestival` at the default centre now offers **2 matches** with
+their event dates instead of 30 rows, and `braderie of rommelmarkt` says "Nothing here matches …
+well" with 30 weaker matches behind a click, where it previously listed 30 night-work exemptions.

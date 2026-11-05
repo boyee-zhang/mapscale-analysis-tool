@@ -18,6 +18,11 @@ const PermitPanel = ({ data, loading, windowMonths, onSetWindow,
                        noiseFilter, onSetNoiseFilter, notice, onSearchNotices, onClose }) => {
   const [month, setMonth] = useState(null);
   const [draft, setDraft] = useState('');
+  // The weak tail of a search is collapsed by default and opened on request. Not dropped:
+  // the floor is deliberately conservative (api/main/domains/search/service.py measured that
+  // a higher one costs whole queries their answers), so "below the floor" means "we are not
+  // calling this an answer", not "this is wrong".
+  const [showWeak, setShowWeak] = useState(false);
   // When a search is active its ranked results replace the window's list. The month
   // histogram above keeps describing the WINDOW, not the search, so the heading says which
   // of the two the list below it is — otherwise the bars and the list silently disagree.
@@ -29,6 +34,22 @@ const PermitPanel = ({ data, loading, windowMonths, onSetWindow,
     () => (data?.items || []).filter(it => !month || it.published_at.startsWith(month)),
     [data, month]
   );
+  // A search's results split at the backend's relevance floor: `strong` of them are the
+  // answer and the rest is the page-filling tail. `strong` is a COUNT, not a flag per item,
+  // because `items` arrives ranked by similarity — so the answer is always a prefix.
+  // `strong == null` means the baseline could not be measured and the split is UNKNOWN, which
+  // is not the same as empty: everything is shown and nothing is called padding.
+  const splitKnown = notice?.strong != null;
+  const strongItems = useMemo(
+    () => (splitKnown ? (notice.items || []).slice(0, notice.strong) : (notice?.items || [])),
+    [notice, splitKnown]
+  );
+  const weakItems = useMemo(
+    () => (splitKnown ? (notice.items || []).slice(notice.strong) : []),
+    [notice, splitKnown]
+  );
+  const shownItems = showWeak ? [...strongItems, ...weakItems] : strongItems;
+
   const monthTotal = months.find(m => m.month === month)?.count ?? null;
   // The counts on the filter buttons come from the last UNFILTERED response, not from the
   // current one. `by_noise` is computed over the filtered set, so reading it live made
@@ -245,13 +266,20 @@ const PermitPanel = ({ data, loading, windowMonths, onSetWindow,
 
           {searching && notice.items && (
             <p style={filterNoteStyle}>
-              {notice.items.length} ranked by similarity to “{notice.q}”. The bars above still
-              describe the whole window, not this search.
+              {!splitKnown
+                ? `${notice.items.length} ranked by similarity to “${notice.q}” — could not measure
+                   how many are real matches, so all of them are shown.`
+                : strongItems.length === 0
+                  ? `Nothing here matches “${notice.q}” well.`
+                  : `${strongItems.length} ${strongItems.length === 1 ? 'match' : 'matches'} for “${notice.q}”.`}
+              {splitKnown && ' A similarity search always returns a full page, so anything too far'
+                + ' from the query is left out rather than used to fill one.'}
+              {' '}The bars above still describe the whole window, not this search.
             </p>
           )}
 
           <ul style={listStyle}>
-            {(searching && notice.items ? notice.items : items.slice(0, 200)).map(it => (
+            {(searching && notice.items ? shownItems : items.slice(0, 200)).map(it => (
               <li key={it.identifier} style={itemStyle}>
                 <span style={{ ...swatchStyle, background: noiseColor(it.noise_score),
                                marginTop: '5px' }} />
@@ -291,8 +319,27 @@ const PermitPanel = ({ data, loading, windowMonths, onSetWindow,
                 </div>
               </li>
             ))}
-            {items.length === 0 && <li style={emptyStyle}>Nothing in this window.</li>}
+            {!searching && items.length === 0 && (
+              <li style={emptyStyle}>Nothing in this window.</li>
+            )}
           </ul>
+
+          {/* The tail, behind a click. It is never silently discarded: the floor is set low
+              enough to be safe (see service.py), which means some real answers DO fall below
+              it on questions that sit low on the similarity scale, and a reader who searched
+              for something this corpus barely covers should be able to see what came closest. */}
+          {searching && notice.items && weakItems.length > 0 && (
+            <button
+              type="button"
+              style={weakToggleStyle}
+              onClick={() => setShowWeak(v => !v)}
+            >
+              {showWeak
+                ? `Hide the ${weakItems.length} weaker ${weakItems.length === 1 ? 'match' : 'matches'}`
+                : `Show ${weakItems.length} weaker ${weakItems.length === 1 ? 'match' : 'matches'}`}
+              {' '}(too far from the query{!showWeak && ', not on the map'})
+            </button>
+          )}
         </>
       )}
     </div>
@@ -405,6 +452,12 @@ const linkButtonStyle = {
   fontSize: '11px', fontWeight: 600, color: '#007AFF',
 };
 const noticeStyle = { margin: '10px 0 0', fontSize: '12px', color: '#86868b', lineHeight: 1.5 };
+
+const weakToggleStyle = {
+  display: 'block', width: '100%', marginTop: '8px', padding: '8px 10px',
+  borderRadius: '10px', border: '1px dashed rgba(0,0,0,0.18)', background: 'transparent',
+  color: '#86868b', fontSize: '11px', lineHeight: 1.4, cursor: 'pointer', textAlign: 'left',
+};
 
 const listStyle = {
   listStyle: 'none', margin: '12px 0 0', padding: '12px 0 0',

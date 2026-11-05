@@ -329,7 +329,16 @@ const MapContainer = () => {
       <PermitLayer
         map={map}
         isReady={isReady}
-        items={notice.items || permits.data?.items}
+        // Only the results above the relevance floor go on the MAP. The weak tail is
+        // reachable in the panel behind an explicit disclosure, but a dot is an assertion
+        // that something is there — padding the map is worse than padding a list, because a
+        // reader cannot see a similarity score on a 3px circle.
+        // `strong == null` means the backend could not measure the per-query baseline, so the
+        // split is UNKNOWN rather than empty -- show everything in that case, since hiding
+        // results because a diagnostic failed is the worse of the two errors.
+        items={notice.items
+          ? (notice.strong == null ? notice.items : notice.items.slice(0, notice.strong))
+          : permits.data?.items}
         visible={showPermits}
       />
       {showPermits && (
@@ -339,7 +348,7 @@ const MapContainer = () => {
           windowMonths={permitWindow}
           notice={notice}
           onSearchNotices={async (q) => {
-            if (!q) { setNotice({ q: '', items: null, loading: false, error: null }); return; }
+            if (!q) { setNotice({ q: '', items: null, strong: 0, loading: false, error: null }); return; }
             setNotice(n => ({ ...n, q, loading: true, error: null }));
             try {
               const to = new Date();
@@ -351,11 +360,11 @@ const MapContainer = () => {
                 minutes: params.minutes, profile: params.mode,
                 dateFrom: iso(from), dateTo: iso(to), limit: 30,
               });
-              setNotice({ q, items: r.items, loading: false, error: null });
+              setNotice({ q, items: r.items, strong: r.strong, loading: false, error: null });
             } catch (e) {
               // `unavailable` is carried through from a 503 so the panel can say the encoder
               // is missing instead of showing "no results", which would be a different fact.
-              setNotice({ q, items: null, loading: false,
+              setNotice({ q, items: null, strong: 0, loading: false,
                           error: e.unavailable ? e.message : 'Search failed' });
             }
           }}

@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import {
   STAGE_ORDER, STAGE, stageColor, stageLabel,
-  noiseColor, noiseBand, NOISE_FILTERS, NOISE_RAMP, fmtEventDate,
+  noiseColor, noiseBand, NOISE, NOISE_FILTERS, NOISE_RAMP, fmtEventDate,
   ACTIVITEIT_LABEL, DOC_TYPE_LABEL, WINDOWS, monthTick,
 } from '../constants/bekendmaking';
 
@@ -116,6 +116,13 @@ const PermitPanel = ({ data, loading, windowMonths, onSetWindow,
               onClick={() => { setMonth(null); onSetNoiseFilter(f.value); }}
               style={{ ...pillStyle, ...(on ? pillOnStyle : null) }}
             >
+              {/* The pole's own colour, so the control a reader uses to pick "noisy" carries the
+                  same blue/red encoding as the dots they are picking. Without it the scale lives
+                  only on the map and the legend, and the filter — the one place the two buckets
+                  are named — says nothing about which colour it selects. */}
+              {f.value?.length === 1 && (
+                <span style={{ ...pillDotStyle, background: NOISE[f.value[0]].color }} />
+              )}
               {f.label}
               {byNoise && f.value?.length === 1 ? ` ${byNoise[f.value[0]] ?? 0}` : ''}
             </button>
@@ -447,6 +454,11 @@ const linkButtonStyle = {
   background: 'none', border: 'none', padding: 0, cursor: 'pointer',
   fontSize: '11px', fontWeight: 600, color: '#007AFF',
 };
+const pillDotStyle = {
+  display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%',
+  marginRight: '5px', verticalAlign: 'middle',
+};
+
 const noticeStyle = { margin: '10px 0 0', fontSize: '12px', color: '#86868b', lineHeight: 1.5 };
 
 const weakToggleStyle = {

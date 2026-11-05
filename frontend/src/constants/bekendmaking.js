@@ -104,46 +104,72 @@ export const monthTick = (ym) => {
  * actually act on.
  */
 export const NOISE = {
-  noisy:    { label: 'Likely noisy', color: '#FF3B30', hint: 'Model predicts works or an event a neighbour would hear' },
-  quiet:    { label: 'Likely quiet', color: '#8E8E93', hint: 'Model predicts no audible works' },
-  unscored: { label: 'Not scored',   color: '#C7C7CC', hint: 'No prediction yet — not a verdict of quiet' },
+  // The two buckets are the two POLES of the diverging scale, so the filter pills read as
+  // the same encoding as the dots. Grey is reserved for the midpoint and must not be spent
+  // on `quiet`, which is a side, not a middle.
+  noisy:    { label: 'Likely noisy', color: '#e34948', hint: 'Model predicts works or an event a neighbour would hear' },
+  quiet:    { label: 'Likely quiet', color: '#2a78d6', hint: 'Model predicts no audible works' },
+  unscored: { label: 'Not scored',   color: '#6e6d68', hint: 'No prediction yet — not a verdict of quiet' },
 };
 
 export const NOISE_ORDER = ['noisy', 'quiet', 'unscored'];
 
 /**
- * Score → colour. A SEQUENTIAL encoding: one hue, light → dark, because the thing being
- * shown is a magnitude ("how likely is this to be loud"), not an identity. Never a rainbow,
- * and never a hue change partway up — the step from pale to deep is the whole signal.
+ * Score → colour. A DIVERGING encoding: blue on one side, red on the other, a neutral grey
+ * between them. It replaced a single-hue red ramp, and the change is not cosmetic.
  *
- * THE STOPS ARE MEASURED QUANTILES, NOT ROUND NUMBERS, and that is the point. The corpus
- * score distribution is strongly bimodal: 64% of publications sit below 0.4 and 29% above
- * 0.8, with only 7% in the 0.4–0.8 valley between them. A ramp spread evenly over 0–1
- * therefore spends most of its colour on a range almost nothing occupies, and squashes the
- * two places the data actually lives into a single shade each. Anchoring on p10/p25/p50/
- * p75/p90/max instead makes colour track RANK, so equal colour steps mean equal numbers of
- * publications — the choropleth rule, for the same reason.
+ * WHY DIVERGING IS THE RIGHT FORM HERE, now that it has been looked at properly. The score has
+ * a real midpoint — `noise_model.threshold`, MEASURED at 0.3826 — and that midpoint is where the
+ * model flips its own `is_noisy` verdict. A sequential ramp says "more of the same thing" all
+ * the way across and so cannot show a boundary; a diverging ramp puts the hue flip exactly on
+ * it, so the colour and the verdict agree by construction. The distribution backs this up: the
+ * median is 0.373, within 0.01 of the threshold, and the data is strongly bimodal — 64% below
+ * 0.4, 29% above 0.8, only 7.5% in the 0.4–0.8 valley. Two masses either side of a meaningful
+ * line is the textbook diverging case, and reading it as one magnitude was the earlier mistake.
  *
- * The visible symptom of getting this wrong, which is how it was found: the first version
- * ramped linearly and hit full red at 0.85, while building permits score 0.856–0.929
- * (p5–p95). Every dot in the default view was the identical red, so a gradient was being
- * drawn and no gradient could be seen.
+ * Blue for quiet, red for noisy, which is also the CVD-safe pair: red/green would collapse for
+ * the commonest colour-vision deficiencies, red/blue does not.
  *
- * Hexes validated against the pale map basemap (#f2f1ee): monotone lightness, every
- * adjacent gap ΔL ≥ 0.06, light end 2.13:1 — above the 2:1 floor, so the quietest dot is
- * still a dot and not a smudge of the basemap. Hue spread 6°, i.e. genuinely one hue.
+ * THE STOPS ARE STILL MEASURED QUANTILES, per arm, so equal colour steps mean equal numbers of
+ * publications: p10/p25 on the blue arm, p75/p95/max on the red. The red arm deliberately spends
+ * three of its four steps above 0.8, because that is where 29% of the corpus sits while the
+ * 0.4–0.8 valley holds almost nothing.
+ *
+ * VALIDATED, not eyeballed, with the dataviz validator against the pale basemap (#f2f1ee) — and
+ * for a diverging ramp the gate is lightness monotonicity PER ARM, not adjacent-pair CVD, which
+ * the categorical validator would fail by design. Both arms pass all four ordinal checks:
+ * monotone L, every adjacent ΔL ≥ 0.06, single hue (3° spread each), and the step nearest the
+ * midpoint clears the 2:1 surface floor (#6da7ec 2.22:1, #e08a86 2.28:1).
+ *
+ * The 2:1 floor is what fixes the shape: it caps lightness at about L 0.73, so the NEUTRAL has
+ * to be the lightest point in the whole ramp (#a9a7a0, L 0.728, 2.13:1) and each arm descends
+ * from it to L ≈ 0.39 at its extreme. The two arms are near-mirrored in lightness
+ * (0.385/0.480/0.575/0.717 against 0.389/0.506/0.623/0.722), which is the "equal steps per arm"
+ * rule holding.
  */
+export const NOISE_THRESHOLD = 0.3826;
+
 export const NOISE_RAMP = [
-  [0.09, '#e4918f'],  // p10
-  [0.21, '#d66663'],  // p25
-  [0.37, '#c53f3b'],  // p50
-  [0.87, '#a22e29'],  // p75
-  [0.93, '#7a211d'],  // p90
-  [0.99, '#511210'],  // max
+  [0.013, '#104281'],   // min — the quietest publications in the corpus
+  [0.091, '#1c5cab'],   // p10
+  [0.211, '#2a78d6'],   // p25
+  [0.330, '#6da7ec'],
+  [NOISE_THRESHOLD, '#a9a7a0'],  // the model's own noisy/quiet cut, and the lightest step
+  [0.500, '#e08a86'],
+  [0.870, '#e34948'],   // p75
+  [0.923, '#b02f2f'],   // p95
+  [0.994, '#7a1f1f'],   // max
 ];
 
-/** Unscored is NOT on the ramp — see `noiseColor`. */
-export const NOISE_UNSCORED_COLOR = '#b8b8b2';
+/**
+ * Unscored is NOT on the ramp — see `noiseColor`. It is now a DARK outline rather than a pale
+ * grey, and it had to change: the midpoint of a diverging ramp is itself neutral grey, so the
+ * old `#b8b8b2` would have read as "sitting exactly on the threshold" — the one value it must
+ * not be confused with. Measured, that old value was also below the 2:1 surface floor at
+ * 1.76:1, so it was already too faint to be a dot; this one is 4.59:1 and sits at L 0.534
+ * against the midpoint's 0.728, which no interpolation of the ramp reaches at that lightness.
+ */
+export const NOISE_UNSCORED_COLOR = '#6e6d68';
 
 /**
  * Colour for one item. Takes the score, not the bucket.
@@ -185,10 +211,13 @@ export const noiseLabel = (noise) => (NOISE[noise] || NOISE.unscored).label;
  */
 export const noiseBand = (score) => {
   if (score == null) return 'Not scored';
-  if (score >= 0.93) return 'Among the noisiest';
-  if (score >= 0.87) return 'Noisier than most';
-  if (score >= 0.37) return 'Middling';
-  if (score >= 0.21) return 'Quieter than most';
+  if (score >= 0.923) return 'Among the noisiest';
+  if (score >= 0.870) return 'Noisier than most';
+  // The middle boundary is the model's threshold, not a round number near it. The words and the
+  // hue now change at the same place the `is_noisy` flag does, so a dot that reads blue can
+  // never be labelled noisy.
+  if (score >= NOISE_THRESHOLD) return 'Just over the line';
+  if (score >= 0.211) return 'Quieter than most';
   return 'Among the quietest';
 };
 

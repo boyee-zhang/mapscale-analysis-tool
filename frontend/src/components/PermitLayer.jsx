@@ -28,13 +28,20 @@ const LAYER_HALO = 'permits-halo';
 // found by clicking one in the browser, not by reading the code.
 export const PERMIT_LAYER_IDS = [LAYER, LAYER_HALO];
 
-// noise → colour, as a MapLibre `match` expression. Built from the same constant the legend
-// and the panel read, so a colour cannot drift between the three.
+// noise → colour, as a MapLibre `interpolate` expression. Built from the same constant the
+// legend and the panel read, so a colour cannot drift between the three.
 //
 // The dots used to be coloured by `stage` (applied / draft / decided). They are coloured by
 // the noise prediction instead because that is the question the layer now answers, and two
 // categorical colour scales on one set of dots would mean neither is readable. `stage` did not
 // go away: it is in the popup and in the panel list, where a label can say what it is.
+//
+// THE RAMP IS DIVERGING — blue for quiet, red for noisy, neutral grey on the model's own
+// threshold (0.3826). It was a single-hue red ramp first, which could show the magnitude but not
+// the BOUNDARY: the score's midpoint is where `is_noisy` flips, and a one-hue ramp has no way to
+// mark that. Now the hue changes exactly where the verdict does. The stops, the per-arm
+// validation and the 2:1 surface floor that forces the neutral to be the lightest step all live
+// in constants/bekendmaking.js — do not inline a different ramp here.
 // MEASURED, and it is why this is a gradient and not three buckets: the model's BINARY
 // verdict is a four-value doc_type lookup. `doc_type IN (omgevingsvergunning,
 // evenementenvergunning, omgevingsmelding, andere beschikking)` agrees with it on 99.61% of
@@ -55,9 +62,12 @@ const NOISE_COLOR = [
   ['interpolate', ['linear'], ['get', 'noise_p'], ...NOISE_RAMP.flat()],
 ];
 
-// The second channel. Unscored dots are hollow — white fill, grey ring — so "no prediction"
-// is not merely a paler step of "quiet". Colour alone would make the two a matter of degree,
-// and they are a difference in kind: one is an answer and the other is the absence of one.
+// The second channel, and it carries more weight on a diverging ramp than it did on a one-hue
+// one. Unscored dots are hollow — white fill, dark ring — so "no prediction" is not confused
+// with a position on the scale. Under the old red ramp the risk was reading unscored as "quiet";
+// under this one the midpoint is itself neutral grey, so a grey unscored dot would read as
+// "exactly on the threshold". The fill is what separates them: solid at the midpoint, white when
+// there is no answer at all.
 const NOISE_STROKE = [
   'case', ['<', ['get', 'noise_p'], 0], NOISE_UNSCORED_COLOR, '#ffffff',
 ];

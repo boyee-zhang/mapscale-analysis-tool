@@ -80,6 +80,28 @@ async def main() -> int:
 
     conn = await asyncpg.connect(DATABASE_URL)
     try:
+        # REFRESH THE FTS MATVIEW IN THE SAME BREATH, and do it before reading the view.
+        #
+        # `bekendmaking_search_text` (migration 0020) is a materialized copy of the exact text
+        # this script embeds, and it exists so that FTS and vector search can be compared over
+        # identical text -- the control that makes docs/pg-notes/semsearch-judgeset.md a
+        # single-axis measurement. Both derive from `bekendmaking_activity`, which is a VIEW over
+        # `body_text`, so both go stale together when a body is fetched or an extraction pattern
+        # improves. Refreshing it anywhere other than here would eventually be forgotten, and the
+        # failure is silent: the two arms quietly stop reading the same corpus and the comparison
+        # stops being about the ranking function without a single error anywhere.
+        #
+        # CONCURRENTLY so a refresh does not lock out readers; it needs the unique index 0020
+        # creates. Not fatal if it fails -- embedding is this script's job and a stale FTS copy
+        # costs a measurement, not a feature -- but it is said loudly.
+        try:
+            await conn.execute("REFRESH MATERIALIZED VIEW CONCURRENTLY bekendmaking_search_text")
+            print("refreshed bekendmaking_search_text", flush=True)
+        except Exception as e:  # noqa: BLE001 - reported, not swallowed
+            print(f"WARNING: could not refresh bekendmaking_search_text: {e}\n"
+                  "  the FTS baseline now reads older text than the embeddings; "
+                  "any FTS-vs-vector comparison is no longer single-axis", flush=True)
+
         rows = await conn.fetch(SELECT_ALL)
         have = {r["identifier"]: (r["model"], r["text_sha1"]) for r in await conn.fetch(
             "SELECT identifier, model, text_sha1 FROM bekendmaking_embedding")}

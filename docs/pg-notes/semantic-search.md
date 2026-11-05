@@ -91,8 +91,13 @@ exact top-5" is an arbitrary pick among equivalents and **ID-overlap recall meas
 identity, not relevance.** 72.5% is a lower bound on quality, not a measure of it — a corpus
 with near-duplicates breaks this metric, and a judged relevance set is what would settle it.
 
-That judged set does not exist yet, so no claim is made about retrieval quality against the
-FTS baseline. `noise-retrieval-fts.md` has FTS at F1 0.475 on a different task with a different
+**That judged set now exists: `semsearch-judgeset.md`** (built 2026-11-05, 40 queries, 1,085
+judged pairs, four arms pooled at depth 10). Measured there: the embedding beats the best FTS
+configuration by **+0.194 nDCG@10** (0.669 against 0.475), 95% CI [+0.024, +0.361], and a control
+arm running the same FTS terms over the *same* text the embedding saw rules out the source text
+as the explanation (+0.037, interval crosses zero). Read the magnitude with its caveat: 40
+queries have 80% power only for an effect of 0.241, so the direction is sound and the point
+estimate is probably inflated. `noise-retrieval-fts.md` has FTS at F1 0.475 on a different task with a different
 ground truth; the two are **not comparable** and are not compared here.
 
 ## 5. The index silently returned ZERO rows for a filtered search
@@ -163,8 +168,12 @@ Ranking now takes its LIMIT first and the expensive joins run on what is left.
   forced, and the recall it buys is partly an artefact of the metric.
 
 Open:
-- **No judged relevance set**, so retrieval quality is unmeasured. This is the gap that
-  matters most and the only honest way to compare against FTS.
+- **Equal-weight RRF fusion with FTS is worse than pure vector** (−0.063 nDCG, inside noise),
+  although the two arms are strongly complementary per query. A weight or a query router is the
+  open move; it needs a pool extension and another judging pass, not a re-score.
+  `semsearch-judgeset.md` §Result.
+- **Three query intents have no relevant document in a 4-arm pool**, one of them (a skip on the
+  street) unreachable by three different retrieval methods now. Same file.
 - Only one embedding model has ever been tried, across this whole line of work.
 - The isochrone path ignores the HNSW index by design; if a mode ever searches a wide area
   without a spatial filter, that assumption needs re-measuring.

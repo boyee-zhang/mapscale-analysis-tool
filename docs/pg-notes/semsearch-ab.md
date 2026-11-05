@@ -151,6 +151,10 @@ So three distinct causes with three different fixes. The one that generalises:
    more data. The precision figures will move.
 4. Latency was not measured. The GIN index `bekendmaking_fts_tmp` was created for this
    experiment (5 MB, 1.6 s) and is **not** in any migration.
+   **RESOLVED 2026-11-05:** promoted to `migrations/0020_bekendmaking_fts.sql` as
+   `bekendmaking_fts`, and the hand-made one dropped. The same migration adds
+   `bekendmaking_search_text`, a matview of the text the embeddings were computed from, so FTS
+   and vector can be compared over identical text — see `semsearch-judgeset.md`.
 
 ## What this says about pgvector
 
@@ -179,9 +183,8 @@ Open, in the order that matters:
    with a known bug under it.
 2. **Re-judge the 93 pooled-out documents** so the fix has a valid overall figure. Without this
    there is no honest before/after.
-3. **Decide on `bekendmaking_fts_tmp`** — the 5 MB GIN index this experiment created by hand.
-   Either promote it to a numbered migration or drop it. It is currently in the local database
-   and in no migration, which is the worst of both.
+3. ~~**Decide on `bekendmaking_fts_tmp`**~~ — **DONE 2026-11-05**, migration 0020; see threat 4
+   above.
 4. Only then: decide whether pgvector earns its place on what expansion still cannot reach
    (ranking by degree of similarity, and `abstract` free text).
 

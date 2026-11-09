@@ -21,6 +21,7 @@ import json
 import os
 import re
 import sys
+import xml.etree.ElementTree as ET
 from datetime import date, timedelta
 
 from pathlib import Path
@@ -114,17 +115,74 @@ _PROMOTED = {
     "itemUrl", "url",
 }
 
+# Excluded from raw at ANY multiplicity, unlike the rest of _PROMOTED. bekendmaking_locatie
+# holds these in full and in WGS84, and `geometrie` is the SAME polygon again in RD New
+# (EPSG:28992) -- checked point for point against locatiegebied on gmb-2026-341525. A second
+# copy is a kilobyte a row buying no question we could not already answer.
+_GEOMETRY = {"geometrie", "locatiegebied", "locatiepunt"}
 
-def _all(rec: str, tag: str) -> list[str]:
-    return [m.strip() for m in re.findall(r"<(?:\w+:)?%s[^>]*>([^<]*)</" % tag, rec) if m.strip()]
+
+def _tag(el: ET.Element) -> str:
+    """Local name, namespace prefix stripped.
+
+    MEASURED over 50 Amsterdam records: 55 distinct local names and NOT ONE of them occurs
+    under two namespace URIs, so collapsing `dcterms:x` and `overheid:x` onto one key loses
+    nothing on this corpus. Keying by the full `{uri}local` instead would put a 60-character
+    URI in front of every raw key.
+    """
+    return el.tag.rpartition("}")[2]
 
 
-def _one(rec: str, tag: str) -> str | None:
+def _all(rec: ET.Element, tag: str) -> list[str]:
+    """Every occurrence of `tag`, in document order.
+
+    `.text` and not `itertext()` on purpose: it keeps this identical to the regex it replaces
+    for leaf elements, and returns nothing for a container -- `gebiedsmarkering` must not
+    start answering with the polygon nested inside it.
+    """
+    return [t for el in rec.iter() if _tag(el) == tag
+            for t in ((el.text or "").strip(),) if t]
+
+
+def _one(rec: ET.Element, tag: str) -> str | None:
     v = _all(rec, tag)
     return v[0] if v else None
 
 
-def _parse(rec: str) -> dict | None:
+def _collect(rec: ET.Element) -> dict[str, list[str]]:
+    """Everything in the record no column holds, keyed `tag` and `tag@attribute`.
+
+    The regex this replaces claimed in its own comment that "nothing in the record is
+    silently discarded", and could not keep that promise by construction: `[^>]*>` ate every
+    attribute, and `([^<]+)` matches only leaf text, so container elements were invisible.
+    MEASURED on gmb-2026-341525 -- 39 elements, of which it stored 14 and dropped all 14
+    attribute values, among them `hasVersion@resourceIdentifier` (the canonical document URL)
+    and six `itemUrl@manifestation` values, the only thing telling html/pdf/xml/odt apart.
+
+    Two rules, because "store everything" is not free:
+      - Attributes are ALWAYS kept, promoted tag or not, since no column holds an attribute.
+      - A promoted tag's TEXT is kept only when the tag REPEATS, because `_one()` then took
+        the first value and the column lost the rest. `itemUrl` is the live case: it is in
+        _PROMOTED, no column reads it, and it occurs six times.
+    _GEOMETRY stays out either way.
+    """
+    out: dict[str, list[str]] = {}
+    counts: dict[str, int] = {}
+    for el in rec.iter():
+        counts[_tag(el)] = counts.get(_tag(el), 0) + 1
+    for el in rec.iter():
+        t = _tag(el)
+        txt = (el.text or "").strip()
+        if txt and t not in _GEOMETRY and (t not in _PROMOTED or counts[t] > 1):
+            out.setdefault(t, []).append(txt)
+        for k, v in el.attrib.items():
+            name = k.rpartition("}")[2]
+            if v.strip() and name != "xmlns" and not k.startswith("xmlns"):
+                out.setdefault(f"{t}@{name}", []).append(v.strip())
+    return out
+
+
+def _parse(rec: ET.Element) -> dict | None:
     ident = _one(rec, "identifier")
     title = _one(rec, "title")
     dtype = _one(rec, "type")
@@ -132,11 +190,7 @@ def _parse(rec: str) -> dict | None:
     if not (ident and title and dtype and when):
         return None
 
-    # Every tag not promoted to a column, so nothing in the record is silently discarded.
-    raw: dict[str, list[str]] = {}
-    for tag, val in re.findall(r"<(?:\w+:)?([a-zA-Z][\w.-]*)[^>]*>([^<]+)</", rec):
-        if tag not in _PROMOTED and val.strip():
-            raw.setdefault(tag, []).append(val.strip())
+    raw = _collect(rec)
 
     # `locatiegebied`, NOT `locatiepunt`. locatiepunt is only the point subset: over 100
     # Diemen records it was present on 46 while locatiegebied was present on 100, and the
@@ -177,18 +231,34 @@ def _parse(rec: str) -> dict | None:
 
 
 async def _page(client: httpx.AsyncClient, cql: str, start: int,
-                probe_only: bool = False) -> tuple[list[str], int]:
+                probe_only: bool = False) -> tuple[list[ET.Element], int]:
+    """One SRU page, as parsed elements.
+
+    The WHOLE envelope is parsed, and records are handed on as Elements rather than as the
+    substrings between `<recordData>` tags. A record cut out of the response is NOT
+    well-formed XML on its own -- its namespace prefixes are declared on the envelope root,
+    so ElementTree rejects such a fragment outright with "unbound prefix". The regex this
+    replaces had no objection to it, which is exactly the problem: it answered anyway, and
+    plausibly. A parser's failure mode is an exception; a regex's is a wrong answer.
+    """
     r = await client.get(SRU, params={
         "operation": "searchRetrieve", "version": "2.0", "query": cql,
         "maximumRecords": 0 if probe_only else PAGE, "startRecord": start,
     })
     r.raise_for_status()
-    x = r.text
-    total = re.search(r"<(?:\w+:)?numberOfRecords>(\d+)</", x)
-    if total is None:
-        diag = re.search(r"<(?:\w+:)?details>([^<]+)<", x)
-        raise SystemExit(f"SRU rejected the query: {diag.group(1) if diag else x[:200]}")
-    return re.findall(r"<(?:\w+:)?recordData>(.*?)</(?:\w+:)?recordData>", x, re.S), int(total.group(1))
+    try:
+        root = ET.fromstring(r.text)
+    except ET.ParseError as e:
+        raise SystemExit(f"SRU returned XML that does not parse: {e}; body starts {r.text[:200]}")
+    total = root.find(".//{*}numberOfRecords")
+    # Still a SystemExit and not an empty page, for the reason the maximumRecords comment
+    # above records: over 1000 the service answers 200 with a body carrying no
+    # numberOfRecords at all, and a client that reads that as "no results" stops silently.
+    if total is None or not (total.text or "").strip().isdigit():
+        diag = root.find(".//{*}details")
+        detail = (diag.text or "").strip() if diag is not None else r.text[:200]
+        raise SystemExit(f"SRU rejected the query: {detail}")
+    return root.findall(".//{*}recordData"), int(total.text.strip())
 
 
 def _window_cql(scope: str, lo: date, hi: date) -> str:

@@ -43,7 +43,16 @@ echo "==> migrations"
 .venv/bin/python scripts/migrate.py
 
 echo "==> backend  http://localhost:8000/api/main/health"
-.venv/bin/python -m uvicorn api.main.app:app --reload &
+# --reload-dir api is not tidiness, it is the difference between starting and not starting.
+# A bare --reload makes StatReload walk the WHOLE repo on every poll, and this repo's tree
+# includes a gitignored data/ holding a 1.3 GB netherlands-latest.osm.pbf, a 181 MB province
+# extract and a 185 MB embedding cache -- 1.7 GB of files the API never reads. MEASURED
+# 2026-11-10 on a 16 GB machine with Docker holding 7.65 GB: the reloader parent sat at
+# 36-86% CPU doing nothing but stat(), the worker it spawned spent 10+ minutes inside a
+# single import at 0.0% CPU, and :8000 never bound at all while :5173 came up fine -- which
+# reads from the browser as "the backend is broken" rather than as "the watcher is eating
+# the disk". Only api/ is imported by the server, so only api/ needs watching.
+.venv/bin/python -m uvicorn api.main.app:app --reload --reload-dir api &
 backend=$!
 
 echo "==> frontend http://localhost:5173"

@@ -1,12 +1,15 @@
 """
 Prometheus instrumentation.
 
-Degrades like everything else here: `prometheus_client` lives in requirements-local.txt,
-not requirements.txt, so the Vercel bundle does not carry it. If the import fails every
-function below becomes a no-op and `/metrics` 503s. That is the same pattern as
-`db.enabled()` and `cache.py` — the local-only capability is absent in production rather
-than fatal there. Scraping a Vercel function would not work anyway: each invocation is a
-fresh process, so a counter never accumulates.
+Degrades like everything else here: if `prometheus_client` is missing, every function below
+becomes a no-op and `/metrics` 503s rather than returning an empty 200 — an empty 200 charts
+as a flat zero that looks like "no traffic". That is the same pattern as `db.enabled()` and
+`cache.py`.
+
+It is now in requirements.txt, not requirements-local.txt. The reason it was local-only was
+bundle size in a Vercel function, and that deployment is gone; the deploy image was installing
+it separately anyway, because deploy/prometheus.yml scrapes api:8000/metrics. The degradation
+path stays because an environment can still be built without it.
 
 What is measured, and why each one is here rather than "because Prometheus has it":
 
@@ -41,7 +44,7 @@ try:
         CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest,
     )
     _ENABLED = True
-except ImportError:  # pragma: no cover - exercised by the Vercel bundle, not by tests
+except ImportError:  # pragma: no cover - an install without prometheus_client, not tests
     _ENABLED = False
     CONTENT_TYPE_LATEST = "text/plain"
 

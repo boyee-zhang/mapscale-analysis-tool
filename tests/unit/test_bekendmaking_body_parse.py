@@ -116,8 +116,18 @@ def test_body_with_text_but_no_period_is_not_a_failure():
 
 
 def test_body_present_but_textless():
+    # Well-formed on purpose: the closing </officiele-publicatie> used to be missing here,
+    # which the old regex never noticed and ElementTree reports as parse_error. The case
+    # being tested is an empty body, not malformed XML -- that one is its own test below.
     assert parse_body(HEAD + "<gemeenteblad><tekst><al /><al>  </al></tekst>"
-                             "</gemeenteblad>")["status"] == "empty_body"
+                             "</gemeenteblad></officiele-publicatie>")["status"] == "empty_body"
+
+
+def test_malformed_xml_is_parse_error_not_a_partial_body():
+    # An unclosed root. The regex returned whatever it could match and the row looked fine;
+    # a parser says it could not read the document, which is the honest answer.
+    broken = HEAD + "<gemeenteblad><tekst><al>Looptijd :01-01-2026 t/m 02-01-2026</al>"
+    assert parse_body(broken)["status"] == "parse_error"
 
 
 def test_no_body_element_at_all():
@@ -147,3 +157,88 @@ def test_markup_and_entities_inside_a_line_are_flattened():
 ])
 def test_looptijd_spelling_variants(line, expected):
     assert parse_body(doc(line))["start_date"] == expected
+
+
+# ── tussenkop: headings are body text, and sometimes they ARE the data ────────────
+
+def seq(*els: tuple[str, str]) -> str:
+    """(tag, text) pairs in document order, so a heading can sit next to its value."""
+    return HEAD + "<gemeenteblad><tekst>" + "".join(
+        f"<{t}>{x}</{t}>" for t, x in els) + "</tekst></gemeenteblad></officiele-publicatie>"
+
+
+def test_tussenkop_reaches_body_text():
+    r = parse_body(seq(("tussenkop", "Besluit:"), ("al", "een maximale snelheid van 30 km/u")))
+    assert r["body_text"] == "Besluit:\neen maximale snelheid van 30 km/u"
+
+
+def test_event_period_living_only_in_headings_is_recovered():
+    # gmb-2026-209074 (Nissewaard), the counterexample that destroyed "those headings are
+    # appeal boilerplate": the label is one <tussenkop> and the value is the NEXT one, and
+    # nothing about the period appeared in any <al>. The row read no_period with NULL dates
+    # while the document stated the period plainly.
+    r = parse_body(seq(
+        ("tussenkop", "Waar"),
+        ("al", "Diverse wijken in Spijkenisse."),
+        ("tussenkop", "Datum en tijd ontheffing"),
+        ("tussenkop", "18 mei 2026 t/m 20 mei 2026 mini 15.30 – 19:00 uur"),
+        ("tussenkop", "Datum besluit"),
+        ("al", "28 april 2026."),
+    ))
+    assert r["status"] == "ok"
+    assert r["start_date"] == date(2026, 5, 18)
+    assert r["end_date"] == date(2026, 5, 20)
+    assert "Datum en tijd ontheffing" in r["period_raw"]
+
+
+def test_heading_ordering_is_preserved_so_a_label_stays_next_to_its_value():
+    # The adjacency is the whole mechanism: out of order, "28 april 2026" under "Datum
+    # besluit" could be read as the event date.
+    r = parse_body(seq(
+        ("tussenkop", "Datum ontvangst"), ("al", "14-10-2026"),
+        ("tussenkop", "Datum en tijd ontheffing"), ("tussenkop", "1 juni 2026"),
+    ))
+    assert r["body_text"].splitlines() == [
+        "Datum ontvangst", "14-10-2026", "Datum en tijd ontheffing", "1 juni 2026"]
+    assert r["start_date"] == date(2026, 6, 1)
+    assert r["end_date"] is None
+
+
+def test_a_heading_nested_in_a_paragraph_is_not_duplicated():
+    r = parse_body(HEAD + "<gemeenteblad><tekst>"
+                          "<al>voor <tussenkop>Besluit</tussenkop> geldt</al>"
+                          "</tekst></gemeenteblad></officiele-publicatie>")
+    assert r["body_text"] == "voor Besluit geldt"
+
+
+# ── Dutch month-name dates ───────────────────────────────────────────
+
+@pytest.mark.parametrize("line,start,end", [
+    ("Datum van: 18 mei 2026", date(2026, 5, 18), None),
+    ("Datum van 1 januari 2026", date(2026, 1, 1), None),
+    ("Looptijd: 3 december 2026 t/m 5 december 2026", date(2026, 12, 3), date(2026, 12, 5)),
+    ("Looptijd :22-05-2026 t/m 04-06-2026", date(2026, 5, 22), date(2026, 6, 4)),
+])
+def test_both_published_date_formats(line, start, end):
+    # Amsterdam writes 22-05-2026; most other municipalities write "18 mei 2026". The
+    # numeric-only pattern could never match the second, and 5,318 no_period rows carried a
+    # period keyword plus a Dutch-month date and no numeric date at all.
+    r = parse_body(doc(line))
+    assert r["status"] == "ok"
+    assert r["start_date"] == start
+    assert r["end_date"] == end
+
+
+def test_an_impossible_dutch_month_date_is_not_invented():
+    # Same discipline as 31-04-2026: present, so the status is ok, but the value stays NULL
+    # and the original text survives in period_raw.
+    r = parse_body(doc("Datum van: 31 april 2026"))
+    assert r["status"] == "ok"
+    assert r["start_date"] is None
+    assert r["period_raw"] == "Datum van: 31 april 2026"
+
+
+def test_a_month_name_that_is_not_dutch_is_not_a_date():
+    r = parse_body(doc("Datum van: 18 May 2026"))
+    assert r["status"] == "no_period"
+    assert r["start_date"] is None

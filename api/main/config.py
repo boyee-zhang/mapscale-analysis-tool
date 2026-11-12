@@ -9,8 +9,9 @@ ORS_API_KEY = os.getenv("ORS_API_KEY")
 #   https://api.openrouteservice.org/v2          legacy public host, undocumented, the default
 #   https://api.heigit.org/openrouteservice/v2   what the official OpenAPI spec declares
 #   http://localhost:8080/ors/v2                 self-hosted container (see docker-compose.yml)
-# The default keeps Vercel unchanged. A self-hosted instance ignores the API key entirely, so
-# the Authorization header stays unconditional — it is simply not read.
+# The default is the public host, which is what a deployment gets unless it sets this. A
+# self-hosted instance ignores the API key entirely, so the Authorization header stays
+# unconditional — it is simply not read.
 ORS_BASE_URL = os.getenv("ORS_BASE_URL", "https://api.openrouteservice.org/v2").rstrip("/")
 ES_URL = os.getenv("ES_URL")  # optional — omit to disable ES and fall back to PDOK/Nominatim
 TOMTOM_API_KEY = os.getenv("TOMTOM_API_KEY")
@@ -36,9 +37,11 @@ MODE_MAPPING = {
     # 2026-10-28: a self-hosted v10.1.0 built from noord-holland-latest.osm.pbf serves
     # foot-walking perfectly — 1.489 km2 / reachfactor 1.0, byte-identical to foot-hiking, and
     # it routes 731 m in 526 s. So the black hole is in the public DEPLOYMENT, not in ORS and
-    # not in a graph. This stays foot-hiking anyway: it is one global constant and production
-    # on Vercel still talks to the public API, where foot-walking is still a black hole.
-    # Re-pointing it would fix localhost by breaking prod.
+    # not in a graph. This stays foot-hiking anyway, and dropping Vercel does not change that:
+    # ORS_BASE_URL is an env var but MODE_MAPPING is one global constant, so it cannot follow
+    # the base URL, and a deployment may still point at the public host (deploy/README.md
+    # offers three routing options). foot-hiking works against both, foot-walking only against
+    # a self-hosted instance — so the constant has to be the one that works everywhere.
     "walking": "foot-hiking",
     # The degenerate 0.031 km2 blob is REAL but it is NOT a broken graph, and that correction
     # cost nothing but a second coordinate. Re-measured 2026-10-28 on a self-hosted instance:

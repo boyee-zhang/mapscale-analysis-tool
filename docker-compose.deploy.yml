@@ -1,0 +1,224 @@
+# Portable stack: everything the app needs, in containers, on a machine that has nothing
+# but Docker.
+#
+#   cp deploy/env.example .env && $EDITOR .env
+#   docker compose -f docker-compose.deploy.yml up -d --build
+#   open http://localhost:8088
+#
+# This is NOT docker-compose.yml. That file is the local development stack: Postgres runs
+# in a container while the API and the frontend run on the host (scripts/dev.sh), with
+# deliberately small Postgres parameters so bloat and buffer reads show up at 10-20M rows.
+# This one containerises the API and the frontend too, and keeps its own volumes. Both can
+# run side by side — different project name, different volumes, different ports.
+#
+# Images are BUILT on the target rather than shipped as a `docker save` tarball on
+# purpose: the three base images are multi-arch (verified), so building works on an arm64
+# laptop and an amd64 server alike, while saved images are locked to the architecture that
+# built them.
+name: mapscale-deploy
+
+services:
+  postgres:
+    # Same arm64-capable PostGIS mirror as the dev stack: the official postgis/postgis is
+    # amd64-only. This one publishes linux/amd64 and linux/arm64 (verified), so it is also
+    # the right choice on an x86 server.
+    image: imresamu/postgis:16-3.4
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mapscale}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mapscale}
+      POSTGRES_DB: ${POSTGRES_DB:-mapscale}
+    ports:
+      # Published for psql and EXPLAIN from the host. Drop this line on anything with a
+      # public IP — the password in env.example is `mapscale`.
+      - "${PG_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Runs once, on an empty volume, and restores data/mapscale.dump if it is there.
+      - ./deploy/initdb:/docker-entrypoint-initdb.d:ro
+      # The directory, not the file: a bind mount of a path that does not exist gets
+      # created as an empty DIRECTORY, which would make a missing dump fail as a confusing
+      # "is a directory" error instead of the clean "no dump, empty database" branch.
+      - ./data:/dump:ro
+    # Left at the image defaults, unlike the dev stack. The small shared_buffers/work_mem
+    # there exist to make problems visible during experiments; a machine being demoed on
+    # should just be fast.
+    healthcheck:
+      # -h 127.0.0.1 is the load-bearing part, and it was MEASURED here, not copied.
+      # `pg_isready` with no host probes the UNIX SOCKET, and during the initdb phase the
+      # entrypoint runs a temporary server with listen_addresses='' — socket up, TCP not
+      # listening. So the socket probe answered "accepting connections" at 11:46:53 while
+      # the restore still had 22 s to run, compose called the service healthy, started
+      # `api`, and asyncpg got ECONNREFUSED on 172.25.0.2:5432 and exited 1.
+      #
+      # The probe and the real client were using two different surfaces. Over TCP there is
+      # nothing to answer until the real server starts, which is exactly the question
+      # `api` needs answered.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${POSTGRES_USER:-mapscale} -d ${POSTGRES_DB:-mapscale}"]
+      interval: 5s
+      timeout: 5s
+      # 20 x 5 s = 100 s. The first start restores a 35 MB dump (22 s measured) before the
+      # real server binds, so this ceiling is sized for the restore, not for pg startup.
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Built here rather than taken from .env: the host-facing DATABASE_URL in a
+      # development .env points at localhost:5432, which inside this container is the
+      # container itself. Copying that .env in would have produced a connection refused
+      # that looks like Postgres being down.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mapscale}:${POSTGRES_PASSWORD:-mapscale}@postgres:5432/${POSTGRES_DB:-mapscale}
+      ORS_API_KEY: ${ORS_API_KEY:-}
+      ORS_BASE_URL: ${ORS_BASE_URL:-https://api.openrouteservice.org/v2}
+      TOMTOM_API_KEY: ${TOMTOM_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      ES_URL: ${ES_URL:-}
+      DB_POOL_MAX_SIZE: ${DB_POOL_MAX_SIZE:-10}
+      # Wired through even though the Upstash instance is gone (NXDOMAIN), so that
+      # uncommenting them in .env is all it takes to point the cache at a new one. Unset,
+      # kv_get short-circuits before any network call — the same result the failing path
+      # produced, minus the cost. Leaving them unwired would have made the commented lines
+      # in env.example a trap: edited, restarted, still no cache, no error.
+      UPSTASH_REDIS_REST_URL: ${UPSTASH_REDIS_REST_URL:-}
+      UPSTASH_REDIS_REST_TOKEN: ${UPSTASH_REDIS_REST_TOKEN:-}
+    ports:
+      # Not required — nginx reaches the API over the compose network. Published because
+      # /docs and /metrics are the first two things to check when the map is blank.
+      - "${API_PORT:-8000}:8000"
+    # The healthcheck above is the real fix for the start-up race; this is for afterwards —
+    # a Postgres restart or a machine reboot should not leave the stack half up. A genuine
+    # migration failure still crash-loops, and the entrypoint prints the error every time,
+    # so it stays diagnosable rather than silent.
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/api/main/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      # The migrations run before uvicorn binds, so the first probe must not be the one
+      # that decides.
+      start_period: 40s
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.web
+    depends_on:
+      - api
+    ports:
+      - "${WEB_PORT:-8088}:80"
+    # The healthcheck above is the real fix for the start-up race; this is for afterwards —
+    # a Postgres restart or a machine reboot should not leave the stack half up. A genuine
+    # migration failure still crash-loops, and the entrypoint prints the error every time,
+    # so it stays diagnosable rather than silent.
+    restart: unless-stopped
+    healthcheck:
+      # 127.0.0.1, NOT localhost: /etc/hosts maps localhost to both 127.0.0.1 and ::1,
+      # busybox wget tries the v6 address first, and `listen 80` is IPv4-only — so the
+      # probe got ECONNREFUSED while the same request over 127.0.0.1 returned 200 and the
+      # access log showed nginx serving happily. Reported `unhealthy` for a service that
+      # was never down, which is the ors/curl mistake in a different coat.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  # ── Optional: self-hosted routing ───────────────────────────────────────────
+  #
+  #   docker compose -f docker-compose.deploy.yml up -d ors
+  #
+  # and set ORS_BASE_URL=http://ors:8082/ors/v2 in .env, then recreate `api`.
+  # Behind a profile because the first start builds one contraction-hierarchy graph per
+  # enabled profile. Measured on the 181 MB Noord-Holland extract: 211 s for three graphs,
+  # peak heap 2.03 GB, peak container RSS 2987 MiB.
+  ors:
+    image: openrouteservice/openrouteservice:v10.1.0
+    profiles: ["ors"]
+    ports:
+      - "${ORS_PORT:-8080}:8082"
+    volumes:
+      - ./data:/home/ors/files:ro
+      - ors_graphs:/home/ors/graphs
+      - ors_elevation:/home/ors/elevation_cache
+    environment:
+      ors.engine.profile_default.build.source_file: /home/ors/files/${ORS_EXTRACT:-noord-holland-latest.osm.pbf}
+      # Exactly the three profiles MODE_MAPPING targets, and foot-HIKING rather than
+      # foot-walking: MODE_MAPPING["walking"] points at foot-hiking because the public
+      # deployment black-holes foot-walking, so enabling the other one here would 404
+      # every walking request — the default mode.
+      ors.engine.profiles.driving-car.enabled: "true"
+      ors.engine.profiles.cycling-regular.enabled: "true"
+      ors.engine.profiles.foot-hiking.enabled: "true"
+      XMS: 1g
+      XMX: ${ORS_XMX:-4g}
+      REBUILD_GRAPHS: "False"
+    healthcheck:
+      # wget, not curl: this image has no curl, and a probe that cannot run reports
+      # `unhealthy` for a service that is serving fine. Asserting the three profile NAMES
+      # rather than /v2/health, because /v2/health answers {"status":"ready"} while zero
+      # graphs are loaded — "ready" means the HTTP layer is up, nothing more.
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/ors/v2/status > /tmp/s && grep -q foot-hiking /tmp/s && grep -q driving-car /tmp/s && grep -q cycling-regular /tmp/s"]
+      interval: 30s
+      timeout: 5s
+      retries: 60
+      start_period: 300s
+
+  # ── Optional: monitoring ────────────────────────────────────────────────────
+  #
+  #   docker compose -f docker-compose.deploy.yml --profile monitoring up -d
+  #
+  # Uses deploy/prometheus.yml, not monitoring/prometheus.yml: there the API is reached
+  # through host.docker.internal because it runs on the host; here it is a container.
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    profiles: ["monitoring"]
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle
+
+  grafana:
+    image: grafana/grafana:11.5.1
+    profiles: ["monitoring"]
+    depends_on:
+      - prometheus
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      # Anonymous admin. Fine on a laptop behind a firewall, NOT fine on anything with a
+      # public IP — there is no login page at all.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_USERS_DEFAULT_THEME: light
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    profiles: ["monitoring"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-mapscale}:${POSTGRES_PASSWORD:-mapscale}@postgres:5432/${POSTGRES_DB:-mapscale}?sslmode=disable"
+
+volumes:
+  pgdata:
+  ors_graphs:
+  ors_elevation:
+  promdata:
+  grafanadata:

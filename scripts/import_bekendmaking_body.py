@@ -25,6 +25,7 @@ import asyncio
 import os
 import re
 import sys
+import xml.etree.ElementTree as ET
 from datetime import date, time
 from pathlib import Path
 
@@ -85,9 +86,30 @@ _SCOPE = {
 _SCOPE["period"] = f"({_SCOPE['apv']}) OR ({_SCOPE['evenement']})"
 _SCOPE["corpus"] = "true"
 
-_AL = re.compile(r"<al\b[^>]*>(.*?)</al>", re.S)
-_TAG = re.compile(r"<[^>]+>")
-_D = r"(\d{1,2}-\d{1,2}-\d{4})"
+# The body text is read with ElementTree (see `_body_lines`), not a regex. `_AL`/`_TAG` are
+# gone: `<al\b[^>]*>(.*?)</al>` could not see `<tussenkop>` at all, and that silently dropped
+# the field LABELS -- and sometimes the dates themselves -- for every publisher that puts them
+# in a heading. Measured 2026-11-12: `evenementenvergunning` outside Amsterdam was 32.2%
+# `no_period` against Amsterdam's 0.2%. docs/pg-notes/bekendmaking-tussenkop.md.
+_BODY_TAGS = ("tekst", "zakelijke-mededeling-tekst", "body")
+_WANT = ("al", "tussenkop")
+
+# XML predefines five entities; the source ships HTML ones, which make ElementTree raise.
+_HTML_ENT = {"nbsp": " ", "eacute": "\u00e9", "egrave": "\u00e8", "euml": "\u00eb",
+             "iuml": "\u00ef", "ouml": "\u00f6", "uuml": "\u00fc", "auml": "\u00e4",
+             "ccedil": "\u00e7", "ndash": "\u2013", "mdash": "\u2014", "rsquo": "\u2019",
+             "lsquo": "\u2018", "ldquo": "\u201c", "rdquo": "\u201d", "hellip": "\u2026",
+             "deg": "\u00b0", "euro": "\u20ac", "oacute": "\u00f3", "aacute": "\u00e1"}
+_ENT = re.compile(r"&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)([a-zA-Z]+);")
+
+# Dates come in two published formats. Amsterdam writes 22-05-2026; most other municipalities
+# write "18 mei 2026", which the numeric-only pattern could never match -- 5,318 `no_period`
+# rows carry a period KEYWORD and a Dutch-month date and no numeric date at all.
+_MONTHS = ("januari", "februari", "maart", "april", "mei", "juni",
+           "juli", "augustus", "september", "oktober", "november", "december")
+_D_NUM = r"\d{1,2}-\d{1,2}-\d{4}"
+_D_NL = r"\d{1,2}\s+(?:" + "|".join(_MONTHS) + r")\s+\d{4}"
+_D = rf"({_D_NUM}|{_D_NL})"
 _T = r"(\d{1,2}[:.]\d{2})"
 
 # 'Looptijd :22-05-2026 t/m 04-06-2026' -- note the space before the colon and none after.
@@ -97,22 +119,28 @@ _DATUM_TM = re.compile(rf"Datum\s*(?:t/m|tot en met|tot)\s*:?\s*{_D}", re.I)
 _TIJD_VAN = re.compile(rf"Tijd\s+van\s*:?\s*{_T}", re.I)
 _TIJD_TOT = re.compile(rf"Tijd\s*(?:tot en met|t/m|tot)\s*:?\s*{_T}", re.I)
 _BEZOEKERS = re.compile(r"Bezoekers\s+drukste\s+moment\s*:?\s*(\d{1,7})", re.I)
-
-
-def _unesc(s: str) -> str:
-    for a, b in (("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"), ("&quot;", '"'),
-                 ("&#39;", "'"), ("&nbsp;", " ")):
-        s = s.replace(a, b)
-    return s
+# 'Datum en tijd ontheffing' sits in one <tussenkop> and its value in the NEXT one, so this
+# can only ever match now that headings are part of the body text. Example gmb-2026-209074
+# (Nissewaard): the whole event period lived only in headings and the row read `no_period`
+# with NULL dates while the stored body contained no trace of it.
+_DATUM_EN_TIJD = re.compile(
+    rf"Datum\s+en\s+tijd[^\n]*\n\s*{_D}(?:\s*(?:t/m|tot en met|tot)\s*{_D})?", re.I)
 
 
 def _d(s: str) -> date | None:
-    """dd-mm-yyyy, validated. '31-04-2026' really occurs upstream (1 row in 20,689 of an
-    earlier probe, 0.005%) and date() is what catches it -- a format check would not."""
-    dd, mm, yy = (int(x) for x in s.split("-"))
+    """dd-mm-yyyy or '18 mei 2026', validated. '31-04-2026' really occurs upstream (1 row in
+    20,689 of an earlier probe, 0.005%) and date() is what catches it -- a format check would
+    not. An unparseable value returns None and the original stays in period_raw."""
+    s = s.strip()
     try:
+        if "-" in s:
+            dd, mm, yy = (int(x) for x in s.split("-"))
+        else:
+            parts = s.split()
+            dd, yy = int(parts[0]), int(parts[-1])
+            mm = _MONTHS.index(parts[1].lower()) + 1
         return date(yy, mm, dd)
-    except ValueError:
+    except (ValueError, IndexError):
         return None
 
 
@@ -127,6 +155,52 @@ def _t(s: str) -> time | None:
         return None
 
 
+def _pre(xml: str) -> str:
+    """Replace the HTML entities the source ships; XML predefines only five."""
+    return _ENT.sub(lambda m: _HTML_ENT.get(m.group(1), " "), xml)
+
+
+def _local(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1] if "}" in tag else tag
+
+
+def _body_lines(xml: str) -> list[str] | None:
+    """Ordered text of every <al> and <tussenkop> in the body; None if the XML will not parse.
+
+    ElementTree, not a regex, for the same reason 156e8fe switched the SRU record parser: a
+    single-pass regex over `<(tussenkop|al)\b[^>]*>(.*?)</\1>` swallows a heading nested
+    inside an <al>. While measuring this very bug that regex reported 9 headings where two
+    independent per-tag scans found 41 -- a parser's failure mode is an exception, a regex's
+    is a plausible wrong answer.
+
+    Headings are interleaved with paragraphs in document order on purpose: several publishers
+    put a field label in one <tussenkop> and its value in the next, so the adjacency is the
+    only thing that says which date is the event and which is the decision.
+    """
+    try:
+        root = ET.fromstring(_pre(xml))
+    except ET.ParseError:
+        return None
+    scope = next((el for el in root.iter() if _local(el.tag) in _BODY_TAGS), root)
+    parents = {c: p for p in scope.iter() for c in p}
+    lines: list[str] = []
+    for el in scope.iter():
+        if _local(el.tag) not in _WANT:
+            continue
+        # A nested al/tussenkop is already covered by its parent's itertext().
+        anc, nested = parents.get(el), False
+        while anc is not None:
+            if _local(anc.tag) in _WANT:
+                nested = True
+                break
+            anc = parents.get(anc)
+        if nested:
+            continue
+        if t := re.sub(r"\s+", " ", "".join(el.itertext())).strip():
+            lines.append(t)
+    return lines
+
+
 def parse_body(xml: str) -> dict:
     """XML text -> a row dict. Pure, so tests need no network."""
     if "</metadata>" not in xml:
@@ -135,11 +209,12 @@ def parse_body(xml: str) -> dict:
     if not body.strip():
         return {"status": "no_body_element"}
 
-    lines = []
-    for raw in _AL.findall(body):
-        t = re.sub(r"\s+", " ", _unesc(_TAG.sub("", raw))).strip()
-        if t:
-            lines.append(t)
+    # The split above only decides no_body_element; ElementTree gets the WHOLE document,
+    # because the fragment after </metadata> carries an unmatched closing tag and is not
+    # well-formed on its own.
+    lines = _body_lines(xml)
+    if lines is None:
+        return {"status": "parse_error"}
     if not lines:
         return {"status": "empty_body"}
     text = "\n".join(lines)
@@ -157,6 +232,10 @@ def parse_body(xml: str) -> dict:
         out["start_date"] = _d(m.group(1))
         out["end_date"] = _d(m.group(2)) if m.group(2) else None
         raws.append(m.group(0))
+    elif m := _DATUM_EN_TIJD.search(text):
+        out["start_date"] = _d(m.group(1))
+        out["end_date"] = _d(m.group(2)) if m.group(2) else None
+        raws.append(re.sub(r"\s+", " ", m.group(0)))
     else:
         if m := _DATUM_VAN.search(text):
             out["start_date"] = _d(m.group(1))

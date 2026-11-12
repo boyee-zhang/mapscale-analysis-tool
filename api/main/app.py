@@ -64,10 +64,11 @@ async def internal_error_handler(request: Request, exc: InternalError):
 
 # ── Metrics ──────────────────────────────────────────────────────────────────
 #
-# Deliberately NOT under /api/main. That prefix is what vercel.json routes to the
-# serverless function and what the Vite dev proxy forwards; /metrics is a local-only
-# operational surface and should not look like part of the public API. It also means a
-# scrape never passes through the CORS middleware's allow-origin "*".
+# Deliberately NOT under /api/main. That prefix is what deploy/nginx.conf proxies to this
+# service and what the Vite dev proxy forwards; /metrics is an operational surface and should
+# not look like part of the public API. It also means a scrape never passes through the CORS
+# middleware's allow-origin "*". nginx has no /metrics location, so it is not reachable from
+# outside the compose network — deploy/prometheus.yml scrapes api:8000 directly.
 
 
 @app.get("/metrics", include_in_schema=False)

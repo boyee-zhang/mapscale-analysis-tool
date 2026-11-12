@@ -1,0 +1,1481 @@
+[
+ {
+  "query": "我家附近有人要砍树吗",
+  "candidates": [
+   {
+    "n": 1,
+    "id": "gmb-2026-459110",
+    "title": "Aanvraag omgevingsvergunning vellen van een houtopstand (kap) in de openbare ruimte op kadastraal objecten STN02I07147G00 en STN02I07153G0000 nabij Baron Schimmelpenninck van der Oyeweg 10 1067HV Amsterdam",
+    "abstract": "vellen van 14 houtopstanden en kandelaberen van 1 houtopstand in de openbare ruimte op kadastraal objecten STN02I07147G00 en STN02I07153G0000"
+   },
+   {
+    "n": 2,
+    "id": "gmb-2026-457358",
+    "title": "Aanvraag omgevingsvergunning vellen van een houtopstand (kap) vellen van 51 houtopstanden op verschillende locaties in het gebied van Stadsdeel Nieuw West in Amsterdam",
+    "abstract": "vellen van 51 houtopstanden op verschillende locaties in het gebied van stadsdeel Nieuw West (Veiligheidskap)"
+   },
+   {
+    "n": 3,
+    "id": "gmb-2026-432389",
+    "title": "Aanvraag omgevingsvergunning vellen van een houtopstand (kap) t.h.v. Theodorus Dobbestraat 48-1 1063BW Amsterdam",
+    "abstract": "Het snoeien van 1 houtopstand en het vellen van 1 houtopstand in de gemeenschappelijke tuin op de locatie t.h.v. Theodorus Dobbestraat 48-1"
+   },
+   {
+    "n": 4,
+    "id": "gmb-2026-473624",
+    "title": "Besluit omgevingsvergunning reguliere procedure vellen van een houtopstand (kap) verleend Lambertus Zijlplein 27 1067JR Amsterdam",
+    "abstract": "vellen van 7 houtopstanden en verplanten van 1 houtopstand in de openbare ruimte op de locatie Lambertus Zijlplein"
+   },
+   {
+    "n": 5,
+    "id": "gmb-2026-377590",
+    "title": "Aanvraag omgevingsvergunning vellen van een houtopstand (kap) vellen van 37 houtopstanden in de openbare ruimte op verschillende locaties in het gebied van Stadsdeel Nieuw West (veiligheidskap) Amsterdam",
+    "abstract": "vellen van 37 houtopstanden in de openbare ruimte op verschillende locaties in het gebied van Stadsdeel Nieuw West (veiligheidskap)"
+   },
+   {
+    "n": 6,
+    "id": "gmb-2026-473692",
+    "title": "Besluit omgevingsvergunning reguliere procedure vellen van een houtopstand (kap) verleend Theodorus Dobbestraat 48-1 1063BW Amsterdam",
+    "abstract": "Het snoeien van 1 houtopstand en het vellen van 1 houtopstand in de gemeenschappelijke tuin op de locatie t.h.v. Theodorus Dobbestraat 48-1"
+   }
+  ]
+ },
+ {
+  "query": "附近有什么会吵的工程",
+  "candidates": [
+   {
+    "n": 1,
+    "id": "gmb-2026-415368",
+    "title": "Besluit omgevingsvergunning reguliere procedure verleend Jan Kiststraat 2, 4, 6, 8 en 10 1018PM Amsterdam, Oostenburgermiddenstraat 1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21 en 23 1018LH Amsterdam, VOC-kade 2, 4, 6, 8, 10, 12, 14 en 16 1018LG Amsterdam, Zeemagazijnkade 1, 3, 4, 5, 7, 8, 9, 11 en 13 1018LE Amsterdam",
+    "abstract": "bouwen in afwijking van omgevingsvergunning zaak Z2021-C000975/ OLO 5221153 voor diverse in- en uitpandige werkzaamheden"
+   },
+   {
+    "n": 2,
+    "id": "gmb-2026-161563",
+    "title": "Aanvraag omgevingsvergunning, het bouwen van 2 dakkapellen en het bouwen van een trap naar de zolder, Aanvraag vergunning Furkabaan 581 in Utrecht, GU-Z2026-0050575",
+    "abstract": "Toelichting: het bouwen van 2 dakkapellen en het bouwen van een trap naar de zolder"
+   },
+   {
+    "n": 3,
+    "id": "gmb-2026-485995",
+    "title": "Intrekking omgevingsvergunning, intrekken omgevingsvergunning met kenmerk GU-Z2024-0005121 op eigen verzoek, Bemuurde Weerd W.Z. 2, 3513BH Utrecht, GU-Z2026-0047527",
+    "abstract": "Toelichting: intrekken omgevingsvergunning met kenmerk GU-Z2024-0005121 op eigen verzoek"
+   },
+   {
+    "n": 4,
+    "id": "gmb-2026-376111",
+    "title": "RECTIFICATIE Verleende Omgevingsvergunning, het bouwen van twee weegbruggen en lichtmasten en het tijdelijk bouwen van een prefab kantoorunit voor 15 jaar,  Sophialaan 31, 3542AR Utrecht, GU-Z2025-0036990",
+    "abstract": "Toelichting: het tijdelijk bouwen van twee weegbruggen, prefab kantoorunit en lichtmasten"
+   },
+   {
+    "n": 5,
+    "id": "gmb-2026-447993",
+    "title": "Aanvraag Geluidhinder ontheffing nabij Station Diemen Zuid - een aanvraag geluidhinder ontheffing t.b.v. spoorwerkzaamheden",
+    "abstract": "Aanvraag Geluidhinder ontheffing Nabij Station Diemen Zuid - een aanvraag geluidhinder ontheffing t.b.v. spoorwerkzaamheden"
+   },
+   {
+    "n": 6,
+    "id": "gmb-2026-19243",
+    "title": "Aanvraag omgevingsvergunning vergunningsvrij Omgevingsvergunning, het bouwen van sauna ruimten in een bedrijfspand, Overvliet 113, 3545NG Utrecht, GU-Z2025-0041201",
+    "abstract": "Toelichting: het bouwen van sauna ruimten in een bedrijfspand"
+   },
+   {
+    "n": 7,
+    "id": "gmb-2026-345333",
+    "title": "Aanvraag omgevingsvergunning,  wijzigen v/e eerder verleende omgevingsvergunning m.b.t. de gebruiksfuncties, Nijverheidsweg 6, 3534AM Utrecht, GU-Z2026-0061754",
+    "abstract": "Toelichting:  wijzigen v/e eerder verleende omgevingsvergunning m.b.t. de gebruiksfuncties"
+   },
+   {
+    "n": 8,
+    "id": "gmb-2026-109773",
+    "title": "Aanvraag omgevingsvergunning, het bouwen van een dakkapel op het achterdakvlak en het bouwen van uitbouw, Kanaalweg 57, 3527KX Utrecht, GU-Z2026-0047682",
+    "abstract": "Toelichting: het bouwen van een dakkapel op het achterdakvlak en het bouwen van uitbouw"
+   },
+   {
+    "n": 9,
+    "id": "gmb-2026-322272",
+    "title": "Besluit apv vergunning Verleend - Bouwen Ewoutszstraat ter hoogte van nummer: 7 in Amsterdam",
+    "abstract": "TVM parkeervak,Bouwen Ewoutszstraat 7 H 1067XL, 20260707, Bouwen Ewoutszstraat ter hoogte van nummer: 7"
+   },
+   {
+    "n": 10,
+    "id": "gmb-2026-491590",
+    "title": "Intrekking omgevingsvergunning, ambtshalve intrekken omgevingsvergunning met kenmerk HZ_WABO-20-14315, Noordersluis 10, 3526KX Utrecht, GU-Z2024-0009323",
+    "abstract": "Toelichting: ambtshalve intrekken omgevingsvergunning met kenmerk HZ_WABO-20-14315"
+   },
+   {
+    "n": 11,
+    "id": "gmb-2026-128542",
+    "title": "Aanvraag vergunning ontvangen - nabij Hildegard von Bingenstraat 4, Amsterdam - het bouwen in afwijking van de omgevingsvergunning met kenmerk 13328041",
+    "abstract": "het bouwen in afwijking van de omgevingsvergunning met kenmerk 13328041"
+   },
+   {
+    "n": 12,
+    "id": "gmb-2026-327381",
+    "title": "Verleende Omgevingsvergunning, het wijzigen van de verleende omgevingsvergunning HZ_WABO-21-21217, Biltstraat 86-88, 3572BH Utrecht , GU-Z2026-0043247",
+    "abstract": "Toelichting: het wijzigen van de verleende omgevingsvergunning HZ_WABO-21-21217"
+   },
+   {
+    "n": 13,
+    "id": "gmb-2026-197093",
+    "title": "Besluit van het college van burgemeester en wethouders van de gemeente Amsterdam tot wijziging van Verkeersbesluit milieuzone Amsterdam 2022 en Definitief verkeersbesluit aanscherping milieuzone dieselpersonen- en bedrijfsauto’s Amsterdam 2025 in verband met wijzigen verkeersborden voor de aanduiding van de milieuzones",
+    "abstract": "wijziging van Verkeersbesluit milieuzone Amsterdam 2022 en Definitief verkeersbesluit aanscherping milieuzone dieselpersonen- en bedrijfsauto’s Amsterdam 2025 in verband met wijzigen verkeersborden voor de aanduiding van de milieuzones"
+   },
+   {
+    "n": 14,
+    "id": "gmb-2026-203735",
+    "title": "Aanvraag omgevingsvergunning, het bouwen van een aanbouw en het bouwen van dakkapellen (voor en achter), Ardennen 28, 3524VD Utrecht, GU-Z2026-0053529",
+    "abstract": "Toelichting: het bouwen van een aanbouw en het bouwen van dakkapellen (voor en achter)"
+   }
+  ]
+ },
+ {
+  "query": "有人要占用我家门口的停车位吗",
+  "candidates": [
+   {
+    "n": 1,
+    "id": "gmb-2026-503260",
+    "title": "Besluit onttrekkingsvergunning van woonruimte voor een tweede woning verleend Lauriergracht 120E 1016RR Amsterdam",
+    "abstract": "onttrekkingsvergunning voor een tweede woning"
+   },
+   {
+    "n": 2,
+    "id": "gmb-2026-218658",
+    "title": "Aanvraag ontheffing artikel 35 Alcoholwet D.J. den Hartoglaan 1, 1111ZB Diemen - een art 35 ontheffing voor het schenken van alcohol op 20-05-2026",
+    "abstract": "Aanvraag ontheffing artikel 35 Alcoholwet D.J. den Hartoglaan 1, 1111ZB Diemen - een art 35 ontheffing voor het schenken van alcohol op 20-05-2026"
+   },
+   {
+    "n": 3,
+    "id": "gmb-2026-356468",
+    "title": "Verkeersbesluit instellen tijdelijke verkeersmaatregelen ten behoeve van Diemer Festijn 2026",
+    "abstract": "Verkeersbesluit instellen tijdelijke verkeersmaatregelen ten behoeve van Diemer Festijn"
+   },
+   {
+    "n": 4,
+    "id": "gmb-2026-502928",
+    "title": "Besluit onttrekkingsvergunning van woonruimte voor een tweede woning verleend Jacob van Lennepkade 39-1 1054ZG Amsterdam",
+    "abstract": "onttrekkingsvergunning voor een tweede woning"
+   },
+   {
+    "n": 5,
+    "id": "gmb-2026-502343",
+    "title": "Besluit onttrekkingsvergunning van woonruimte voor een tweede woning verleend Gietersstraat 57 1015HB Amsterdam",
+    "abstract": "onttrekkingsvergunning voor een tweede woning"
+   },
+   {
+    "n": 6,
+    "id": "gmb-2026-368394",
+    "title": "Aanvraag Geluidhinder ontheffing - een ontheffing geluidhinder t.b.v. werkzaamheden aan het spoor op 12-09-2026",
+    "abstract": "Aanvraag Geluidhinder ontheffing Op het spoor traject Diemen - Weesp KM 7.4 t/m 7.8 - een ontheffing geluidhinder t.b.v. werkzaamheden aan het spoor op 12-09-2026"
+   },
+   {
+    "n": 7,
+    "id": "gmb-2026-474089",
+    "title": "Aanvraag ontheffing een ontheffing voor geluid ten behoeve van het evenement Intocht Sinterklaas 15-11-2026",
+    "abstract": "Aanvraag Geluidhinder ontheffing Venserkade - een geluidhinder ontheffing t.b.v. het evenement Intocht Sinterklaas 15-11-2026"
+   },
+   {
+    "n": 8,
+    "id": "gmb-2026-503187",
+    "title": "Aanvraag onttrekkingsvergunning van woonruimte voor een tweede woning Lauriergracht 120E 1016RR Amsterdam",
+    "abstract": "onttrekkingsvergunning voor een tweede woning"
+   },
+   {
+    "n": 9,
+    "id": "gmb-2026-197093",
+    "title": "Besluit van het college van burgemeester en wethouders van de gemeente Amsterdam tot wijziging van Verkeersbesluit milieuzone Amsterdam 2022 en Definitief verkeersbesluit aanscherping milieuzone dieselpersonen- en bedrijfsauto’s Amsterdam 2025 in verband met wijzigen verkeersborden voor de aanduiding van de milieuzones",
+    "abstract": "wijziging van Verkeersbesluit milieuzone Amsterdam 2022 en Definitief verkeersbesluit aanscherping milieuzone dieselpersonen- en bedrijfsauto’s Amsterdam 2025 in verband met wijzigen verkeersborden voor de aanduiding van de milieuzones"
+   },
+   {
+    "n": 10,
+    "id": "gmb-2026-287605",
+    "title": "Aanvraag ontheffing artikel 35 Alcoholwet Venserkade 1112 CG Diemen - een ontheffing art. 35 alcoholwet t.b.v. De Grote Diemense Waterdag 30-08-2026",
+    "abstract": "Aanvraag Ontheffing artikel 35 Alcoholwet Venserkade 1112 CG Diemen - een ontheffing art. 35 alcoholwet t.b.v. De Grote Diemense Waterdag 30-08-2026"
+   },
+   {
+    "n": 11,
+    "id": "gmb-2026-447993",
+    "title": "Aanvraag Geluidhinder ontheffing nabij Station Diemen Zuid - een aanvraag geluidhinder ontheffing t.b.v. spoorwerkzaamheden",
+    "abstract": "Aanvraag Geluidhinder ontheffing Nabij Station Diemen Zuid - een aanvraag geluidhinder ontheffing t.b.v. spoorwerkzaamheden"
+   },
+   {
+    "n": 12,
+    "id": "gmb-2026-503434",
+    "title": "Besluit onttrekkingsvergunning van woonruimte voor een tweede woning verleend Fort Heemstedestraat 131 1384AW Weesp",
+    "abstract": "onttrekkingsvergunning voor een tweede woning"
+   },
+   {
+    "n": 13,
+    "id": "gmb-2026-273610",
+    "title": "Aanvraag ontheffing geluidshinder rijbaan Weteringweg en Muiderstraatweg - een ontheffing voor geluidshinder t.b.v. het opbreken van asfalt en heien palen",
+    "abstract": "aanvraag geluidhinder ontheffing Rijbaan Weteringweg en Muiderstraatweg - een ontheffing voor geluidshinder t.b.v. het opbreken van asfalt en heien palen"
+   },
+   {
+    "n": 14,
+    "id": "gmb-2026-467549",
+    "title": "Aanvraag ontheffing artikel 35 Alcoholwet nabij D.J. den Hartoglaan 1 en Ouddiemerlaan 104 te Diemen - een ontheffing art. 35 Alcoholwet t.b.v. het evenement Winterbubbel op 11-12-2026 en 12-12-2026",
+    "abstract": "Aanvraag Ontheffing artikel 35 Alcoholwet Nabij D.J. den Hartoglaan 1 en Ouddiemerlaan 104 te Diemen - een ontheffing art. 35 Alcoholwet t.b.v. het evenement Winterbubbel"
+   },
+   {
+    "n": 15,
+    "id": "gmb-2026-242329",
+    "title": "Aanvraag Ontheffing artikel 35 Alcoholwet Diemerplein - een art 35 ontheffing voor het schenken van alcohol 05-06-2026 t/m 07-06-2026",
+    "abstract": "Aanvraag Ontheffing artikel 35 Alcoholwet Diemerplein - een art 35 ontheffing voor het schenken van alcohol 05-06-2026 t/m 07-06-2026"
+   },
+   {
+    "n": 16,
+    "id": "gmb-2026-463186",
+    "title": "Amsterdam stadsdeel Zuid, verkeersbesluit Nicolaas Maesstraat, dubbelgebruik parkeervak",
+    "abstract": "Nicolaas Maesstraat, dubbelgebruik parkeervak"
+   },
+   {
+    "n": 17,
+    "id": "gmb-2026-287193",
+    "title": "Aanvraag Ontheffing artikel 35 Alcoholwet Rode Kruislaan 900, 1111XA Diemen - een ontheffing art. 35 t.b.v. Jubileum 25 jaar Klaverjas Marathon op 4 juli 2026",
+    "abstract": "Aanvraag Ontheffing artikel 35 Alcoholwet Rode Kruislaan 900, 1111XA Diemen - een ontheffing art. 35 t.b.v. Jubileum 25 jaar Klaverjas Marathon op 4 juli 2026"
+   },
+   {
+    "n": 18,
+    "id": "gmb-2026-300423",
+    "title": "Verkeersbesluit aanwijzen twee parkeerplaatsen voor een e-laadpunt op Karekiet",
+    "abstract": "Verkeersbesluit aanwijzen parkeerplaats voor een e-laadpunt op Karekiet"
+   }
+  ]
+ },
+ {
+  "query": "附近有新开的餐厅或酒吧在申请许可吗",
+  "candidates": [
+   {
+    "n": 1,
+    "id": "gmb-2026-212569",
+    "title": "Aanvraag Terrasvergunning Gerrit Rietveldsingel 177 - het aanvragen van een terrasvergunning",
+    "abstract": "Aanvraag Terrasvergunning Gerrit Rietveldsingel 177 - het aanvragen van een terrasvergunning"
+   },
+   {
+    "n": 2,
+    "id": "gmb-2026-329848",
+    "title": "Gemeente Diemen: besluit toegekend terrasvergunning voor het verlengen van een terrasvergunning te Ouddiemerlaan 195, 1111GZ Diemen",
+    "abstract": "Diemen besluit Z2026-00001794 het verlengen van een terrasvergunning"
+   },
+   {
+    "n": 3,
+    "id": "gmb-2026-318733",
+    "title": "Aanvraag terrasvergunning Ouddiemerlaan 195, 1111GZ Diemen - het verlengen van een terrasvergunning",
+    "abstract": "Aanvraag terrasvergunning Ouddiemerlaan 195, 1111GZ Diemen - het verlengen van een terrasvergunning"
+   },
+   {
+    "n": 4,
+    "id": "gmb-2026-456774",
+    "title": "Ontwerpbesluit horecavergunning, Burgemeester Norbruislaan 680, 3555EZ Utrecht, GU-Z2026-0067158",
+    "abstract": "Toelichting: Additionele paracommerciele  horeca in Sporthal Zuilen; nieuwe onderneming voor een Additionele horeca - Vergunning op grond van de Alcoholwet paracommercieel"
+   },
+   {
+    "n": 5,
+    "id": "gmb-2026-456130",
+    "title": "Gemeente Diemen: besluit toegekend exploitatievergunning voor het verlengen van een exploitatievergunning te Diemerplein 188, 1111JD Diemen",
+    "abstract": "Diemen besluit Z2026-00001181 het verlengen van een exploitatievergunning"
+   },
+   {
+    "n": 6,
+    "id": "gmb-2026-492259",
+    "title": "Aanvraag horecavergunning, Concordia House Exploitatie BV - D1 incl terras, Hotel, Short Stay, Zaalverhuur, Oudenoord 330-340, 3513EX Utrecht, GU-Z2026-0069375",
+    "abstract": "Aanvraag horecavergunning, Oudenoord 330-340, 3513EX Utrecht, GU-Z2026-0069375"
+   },
+   {
+    "n": 7,
+    "id": "gmb-2026-338155",
+    "title": "Verleende Omgevingsvergunning, verlengen van tijdelijke vergunning voor buurtevenementen met horeca D3 , Concordiastraat 80 in Utrecht, GU-Z2026-0052411",
+    "abstract": "Toelichting: verlengen van tijdelijke vergunning voor buurtevenementen met horeca D3"
+   },
+   {
+    "n": 8,
+    "id": "gmb-2026-502600",
+    "title": "Verlenen exploitatievergunning voor het verlengen van een exploitatievergunning",
+    "abstract": "Diemen besluit Z2026-00002682 het verlengen van een exploitatievergunning"
+   },
+   {
+    "n": 9,
+    "id": "gmb-2026-490270",
+    "title": "Aanvraag omgevingsvergunning, tijdelijke Horecavergunning categorie D2, Vondellaan 72, 3521GH Utrecht, GU-Z2026-0070456",
+    "abstract": "Toelichting: tijdelijke Horecavergunning categorie D2"
+   },
+   {
+    "n": 10,
+    "id": "gmb-2026-55321",
+    "title": "Aanvraag horecavergunning, Noon Bar; overname bestaande zaak, Burgemeester Fockema Andreaeplein 1 in  Utrecht, GU-Z2026-0044615",
+    "abstract": "Aanvraag horecavergunning, Burgemeester Fockema Andreaeplein 1, 3582LA Utrecht, GU-Z2026-0044615"
+   },
+   {
+    "n": 11,
+    "id": "gmb-2026-254249",
+    "title": "Verleende Omgevingsvergunning, het wijzigen van additionele horeca naar horeca D1 met uitbreiding in een hotel, Kanaalstraat 197-199, 3531CG Utrecht, GU-Z2026-0043623",
+    "abstract": "Toelichting: het wijzigen van additionele horeca naar horeca D1 met uitbreiding in een hotel"
+   },
+   {
+    "n": 12,
+    "id": "gmb-2026-238831",
+    "title": "Aanvraag Exploitatievergunning Diemerplein 188, 1111JD Diemen - het verlengen van een exploitatievergunning",
+    "abstract": "Aanvraag Exploitatievergunning Diemerplein 188, 1111JD Diemen - het verlengen van een exploitatievergunning"
+   },
+   {
+    "n": 13,
+    "id": "gmb-2026-341645",
+    "title": "Aanvraag Terrasvergunning Gruttoplein 8, 1113HM Diemen - een aanvraag voor een terrasvergunning",
+    "abstract": "Aanvraag Terrasvergunning Gruttoplein 8, 1113HM Diemen - een aanvraag voor een terrasvergunning"
+   },
+   {
+    "n": 14,
+    "id": "gmb-2026-421434",
+    "title": "Aanvraag vergunning voor het verlengen van een terrasvergunning",
+    "abstract": "Aanvraag Terrasvergunning Ouddiemerlaan 11, 1111GS Diemen - het verlengen van een terrasvergunning"
+   },
+   {
+    "n": 15,
+    "id": "gmb-2026-448706",
+    "title": "Aanvraag vergunning ontvangen - Recyclepunt Meerkerkdreef/ Meerkerkdreef 31, Amsterdam - Wijzigen vergunning betreffende vloeistofdichte vloer",
+    "abstract": "het wijzigen van de vergunning betreffende de vloeistofdichte vloer"
+   },
+   {
+    "n": 16,
+    "id": "gmb-2026-352327",
+    "title": "Aanvraag Terrasvergunning Ouddiemerlaan 104, 1111HL Diemen - het verlengen van de terrasvergunning",
+    "abstract": "Aanvraag Terrasvergunning Ouddiemerlaan 104, 1111HL Diemen - het verlengen van de terrasvergunning"
+   },
+   {
+    "n": 17,
+    "id": "gmb-2026-197246",
+    "title": "Aanvraag omgevingsvergunning, verlengen van tijdelijke vergunning voor buurtevenementen met horeca D3 , Concordiastraat 80 in Utrecht, GU-Z2026-0052411",
+    "abstract": "Toelichting: verlengen van tijdelijke vergunning voor buurtevenementen met horeca D3"
+   },
+   {
+    "n": 18,
+    "id": "gmb-2026-26261",
+    "title": "Ontwerpbesluit horecavergunning, Boorstraat 107, 3513SE Utrecht, GU-Z2026-0042235",
+    "abstract": "Toelichting: Additionele horeca bij Theater Utrecht; overname met terras voor een Additionele horeca - Exploitatievergunning &amp; vergunning op grond van de Alcoholwet paracommercieel"
+   }
+  ]
+ },
+ {
+  "query": "有人要把一套房子拆成多套出租吗",
+  "candidates": [
+   {
+    "n": 1,
+    "id": "gmb-2026-128542",
+    "title": "Aanvraag vergunning ontvangen - nabij Hildegard von Bingenstraat 4, Amsterdam - het bouwen in afwijking van de omgevingsvergunning met kenmerk 13328041",
+    "abstract": "het bouwen in afwijking van de omgevingsvergunning met kenmerk 13328041"
+   },
+   {
+    "n": 2,
+    "id": "gmb-2026-86493",
+    "title": "Besluit omzettingsvergunning verleend obv wijkquotum Jaap Edenstraat 24 1067RZ Amsterdam",
+    "abstract": "omzetten van 3 onzelfstandige woonruimten naar 4 onzelfstandige woonruimten op de locatie Jaap Edenstraat 24"
+   },
+   {
+    "n": 3,
+    "id": "gmb-2026-376111",
+    "title": "RECTIFICATIE Verleende Omgevingsvergunning, het bouwen van twee weegbruggen en lichtmasten en het tijdelijk bouwen van een prefab kantoorunit voor 15 jaar,  Sophialaan 31, 3542AR Utrecht, GU-Z2025-0036990",
+    "abstract": "Toelichting: het tijdelijk bouwen van twee weegbruggen, prefab kantoorunit en lichtmasten"
+   },
+   {
+    "n": 4,
+    "id": "gmb-2026-194613",
+    "title": "Gemeente Diemen: Aanvraag Huisvestingvergunning voor het aanvragen voor een huisvestingsvergunning te Berkenplein 338, 1112CL Diemen",
+    "abstract": "Z2026-00000516 het aanvragen voor een huisvestingsvergunning"
+   },
+   {
+    "n": 5,
+    "id": "gmb-2026-19243",
+    "title": "Aanvraag omgevingsvergunning vergunningsvrij Omgevingsvergunning, het bouwen van sauna ruimten in een bedrijfspand, Overvliet 113, 3545NG Utrecht, GU-Z2025-0041201",
+    "abstract": "Toelichting: het bouwen van sauna ruimten in een bedrijfspand"
+   },
+   {
+    "n": 6,
+    "id": "gmb-2026-312507",
+    "title": "Besluit omzettingsvergunning aanvraag ingetrokken Eurokade 51 1060RZ Amsterdam",
+    "abstract": "van 4 onzelfstandige woonruimten in 6 onzelfstandige woonruimten op de locatie Eurokade 51"
+   },
+   {
+    "n": 7,
+    "id": "gmb-2026-282993",
+    "title": "Verleende Omgevingsvergunning, het splitsen transformeren van industriefunctie in onzelfstand woonruimten, Adelaarstraat 11, 3514CA Utrecht, GU-Z2026-0051693",
+    "abstract": "Toelichting: het splitsen transformeren van industriefunctie in onzelfstand woonruimten"
+   },
+   {
+    "n": 8,
+    "id": "gmb-2026-57369",
+    "title": "Verleende vergunning voor kamerverhuur voor een al bestaande situatie t.b.v. 7 pers., Begijnesteeg 1, 3512AS Utrecht, GU-Z2025-0037379",
+    "abstract": "Verleende vergunning voor kamerverhuur voor een al bestaande situatie t.b.v. 7 pers., Begijnesteeg 1, 3512AS Utrecht, GU-Z2025-0037379"
+   },
+   {
+    "n": 9,
+    "id": "gmb-2026-270287",
+    "title": "Verleende vergunning voor tijdelijke kamerverhuur voor een ouder-kind situatie, Overwinningslaan 25, 3527BT Utrecht, GU-Z2026-0047195",
+    "abstract": "Verleende vergunning voor tijdelijke kamerverhuur voor een ouder-kind situatie, Overwinningslaan 25, 3527BT Utrecht, GU-Z2026-0047195"
+   },
+   {
+    "n": 10,
+    "id": "gmb-2026-229350",
+    "title": "Aanvraag omzettingsvergunning Eurokade 51 1060RZ Amsterdam",
+    "abstract": "van 4 onzelfstandige woonruimten in 6 onzelfstandige woonruimten op de locatie Eurokade 51"
+   },
+   {
+    "n": 11,
+    "id": "gmb-2026-221825",
+    "title": "Aanvraag omgevingsvergunning, het transformeren van onzelfstandige woonruimte naar drie appartementen, Twijnstraat 34-BS, 3511ZL Utrecht, GU-Z2026-0054508",
+    "abstract": "Toelichting: het transformeren van onzelfstandige woonruimte naar drie appartementen"
+   },
+   {
+    "n": 12,
+    "id": "gmb-2026-102426",
+    "title": "Verleende vergunning voor het omzetten van onzelfstandige woonruimte naar drie zelfstandige woonruimten, Nachtegaalstraat 81A, 81B en 81C, 3581AE Utrecht, GU-Z2026-0042653",
+    "abstract": "Verleende vergunning voor het omzetten van onzelfstandige woonruimte naar drie zelfstandige woonruimten, Nachtegaalstraat 81A, 81B en 81C, 3581AE Utrecht, GU-Z2026-0042653"
+   },
+   {
+    "n": 13,
+    "id": "gmb-2026-224618",
+    "title": "Verleende Omgevingsvergunning, het bouwen van een 4e bouwlaag en het gebruiken van de woning voor kamerverhuur, Biltstraat 3, 3572AA Utrecht, GU-Z2025-0033955",
+    "abstract": "Toelichting: het bouwen van een 4e bouwlaag en het gebruiken van de woning voor kamerverhuur"
+   }
+  ]
+ },
+ {
+  "query": "附近最近要办什么活动吗",
+  "candidates": [
+   {
+    "n": 1,
+    "id": "gmb-2026-395909",
+    "title": "Verleende Omgevingsvergunning, afwijken van het omgevingsplan voor het evenement: Festival Strand 2026, Haarrijnse plas, GU-Z2026-0056841",
+    "abstract": "Toelichting: afwijken van het omgevingsplan voor het evenement: Festival Strand 2026"
+   },
+   {
+    "n": 2,
+    "id": "gmb-2026-258285",
+    "title": "Aanvraag vergunning ontvangen - Science Park 608B, Amsterdam - Verlengen vergunning plaatsen tijdelijke huisvesting - Universiteit van Amsterdam",
+    "abstract": "het verlengen van de vergunning met kenmerk 8847369 voor het plaatsen van tijdelijke huisvesting"
+   },
+   {
+    "n": 3,
+    "id": "gmb-2026-467580",
+    "title": "Aangevraagde evenementenvergunningen, Sinterklaas activiteiten, Middenburcht (Winkelcentrum Vleuterweide) te Vleuten",
+    "abstract": "Toelichting: Sinterklaas activiteiten"
+   },
+   {
+    "n": 4,
+    "id": "gmb-2026-336508",
+    "title": "Verleende Omgevingsvergunning, het afwijken van het omgevingsplan voor het evenement: De Leuke festival 2026, Voorveldse polder, GU-Z2026-0053136",
+    "abstract": "Toelichting: het afwijken van het omgevingsplan voor het evenement: De Leuke festival 2026"
+   },
+   {
+    "n": 5,
+    "id": "gmb-2026-264653",
+    "title": "Aangevraagde evenementenvergunningen, Botanische Tuinen activiteiten zomer 2026, Budapestlaan te Utrecht",
+    "abstract": "Toelichting: Botanische Tuinen activiteiten zomer 2026"
+   },
+   {
+    "n": 6,
+    "id": "gmb-2026-409053",
+    "title": "Verleende Omgevingsvergunning, het tijdelijk afwijken van het omgevingsplan voor evenement Lief festival 2026, Recreatieplas Strijkviertel, GU-Z2026-0057634",
+    "abstract": "Toelichting: het tijdelijk afwijken van het omgevingsplan voor evenement Lief festival 2026"
+   },
+   {
+    "n": 7,
+    "id": "gmb-2026-303886",
+    "title": "Aanvraag vergunning ontvangen - Beethovenplein 2, Amsterdam - Verlengen vergunning voor behouden bestaand bouwbord met instandhoudingstermijn 1 jaar",
+    "abstract": "het verlengen van de vergunning met kenmerk 13428408 voor het behouden van een bestaand bouwbord met een instandhoudingstermijn van 1 jaar"
+   },
+   {
+    "n": 8,
+    "id": "gmb-2026-286657",
+    "title": "Vergunning verleend - Radioweg 64B Amsterdam - Wijzigen verleende vergunning zaaknummer 12770989, DSO 2024032500681",
+    "abstract": "een wijziging op vergunning 12770989 (DSO 2024032500681) de wijziging bestaat uit het aanpassen van de bestaande luifel en het plaatsen van 2e luifel"
+   },
+   {
+    "n": 9,
+    "id": "gmb-2026-325208",
+    "title": "Aanvraag vergunning ontvangen - Kattenburgerstraat 7, Amsterdam - Verlengen verleende vergunning voor bestaande buitenkeuken",
+    "abstract": "het verlengen van de vergunning voor de bestaande buitenkeuken"
+   },
+   {
+    "n": 10,
+    "id": "gmb-2026-294061",
+    "title": "Verleende Omgevingsvergunning, tijdelijk afwijken van het omgevingsplan voor het evenement: TAPT Festival 2026, Julianapark Utrecht, GU-Z2026-0049328",
+    "abstract": "Toelichting: tijdelijk afwijken van het omgevingsplan voor het evenement: TAPT Festival 2026"
+   },
+   {
+    "n": 11,
+    "id": "gmb-2026-246342",
+    "title": "Aanvraag vergunning ontvangen - Claude Debussylaan 80, Amsterdam - Wijzigen vergunning intern renoveren gebouw The Rock Amsterdam",
+    "abstract": "het wijzigen van de vergunning met kenmerk 12388220 voor het intern renoveren van het gebouw The Rock Amsterdam"
+   },
+   {
+    "n": 12,
+    "id": "gmb-2026-444470",
+    "title": "Aanvraag vergunning ontvangen - Nieuwe Achtergracht 100 / Weesperplein, Amsterdam - Wijzigen vergunning gevelrenovatie - Gemeente Amsterdam",
+    "abstract": "het wijzigen van de vergunning met zaaknummer 13110189 betreffende gevelrenovatie"
+   },
+   {
+    "n": 13,
+    "id": "gmb-2026-310418",
+    "title": "Verleende Omgevingsvergunning, afwijken van het omgevingsplan voor het evenement: In het Zand Festival 2026 , Kanaalweg 199, 3533HL Utrecht, GU-Z2026-0049345",
+    "abstract": "Toelichting: afwijken van het omgevingsplan voor het evenement: In het Zand Festival 2026"
+   },
+   {
+    "n": 14,
+    "id": "gmb-2026-337860",
+    "title": "Vergunning verleend - Christian Neefestraat 62, Amsterdam -  Wijzigen reeds verleende vergunning zaaknummer 11973060",
+    "abstract": "het wijzigen van de reeds verleende vergunning voor het bouwen van 2 woontorens met plint, een stallingsgarage en een fietsenstalling"
+   },
+   {
+    "n": 15,
+    "id": "gmb-2026-408904",
+    "title": "Verlenen vergunning voor het houden van het evenement Diemerfestijn kermis van 08-09-2026 t/m 12-09-2026",
+    "abstract": "Diemen besluit Z2026-00001626 het houden van het evenement Diemerfestijn kermis van 08-09-2026 t/m 12-09-2026"
+   },
+   {
+    "n": 16,
+    "id": "gmb-2026-448706",
+    "title": "Aanvraag vergunning ontvangen - Recyclepunt Meerkerkdreef/ Meerkerkdreef 31, Amsterdam - Wijzigen vergunning betreffende vloeistofdichte vloer",
+    "abstract": "het wijzigen van de vergunning betreffende de vloeistofdichte vloer"
+   }
+  ]
+ },
+ {
+  "query": "有人申请加盖阳台或改造屋顶吗",
+  "candidates": [
+   {
+    "n": 1,
+    "id": "gmb-2026-118289",
+    "title": "Besluit omgevingsvergunning reguliere procedure verleend Javastraat 51 1094HA",
+    "abstract": "plaatsen dakterras op uitbouw, vergroten balkons 2e en 3e verdieping, maken balkon 4e verdieping en dakopbouw met dakterras op het bestaande dak"
+   },
+   {
+    "n": 2,
+    "id": "gmb-2026-158206",
+    "title": "Aanvraag omgevingsvergunning, het bouwen van een uitbouw met dakterras en vervangen van een balkon, Obrechtstraat 18, 3572EE Utrecht, GU-Z2026-0050527",
+    "abstract": "Toelichting: het bouwen van een uitbouw met dakterras en vervangen van een balkon"
+   },
+   {
+    "n": 3,
+    "id": "gmb-2026-455698",
+    "title": "Verleende Omgevingsvergunning, het vergroten van een dakkapel voorzijde en plaatsen dakkapel achterzijde, Hasebroekstraat 66, 3532GM Utrecht, GU-Z2026-0057671",
+    "abstract": "Toelichting: het vergroten van een dakkapel voorzijde en plaatsen dakkapel achterzijde"
+   },
+   {
+    "n": 4,
+    "id": "gmb-2026-460162",
+    "title": "Aanvraag omgevingsvergunning, het verbouwen van woning (dakkapel voor, draagconstr, garagedeur, warmtepomp), Bernard de Waalstraat 28, 3555BK Utrecht, GU-Z2026-0067619",
+    "abstract": "Toelichting: het verbouwen van woning (dakkapel voor, draagconstr, garagedeur, warmtepomp)"
+   },
+   {
+    "n": 5,
+    "id": "gmb-2026-48473",
+    "title": "Gemeente Diemen: besluit verlenen Omgevingsvergunning voor het realiseren van een uitbouw met dakterras, dakkapel op het achterdakvlak niet vergunningsplichtig  te Oranjeplantsoen 50, 1111CG Diemen",
+    "abstract": "Diemen besluit Z2025-00002881 het realiseren van een uitbouw met dakterras, dakkapel op het achterdakvlak niet vergunningsplichtig"
+   },
+   {
+    "n": 6,
+    "id": "gmb-2026-29382",
+    "title": "Verleende Omgevingsvergunning, het bouwen van een uitbouw met dakterras en een dakterras op de woning, Amsterdamsestraatweg 517, 3553EE Utrecht, GU-Z2025-0034955",
+    "abstract": "Toelichting: het bouwen van een uitbouw met dakterras en een dakterras op de woning"
+   },
+   {
+    "n": 7,
+    "id": "gmb-2026-29039",
+    "title": "Verleende Omgevingsvergunning, het bouwen van een aanbouw met dakterras en een dakopbouw met dakterras, Amsterdamsestraatweg 515, 3553EE Utrecht, GU-Z2025-0034954",
+    "abstract": "Toelichting: het bouwen van een aanbouw met dakterras en een dakopbouw met dakterras"
+   },
+   {
+    "n": 8,
+    "id": "gmb-2026-448287",
+    "title": "Aanvraag omgevingsvergunning, het plaatsen van een dakkapel met nokverhoging achter en dakkapel op voordakvlak, Schoolstraat 78 en 80, 3451AG Vleuten, GU-Z2026-0067897",
+    "abstract": "Toelichting: het plaatsen van een dakkapel met nokverhoging achter en dakkapel op voordakvlak"
+   },
+   {
+    "n": 9,
+    "id": "gmb-2026-168802",
+    "title": "Aanvraag omgevingsvergunning, het optrekken van de gevel, bouwen van een uitbouw met dakterras en dakopbouw, Daendelsstraat 49, 3531GC Utrecht, GU-Z2026-0051045",
+    "abstract": "Toelichting: het optrekken van de gevel, bouwen van een uitbouw met dakterras en dakopbouw"
+   },
+   {
+    "n": 10,
+    "id": "gmb-2026-495532",
+    "title": "Aanvraag omgevingsvergunning, het verbouwen en uitbreiden van een woning en plaatsen dakkapel, Gageldijk 213, 3566MJ Utrecht, GU-Z2026-0070950",
+    "abstract": "Toelichting: het verbouwen en uitbreiden van een woning en plaatsen dakkapel"
+   },
+   {
+    "n": 11,
+    "id": "gmb-2026-260989",
+    "title": "Aanvraag omgevingsvergunning, bouwen van een dakkapel op het voordakvlak en een dakopbouw op het achterdakvlak, Runstraat 23, 3522RE Utrecht, GU-Z2026-0056535",
+    "abstract": "Toelichting: bouwen van een dakkapel op het voordakvlak en een dakopbouw op het achterdakvlak"
+   },
+   {
+    "n": 12,
+    "id": "gmb-2026-448270",
+    "title": "Aanvraag omgevingsvergunning, het plaatsen van een dakkapel met nokverhoging achter en dakkapel op voordakvlak, Westravenstraat 24, 3522TC Utrecht, GU-Z2026-0067920",
+    "abstract": "Toelichting: het plaatsen van een dakkapel met nokverhoging achter en dakkapel op voordakvlak"
+   },
+   {
+    "n": 13,
+    "id": "gmb-2026-365356",
+    "title": "Aanvraag omgevingsvergunning, het uitbouwen van een woning, vervangen dakkapel en plaatsen nieuwe dakkapel, Rijksstraatweg 132, 3454HL De Meern, GU-Z2026-0062795",
+    "abstract": "Toelichting: het uitbouwen van een woning, vervangen dakkapel en plaatsen nieuwe dakkapel"
+   },
+   {
+    "n": 14,
+    "id": "gmb-2026-467636",
+    "title": "Aanvraag omgevingsvergunning, het wijzigen van de voorgevel;  restaureren dakkapel en toevoegen dakkapel., Cornelis Evertsenstraat 7, 3572JP Utrecht, GU-Z2026-0069105",
+    "abstract": "Toelichting: het wijzigen van de voorgevel;  restaureren dakkapel en toevoegen dakkapel."
+   }
+  ]
+ },
+ {
+  "query": "附近有拍电影或拍摄活动吗",
+  "candidates": [
+   {
+    "n": 1,
+    "id": "gmb-2026-253928",
+    "title": "Gemeente Diemen: melding klein evenement voor een melding klein evenement t.b.v. Buiten Dansen op 31-05-2026 te Vogelweg 4 Diemen Noord",
+    "abstract": "Diemen melding Z2026-00001267 een melding klein evenement t.b.v. Buiten Dansen op 31-05-2026"
+   },
+   {
+    "n": 2,
+    "id": "gmb-2026-170316",
+    "title": "Aangevraagde filmvergunningen, Filmopnamen Prove Me Wrong, Janskerkhof te Utrecht",
+    "abstract": "Toelichting: Filmopnamen Prove Me Wrong"
+   },
+   {
+    "n": 3,
+    "id": "gmb-2026-309534",
+    "title": "Gemeente Diemen: Melding klein evenement voor het houden van het evenement 8OOgstfeest op 22-08-2026 te Meidoornplein",
+    "abstract": "Diemen melding Z2026-00001527 het houden van het evenement 8OOgstfeest op 22-08-2026"
+   },
+   {
+    "n": 4,
+    "id": "gmb-2026-275935",
+    "title": "Aangevraagde evenementenvergunningen, Filmopname TOT DOOD ONS SCHEIDT, Oorsprongpark te Utrecht",
+    "abstract": "Toelichting: Filmopname TOT DOOD ONS SCHEIDT"
+   },
+   {
+    "n": 5,
+    "id": "gmb-2026-242864",
+    "title": "Aangevraagde evenementenvergunningen, Filmopnamen CONFETTIREGEN, Rijksstraatweg De Meern",
+    "abstract": "Toelichting: Filmopnamen CONFETTIREGEN"
+   },
+   {
+    "n": 6,
+    "id": "gmb-2026-501363",
+    "title": "Amsterdam stadsdeel Oost, verkeersbesluit Javastraat en Delistraat, opheffen en instellen diverse verkeersmaatregelen",
+    "abstract": "Javastraat en Delistraat, opheffen en instellen diverse verkeersmaatregelen"
+   },
+   {
+    "n": 7,
+    "id": "gmb-2026-317120",
+    "title": "Gemeente Diemen: melding klein evenement voor een melding klein evenement t.b.v. een Burenmiddag op 15-08-2026 ter hoogte van Knoopkruid nr 140 &amp; 142 te Diemen",
+    "abstract": "Diemen melding Z2026-00001718 een melding klein evenement t.b.v. een Burenmiddag"
+   },
+   {
+    "n": 8,
+    "id": "gmb-2026-501378",
+    "title": "Amsterdam stadsdeel Noord, verkeersbesluit J.H. Hisgenpad en Elzenhagensingel, instellen van diverse verkeersmaatregelen",
+    "abstract": "J.H. Hisgenpad en Elzenhagensingel, instellen van diverse verkeersmaatregelen"
+   },
+   {
+    "n": 9,
+    "id": "gmb-2026-343275",
+    "title": "Aangevraagde evenementenvergunningen, Filmopnamen Anton Rooskenshof, Anton Rooskenshof te Utrecht",
+    "abstract": "Toelichting: Filmopnamen Anton Rooskenshof"
+   },
+   {
+    "n": 10,
+    "id": "gmb-2026-501054",
+    "title": "Besluit apv vergunning Verleend - Kuipersstraat ter hoogte van nummer: 18 in AMSTERDAM",
+    "abstract": "Filmen,Kuipersstraat 18 H 1074EK, 20261103, Kuipersstraat ter hoogte van nummer: 18"
+   },
+   {
+    "n": 11,
+    "id": "gmb-2026-256379",
+    "title": "Gemeente Diemen: melding klein evenement voor het houden van een klein evenement t.b.v. Buiten dansen op 7 juni 2026 te Vogelweg 4 Diemen",
+    "abstract": "Diemen melding Z2026-00001268 het houden van een klein evenement t.b.v. Buiten dansen op 7 juni 2026"
+   },
+   {
+    "n": 12,
+    "id": "gmb-2026-202727",
+    "title": "Aangevraagde evenementenvergunningen, Filmopnamen Red Bull photbooth, Neude te Utrecht",
+    "abstract": "Toelichting: Filmopnamen Red Bull photbooth"
+   },
+   {
+    "n": 13,
+    "id": "gmb-2026-500992",
+    "title": "Besluit apv vergunning Verleend - Javaplein ter hoogte van nummer: 18 in Amsterdam",
+    "abstract": "Filmen,Javaplein 18 1094HW, 20261026, Javaplein ter hoogte van nummer: 18"
+   },
+   {
+    "n": 14,
+    "id": "gmb-2026-305708",
+    "title": "Aangevraagde evenementenvergunningen, Everything Is Film Festival , Griftpark te Utrecht",
+    "abstract": "Toelichting: Everything Is Film Festival"
+   }
+  ]
+ },
+ {
+  "query": "残疾人专用停车位有什么变动吗",
+  "candidates": [
+   {
+    "n": 1,
+    "id": "gmb-2026-467549",
+    "title": "Aanvraag ontheffing artikel 35 Alcoholwet nabij D.J. den Hartoglaan 1 en Ouddiemerlaan 104 te Diemen - een ontheffing art. 35 Alcoholwet t.b.v. het evenement Winterbubbel op 11-12-2026 en 12-12-2026",
+    "abstract": "Aanvraag Ontheffing artikel 35 Alcoholwet Nabij D.J. den Hartoglaan 1 en Ouddiemerlaan 104 te Diemen - een ontheffing art. 35 Alcoholwet t.b.v. het evenement Winterbubbel"
+   },
+   {
+    "n": 2,
+    "id": "gmb-2026-502625",
+    "title": "Amsterdam Zuid, verkeersbesluit aanleg gehandicaptenparkeerplaats op kenteken, Van Breestraat 185",
+    "abstract": "aanleg gehandicaptenparkeerplaats op kenteken, Van Breestraat 185"
+   },
+   {
+    "n": 3,
+    "id": "gmb-2026-502799",
+    "title": "Amsterdam Nieuw-West, verkeersbesluit aanleg gehandicaptenparkeerplaats op kenteken, Guus Trestorffstraat 34",
+    "abstract": "aanleg gehandicaptenparkeerplaats op kenteken, Guus Trestorffstraat 34"
+   },
+   {
+    "n": 4,
+    "id": "gmb-2026-502925",
+    "title": "Amsterdam Nieuw-West, verkeersbesluit aanleg gehandicaptenparkeerplaats op kenteken, Reimerswaalstraat 68-108",
+    "abstract": "aanleg gehandicaptenparkeerplaats op kenteken, Reimerswaalstraat 68-108"
+   },
+   {
+    "n": 5,
+    "id": "gmb-2026-363995",
+    "title": "Amsterdam Oost, verkeersbesluit verruimen gehandicaptenparkeerplaats op kenteken met één extra parkeervak, Egstraat 30-32",
+    "abstract": "verruimen gehandicaptenparkeerplaats op kenteken met één extra parkeervak, Egstraat 30-32"
+   },
+   {
+    "n": 6,
+    "id": "gmb-2026-502364",
+    "title": "Amsterdam Zuid, verkeersbesluit opheffen gehandicaptenparkeerplaats op kenteken, Pieter de Hoochstraat 11",
+    "abstract": "opheffen gehandicaptenparkeerplaats op kenteken, Pieter de Hoochstraat 11"
+   },
+   {
+    "n": 7,
+    "id": "gmb-2026-474089",
+    "title": "Aanvraag ontheffing een ontheffing voor geluid ten behoeve van het evenement Intocht Sinterklaas 15-11-2026",
+    "abstract": "Aanvraag Geluidhinder ontheffing Venserkade - een geluidhinder ontheffing t.b.v. het evenement Intocht Sinterklaas 15-11-2026"
+   }
+  ]
+ },
+ {
+  "query": "有人要装电动车充电桩吗",
+  "candidates": [
+   {
+    "n": 1,
+    "id": "gmb-2026-500684",
+    "title": "Amsterdam Nieuw-West, verkeersbesluit opheffen aanleg elektrische oplaadvakken, Slotermeerlaan 60",
+    "abstract": "opheffen aanleg elektrische oplaadvakken, Slotermeerlaan 60"
+   },
+   {
+    "n": 2,
+    "id": "gmb-2026-500707",
+    "title": "Amsterdam Zuid, verkeersbesluit aanleg twee elektrische oplaadvakken, Weerdestein 98",
+    "abstract": "aanleg twee elektrische oplaadvakken, Weerdestein 98"
+   },
+   {
+    "n": 3,
+    "id": "gmb-2026-490468",
+    "title": "Aanvraag omgevingsvergunning Heivlinderweg 46, 1113LT Diemen - het plaatsen van een hoekdakkapel Heivlinderweg 46 Diemen",
+    "abstract": "Aanvraag omgevingsvergunning Heivlinderweg 46, 1113LT Diemen - het plaatsen van een hoekdakkapel Heivlinderweg 46 Diemen"
+   },
+   {
+    "n": 4,
+    "id": "wsb-2026-27868",
+    "title": "Hoogheemraadschap De Stichtse Rijnlanden – Geen vergunning nodig voor aanvraag omgevingsvergunning voor het leggen van glasvezel op de locatie bij Hazelnootstraat 11 in Utrecht (code HDSR766969)",
+    "abstract": "Geen vergunning nodig voor aanvraag omgevingsvergunning voor het leggen van glasvezel op de locatie bij Hazelnootstraat 11 in Utrecht."
+   },
+   {
+    "n": 5,
+    "id": "gmb-2026-394507",
+    "title": "Aanvraag omgevingsvergunning vellen van een houtopstand (kap) openbare ruimte, bij de Goudriaanstraat Amsterdam, openbare ruimte, bij de kruising Weesperzijde-Overamstelstraat Amsterdam",
+    "abstract": "kappen van twee bomen in de openbare ruimte"
+   },
+   {
+    "n": 6,
+    "id": "gmb-2026-488415",
+    "title": "Aanvraag omgevingsvergunning, Aanvraag uitbouw_Tros 1, Kievitstraat 12Bis in Utrecht, GU-Z2026-0070371",
+    "abstract": "Toelichting: Aanvraag uitbouw_Tros 1"
+   },
+   {
+    "n": 7,
+    "id": "gmb-2026-500698",
+    "title": "Amsterdam Noord, verkeersbesluit aanleg twee elektrische oplaadvakken, B. Merkelbachsingel 239",
+    "abstract": "aanleg twee elektrische oplaadvakken, B. Merkelbachsingel 239"
+   },
+   {
+    "n": 8,
+    "id": "gmb-2026-500713",
+    "title": "Amsterdam stadsgebied Weesp, verkeersbesluit aanleg twee elektrische oplaadvakken, Jan Campertplein 58",
+    "abstract": "aanleg twee elektrische oplaadvakken, Jan Campertplein 58"
+   },
+   {
+    "n": 9,
+    "id": "gmb-2026-500693",
+    "title": "Amsterdam Nieuw-West, verkeersbesluit aanleg twee elektrische oplaadvakken, Stoomgemaalstraat 56",
+    "abstract": "aanleg twee elektrische oplaadvakken, Stoomgemaalstraat 56"
+   },
+   {
+    "n": 10,
+    "id": "gmb-2026-468832",
+    "title": "Aanvraag omgevingsvergunning Prinses Beatrixlaan 14, 1111GD Diemen - het verhogen van de daknok van de woning en het realiseren van een dakkapel",
+    "abstract": "Aanvraag omgevingsvergunning Prinses Beatrixlaan 14, 1111GD Diemen - het verhogen van de daknok van de woning en het realiseren van een dakkapel"
+   },
+   {
+    "n": 11,
+    "id": "gmb-2026-471020",
+    "title": "Aanvraag omgevingsvergunning Overdiemerweg 25, 1111PP Diemen - het slopen van twee bestaande woningen",
+    "abstract": "Aanvraag omgevingsvergunning Overdiemerweg 25, 1111PP Diemen - het slopen van twee bestaande woningen"
+   },
+   {
+    "n": 12,
+    "id": "gmb-2026-500496",
+    "title": "Aanvraag omgevingsvergunning D.J. den Hartoglaan 1, 1111ZB Diemen - het aanpassen van de brandscheidingen",
+    "abstract": "Aanvraag omgevingsvergunning D.J. den Hartoglaan 1, 1111ZB Diemen - het aanpassen van de brandscheidingen"
+   },
+   {
+    "n": 13,
+    "id": "gmb-2026-500721",
+    "title": "Amsterdam Zuidoost, verkeersbesluit aanleg twee elektrische oplaadvakken, Snelleveldplein t.h.v. Snelleveldstraat 22",
+    "abstract": "aanleg twee elektrische oplaadvakken, Snelleveldplein t.h.v. Snelleveldstraat 22"
+   },
+   {
+    "n": 14,
+    "id": "gmb-2026-500695",
+    "title": "Amsterdam Noord, verkeersbesluit aanleg twee elektrische oplaadvakken, Johannes J. Glasweg 41",
+    "abstract": "aanleg twee elektrische oplaadvakken, Johannes J. Glasweg 41"
+   },
+   {
+    "n": 15,
+    "id": "gmb-2026-498983",
+    "title": "Aanvraag omgevingsvergunning kappen van 9 bomen in de openbare ruimte van stadsgebied Weesp",
+    "abstract": "kappen van 9 bomen in de openbare ruimte van stadsgebied Weesp"
+   },
+   {
+    "n": 16,
+    "id": "gmb-2026-500700",
+    "title": "Amsterdam Noord, verkeersbesluit aanleg twee elektrische oplaadvakken, Hoornsestraat 27",
+    "abstract": "aanleg twee elektrische oplaadvakken, Hoornsestraat 27"
+   },
+   {
+    "n": 17,
+    "id": "gmb-2026-500705",
+    "title": "Amsterdam Zuid, verkeersbesluit aanleg twee elektrische oplaadvakken, Alexander Boersstraat 2",
+    "abstract": "aanleg twee elektrische oplaadvakken, Alexander Boersstraat 2"
+   },
+   {
+    "n": 18,
+    "id": "wsb-2026-27532",
+    "title": "Hoogheemraadschap De Stichtse Rijnlanden – Nieuwe aanvraag omgevingsvergunning voor een wateractiviteit voor het duurzaam vervangen van de houten steiger door uitbreiding kadelijn nabij Oudegracht 156 in Utrecht met code HDSR766384.",
+    "abstract": "Nieuwe aanvraag omgevingsvergunning voor een wateractiviteit voor het duurzaam vervangen van de houten steiger door uitbreiding kadelijn nabij Oudegracht 156 in Utrecht."
+   },
+   {
+    "n": 19,
+    "id": "gmb-2026-500710",
+    "title": "Amsterdam Zuid, verkeersbesluit aanleg twee elektrische oplaadvakken, Nedersticht 289",
+    "abstract": "aanleg twee elektrische oplaadvakken, Nedersticht 289"
+   }
+  ]
+ },
+ {
+  "query": "有人要在路边放建筑垃圾箱吗",
+  "candidates": [
+   {
+    "n": 1,
+    "id": "gmb-2026-203735",
+    "title": "Aanvraag omgevingsvergunning, het bouwen van een aanbouw en het bouwen van dakkapellen (voor en achter), Ardennen 28, 3524VD Utrecht, GU-Z2026-0053529",
+    "abstract": "Toelichting: het bouwen van een aanbouw en het bouwen van dakkapellen (voor en achter)"
+   },
+   {
+    "n": 2,
+    "id": "gmb-2026-147852",
+    "title": "Aanvraag vergunning ontvangen - Christian Neefestraat 62 (Park Meadows, kavel 6 en 7), Amsterdam - Wijzigen reeds verleende vergunning voor bouwen 2 woontorens met plint, een stallingsgarage en een fietsenstalling",
+    "abstract": "het wijzigen van de reeds verleende vergunning voor het bouwen van 2 woontorens met plint, een stallingsgarage en een fietsenstalling"
+   },
+   {
+    "n": 3,
+    "id": "gmb-2026-322272",
+    "title": "Besluit apv vergunning Verleend - Bouwen Ewoutszstraat ter hoogte van nummer: 7 in Amsterdam",
+    "abstract": "TVM parkeervak,Bouwen Ewoutszstraat 7 H 1067XL, 20260707, Bouwen Ewoutszstraat ter hoogte van nummer: 7"
+   },
+   {
+    "n": 4,
+    "id": "gmb-2026-455619",
+    "title": "Gemeente Diemen: Melding objecten voor het plaatsen van een container op de openbare weg van 30-09-2026 t/m 02-10-2026 nabij Stoelmanseiland 5 te Diemen",
+    "abstract": "Diemen melding Z2026-00002963 het plaatsen van een container op de openbare weg van 30-09-2026 t/m 02-10-2026"
+   },
+   {
+    "n": 5,
+    "id": "gmb-2026-488078",
+    "title": "Besluit apv vergunning Verleend - Anjeliersstraat ter hoogte van nummer: 520 in Amsterdam",
+    "abstract": "TVM parkeervak,TVM stremmen,RVV,Object,Anjeliersstraat 520 1015NL, 20261019, Anjeliersstraat ter hoogte van nummer: 520"
+   },
+   {
+    "n": 6,
+    "id": "gmb-2026-467306",
+    "title": "Gemeente Diemen: Melding objecten voor het plaatsen van een container op de openbare weg van 09-10-2026 t/m 13-10-2026 nabij Aristide Briandstraat 34 in Diemen",
+    "abstract": "Diemen melding Z2026-00002983 het plaatsen van een container op de openbare weg van 09-10-2026 t/m 13-10-2026"
+   },
+   {
+    "n": 7,
+    "id": "gmb-2026-422345",
+    "title": "Gemeente Diemen: Melding objecten voor het plaatsen van een container op de openbare weg van 14-09-2026 t/m 16-09-2026 te Rustenburgh 27, 1111VD Diemen",
+    "abstract": "Diemen melding Z2026-00002622 het plaatsen van een container op de openbare weg van 14-09-2026 t/m 16-09-2026"
+   },
+   {
+    "n": 8,
+    "id": "gmb-2026-404317",
+    "title": "Gemeente Diemen: Melding objecten voor het plaatsen van een container op de openbare weg van 07-09-2026 t/m 09-09-2026 te Johan Coussetstraat 25-II, 1111AT Diemen",
+    "abstract": "Diemen melding Z2026-00002377 het plaatsen van een container op de openbare weg van 07-09-2026 t/m 09-09-2026"
+   },
+   {
+    "n": 9,
+    "id": "gmb-2026-259620",
+    "title": "Aanvraag omgevingsvergunning, het bouwen van een (optionele) uitbouw bij 4 te bouwen woningen, Rijksstraatweg 124B, 3454HK De Meern, GU-Z2026-0056915",
+    "abstract": "Toelichting: het bouwen van een (optionele) uitbouw bij 4 te bouwen woningen"
+   },
+   {
+    "n": 10,
+    "id": "gmb-2026-474694",
+    "title": "Gemeente Diemen: melding objecten voor het plaatsen van een container op de openbare weg van 09-10-2026 t/m 13-10-2026 nabij Fuut 31, 1111VV Diemen",
+    "abstract": "Diemen melding Z2026-00003078 het plaatsen van een container op de openbare weg van 09-10-2026 t/m 13-10-2026"
+   },
+   {
+    "n": 11,
+    "id": "gmb-2026-499522",
+    "title": "Besluit apv vergunning Verleend - Waverstraat ter hoogte van nummer: 71 in Amsterdam",
+    "abstract": "TVM parkeervak,TVM stremmen,RVV,Object,Waverstraat 71 2 1079VH, 20261029, Waverstraat ter hoogte van nummer: 71"
+   },
+   {
+    "n": 12,
+    "id": "gmb-2026-444688",
+    "title": "Gemeente Diemen: Melding objecten voor het plaatsen van een container op de openbare weg van 28-09-2026 t/m 30-09-2026 in een parkeervak nabij Meidoornplein 23 te Diemen",
+    "abstract": "Diemen melding Z2026-00002883 het plaatsen van een container op de openbare weg van 28-09-2026 t/m 30-09-2026"
+   },
+   {
+    "n": 13,
+    "id": "gmb-2026-482411",
+    "title": "Intrekking omgevingsvergunning, intrekken vergunning, het bouwen van een dakopbouw op de woning, Bentheimerstraat 16 in Utrecht, GU-Z2024-0035712",
+    "abstract": "Toelichting: intrekken vergunning, het bouwen van een dakopbouw op de woning"
+   },
+   {
+    "n": 14,
+    "id": "gmb-2026-435357",
+    "title": "Besluit apv vergunning Verleend - Olympisch Stadion ter hoogte van nummer: 2 in Amsterdam",
+    "abstract": "(Project Marathon word door Jassin opgepakt) Fietsen,TVM parkeervak,TVM stremmen,RVV,Object,Nachtwerk,Olympisch Stadion 2 1076DE, 20261009, Olympisch Stadion ter hoogte van nummer: 2"
+   },
+   {
+    "n": 15,
+    "id": "gmb-2026-480064",
+    "title": "Gemeente Diemen: Melding objecten voor het plaatsen van een container op de openbare weg van 16-10-2026 t/m 20-10-2026 nabij Arent Krijtsstraat 35, 1111AH Diemen",
+    "abstract": "Diemen melding Z2026-00003156 het plaatsen van een container op de openbare weg van 16-10-2026 t/m 20-10-2026"
+   },
+   {
+    "n": 16,
+    "id": "gmb-2026-413589",
+    "title": "Besluit apv vergunning Verleend - Vondelstraat ter hoogte van nummer: 74 in Amsterdam",
+    "abstract": "Upload_Upload_TVM parkeervak,TVM stremmen,RVV,Object,Vondelstraat 74 1054GN, 20260902, Vondelstraat ter hoogte van nummer: 74"
+   },
+   {
+    "n": 17,
+    "id": "gmb-2026-455365",
+    "title": "Besluit apv vergunning Verleend - Diepenbroickpark ter hoogte van nummer: 21 in",
+    "abstract": "TVM parkeervak,TVM stremmen,RVV,Diepenbroickpark, Diepenbroickpark ter hoogte van nummer: 21"
+   },
+   {
+    "n": 18,
+    "id": "gmb-2026-317120",
+    "title": "Gemeente Diemen: melding klein evenement voor een melding klein evenement t.b.v. een Burenmiddag op 15-08-2026 ter hoogte van Knoopkruid nr 140 &amp; 142 te Diemen",
+    "abstract": "Diemen melding Z2026-00001718 een melding klein evenement t.b.v. een Burenmiddag"
+   },
+   {
+    "n": 19,
+    "id": "gmb-2026-256623",
+    "title": "Verleende Omgevingsvergunning, het bouwen van 2 dakkapellen en het bouwen van een trap naar de zolder, Aanvraag vergunning Furkabaan 581 in Utrecht, GU-Z2026-0050575",
+    "abstract": "Toelichting: het bouwen van 2 dakkapellen en het bouwen van een trap naar de zolder"
+   },
+   {
+    "n": 20,
+    "id": "gmb-2026-337860",
+    "title": "Vergunning verleend - Christian Neefestraat 62, Amsterdam -  Wijzigen reeds verleende vergunning zaaknummer 11973060",
+    "abstract": "het wijzigen van de reeds verleende vergunning voor het bouwen van 2 woontorens met plint, een stallingsgarage en een fietsenstalling"
+   },
+   {
+    "n": 21,
+    "id": "gmb-2026-437499",
+    "title": "Verleende Omgevingsvergunning, het bouwen van een tijdelijke woonunit tbv de bouw van een woning, Huis te Veenweg 6, 3566MR Utrecht, GU-Z2026-0059835",
+    "abstract": "Toelichting: het bouwen van een tijdelijke woonunit tbv de bouw van een woning"
+   },
+   {
+    "n": 22,
+    "id": "gmb-2026-378968",
+    "title": "Gemeente Diemen: Melding vrijstelling objecten voor het plaatsen van een container op de openbare weg van 14-08-2026 t/m 18-08-2026 nabij Rode Kruislaan 40 te Diemen",
+    "abstract": "Diemen melding Z2026-00002267 het plaatsen van een container op de openbare weg van 14-08-2026 t/m 18-08-2026"
+   },
+   {
+    "n": 23,
+    "id": "gmb-2026-161563",
+    "title": "Aanvraag omgevingsvergunning, het bouwen van 2 dakkapellen en het bouwen van een trap naar de zolder, Aanvraag vergunning Furkabaan 581 in Utrecht, GU-Z2026-0050575",
+    "abstract": "Toelichting: het bouwen van 2 dakkapellen en het bouwen van een trap naar de zolder"
+   },
+   {
+    "n": 24,
+    "id": "gmb-2026-474918",
+    "title": "Gemeente Diemen: Melding objecten voor het plaatsen van een container op de openbare weg van 12-10-2026 t/m 14-10-2026 nabij Biesbosch 3, 1112KA Diemen",
+    "abstract": "Diemen melding Z2026-00003059 het plaatsen van een container op de openbare weg van 12-10-2026 /m 14-10-2026"
+   },
+   {
+    "n": 25,
+    "id": "gmb-2026-324108",
+    "title": "Aanvraag omgevingsvergunning, het bouwen van een tijdelijke woonunit tbv het bouw van een woning, Kapelweg 6B, 3566MK Utrecht, GU-Z2026-0059835",
+    "abstract": "Toelichting: het bouwen van een tijdelijke woonunit tbv het bouw van een woning"
+   },
+   {
+    "n": 26,
+    "id": "gmb-2026-415954",
+    "title": "Besluit apv vergunning Verleend - Fort Abcoudestraat 41 ter hoogte van nummer: 41 in",
+    "abstract": "TVM parkeervak,TVM stremmen,RVV,Object,Afgesloten gebieden,Filmen,Fort Abcoudestraat 41 1384AJ, 20260905, Fort Abcoudestraat 41 ter hoogte van nummer: 41"
+   }
+  ]
+ },
+ {
+  "query": "有什么跟自行车有关的决定吗",
+  "candidates": [
+   {
+    "n": 1,
+    "id": "gmb-2026-365874",
+    "title": "Amsterdam stadsdeel Zuid, verkeersbesluit voor het instellen van diverse tijdelijke verkeersmaatregelen op de verplichte fietspaden en voetpaden rondom station Amsterdam Zuid",
+    "abstract": null
+   },
+   {
+    "n": 2,
+    "id": "gmb-2026-326876",
+    "title": "Besluit apv vergunning Verleend - Prinsengracht ter hoogte van nummer: 323 in Amsterdam",
+    "abstract": "Fietsen,TVM parkeervak,TVM stremmen,RVV,Object,Filmen,Prinsengracht 323 1016GZ, 20260817, Prinsengracht ter hoogte van nummer: 323"
+   },
+   {
+    "n": 3,
+    "id": "gmb-2026-360655",
+    "title": "Besluit apv vergunning Verleend - Driehoekstraat ter hoogte van nummer: 18 in Amsterdam",
+    "abstract": "Fietsen,TVM parkeervak,TVM stremmen,RVV,Object,Filmen,Driehoe, Driehoekstraat ter hoogte van nummer: 18"
+   },
+   {
+    "n": 4,
+    "id": "gmb-2026-468140",
+    "title": "Amsterdam Nieuw-West, verkeersbesluit Henk Sneevlietweg, het instellen van diverse tijdelijke verkeersmaatregelen",
+    "abstract": "Henk Sneevlietweg, het instellen van diverse tijdelijke verkeersmaatregelen"
+   },
+   {
+    "n": 5,
+    "id": "gmb-2026-488078",
+    "title": "Besluit apv vergunning Verleend - Anjeliersstraat ter hoogte van nummer: 520 in Amsterdam",
+    "abstract": "TVM parkeervak,TVM stremmen,RVV,Object,Anjeliersstraat 520 1015NL, 20261019, Anjeliersstraat ter hoogte van nummer: 520"
+   },
+   {
+    "n": 6,
+    "id": "gmb-2026-495136",
+    "title": "Amsterdam stadsdeel Zuidoost, verkeersbesluit Dubbelink en de Marguerite Yourcenarstraat, instellen diverse verkeersmaatregelen",
+    "abstract": "Dubbelink en de Marguerite Yourcenarstraat, instellen diverse verkeersmaatregelen"
+   },
+   {
+    "n": 7,
+    "id": "gmb-2026-95125",
+    "title": "Besluit apv vergunning Verleend - Herengracht ter hoogte van nummer: 1 in Amsterdam",
+    "abstract": "Fietsen,TVM parkeervak,TVM stremmen,RVV,Object,Afgesloten gebieden, Herengracht, Herengracht ter hoogte van nummer: 1"
+   },
+   {
+    "n": 8,
+    "id": "gmb-2026-485461",
+    "title": "Besluit apv vergunning Verleend - Hudsonstraat ter hoogte van nummer: 120 in Amsterdam",
+    "abstract": "TVM 10 parkeervak,TVM stremmen,RVV,Object,Afgesloten gebieden,Hudsons, 16-11-2026 t/m 26-2-2027, Hudsonstraat ter hoogte van nummer: 120"
+   },
+   {
+    "n": 9,
+    "id": "gmb-2026-455365",
+    "title": "Besluit apv vergunning Verleend - Diepenbroickpark ter hoogte van nummer: 21 in",
+    "abstract": "TVM parkeervak,TVM stremmen,RVV,Diepenbroickpark, Diepenbroickpark ter hoogte van nummer: 21"
+   },
+   {
+    "n": 10,
+    "id": "gmb-2026-435357",
+    "title": "Besluit apv vergunning Verleend - Olympisch Stadion ter hoogte van nummer: 2 in Amsterdam",
+    "abstract": "(Project Marathon word door Jassin opgepakt) Fietsen,TVM parkeervak,TVM stremmen,RVV,Object,Nachtwerk,Olympisch Stadion 2 1076DE, 20261009, Olympisch Stadion ter hoogte van nummer: 2"
+   },
+   {
+    "n": 11,
+    "id": "gmb-2026-352329",
+    "title": "Amsterdam stadsdeel Zuidoost, verkeersbesluit Egellelie, diverse verkeersmaatregelen",
+    "abstract": "Egellelie, diverse verkeersmaatregelen"
+   },
+   {
+    "n": 12,
+    "id": "gmb-2026-356468",
+    "title": "Verkeersbesluit instellen tijdelijke verkeersmaatregelen ten behoeve van Diemer Festijn 2026",
+    "abstract": "Verkeersbesluit instellen tijdelijke verkeersmaatregelen ten behoeve van Diemer Festijn"
+   },
+   {
+    "n": 13,
+    "id": "gmb-2026-446640",
+    "title": "Besluit apv vergunning Verleend - Ambonplein ter hoogte van nummer: 31 in Amsterdam",
+    "abstract": "Fietsen,TVM parkeervak,TVM stremmen,Ambonplein 31 1094PW, 20261015, Ambonplein ter hoogte van nummer: 31"
+   },
+   {
+    "n": 14,
+    "id": "gmb-2026-478443",
+    "title": "Amsterdam stadsdeel Noord, verkeersbesluit Dijkmanshuizenstraat en Markengouw, instellen diverse tijdelijke verkeersmaatregelen",
+    "abstract": "Dijkmanshuizenstraat en Markengouw, instellen diverse tijdelijke verkeersmaatregelen"
+   },
+   {
+    "n": 15,
+    "id": "gmb-2026-501378",
+    "title": "Amsterdam stadsdeel Noord, verkeersbesluit J.H. Hisgenpad en Elzenhagensingel, instellen van diverse verkeersmaatregelen",
+    "abstract": "J.H. Hisgenpad en Elzenhagensingel, instellen van diverse verkeersmaatregelen"
+   },
+   {
+    "n": 16,
+    "id": "gmb-2026-499522",
+    "title": "Besluit apv vergunning Verleend - Waverstraat ter hoogte van nummer: 71 in Amsterdam",
+    "abstract": "TVM parkeervak,TVM stremmen,RVV,Object,Waverstraat 71 2 1079VH, 20261029, Waverstraat ter hoogte van nummer: 71"
+   },
+   {
+    "n": 17,
+    "id": "gmb-2026-501363",
+    "title": "Amsterdam stadsdeel Oost, verkeersbesluit Javastraat en Delistraat, opheffen en instellen diverse verkeersmaatregelen",
+    "abstract": "Javastraat en Delistraat, opheffen en instellen diverse verkeersmaatregelen"
+   }
+  ]
+ },
+ {
+  "query": "附近有要拆房子的吗",
+  "candidates": [
+   {
+    "n": 1,
+    "id": "gmb-2026-419104",
+    "title": "Aanvraag omgevingsvergunning, het plaatsen van een nieuwe gevel na sloop van gedeelte van gebouw, Padualaan 14, 3584CH Utrecht, GU-Z2026-0066235",
+    "abstract": "Toelichting: het plaatsen van een nieuwe gevel na sloop van gedeelte van gebouw"
+   },
+   {
+    "n": 2,
+    "id": "wsb-2026-18282",
+    "title": "Hoogheemraadschap De Stichtse Rijnlanden – Geen vergunning nodig voor aanvraag omgevingsvergunning voor het plaatsen van een schutting op het dakterras op de locatie bij Koppestokstraat 37-BS in Utrecht (code HDSR750600)",
+    "abstract": "Geen vergunning nodig voor aanvraag omgevingsvergunning voor het plaatsen van een schutting op het dakterras op de locatie bij Koppestokstraat 37-BS in Utrecht."
+   },
+   {
+    "n": 3,
+    "id": "gmb-2026-479642",
+    "title": "Aanvraag omgevingsvergunning, het slopen van bestaande aangebouwde garage, Israëlslaan 15, 3582HH Utrecht, GU-Z2026-0066956",
+    "abstract": "Toelichting: het slopen van bestaande aangebouwde garage"
+   },
+   {
+    "n": 4,
+    "id": "gmb-2026-495533",
+    "title": "Aanvraag omgevingsvergunning, het slopen van een illegaal aangebouwde uitbouw, Bemuurde Weerd W.Z. 2, 3513BH Utrecht, GU-Z2026-0070881",
+    "abstract": "Toelichting: het slopen van een illegaal aangebouwde uitbouw"
+   },
+   {
+    "n": 5,
+    "id": "wsb-2026-24675",
+    "title": "Hoogheemraadschap De Stichtse Rijnlanden – Geen vergunning nodig voor aanvraag omgevingsvergunning voor het leggen van glasvezel op de locatie bij Parkweg 2A in Vleuten (code HDSR762484)",
+    "abstract": "Geen vergunning nodig voor aanvraag omgevingsvergunning voor het leggen van glasvezel op de locatie bij Parkweg 2A in Vleuten."
+   },
+   {
+    "n": 6,
+    "id": "wsb-2026-20818",
+    "title": "Hoogheemraadschap De Stichtse Rijnlanden – Geen vergunning nodig voor aanvraag omgevingsvergunning voor een wateractiviteit voor het leggen van kabels bij nabij Hondsrug 807 in Utrecht. (code HDSR751949)",
+    "abstract": "Geen vergunning nodig voor aanvraag omgevingsvergunning voor een wateractiviteit voor het leggen van kabels bij nabij Hondsrug 807 in Utrecht"
+   },
+   {
+    "n": 7,
+    "id": "gmb-2026-425764",
+    "title": "Aanvraag omgevingsvergunning, het bouwen van 20 bedrijfunits na sloop leegstaand autobedrijf, Schoolstraat 92, 3451AG Vleuten, GU-Z2026-0066674",
+    "abstract": "Toelichting: het bouwen van 20 bedrijfunits na sloop leegstaand autobedrijf"
+   },
+   {
+    "n": 8,
+    "id": "wsb-2026-27868",
+    "title": "Hoogheemraadschap De Stichtse Rijnlanden – Geen vergunning nodig voor aanvraag omgevingsvergunning voor het leggen van glasvezel op de locatie bij Hazelnootstraat 11 in Utrecht (code HDSR766969)",
+    "abstract": "Geen vergunning nodig voor aanvraag omgevingsvergunning voor het leggen van glasvezel op de locatie bij Hazelnootstraat 11 in Utrecht."
+   },
+   {
+    "n": 9,
+    "id": "wsb-2026-22384",
+    "title": "Hoogheemraadschap De Stichtse Rijnlanden – Geen vergunning nodig voor aanvraag omgevingsvergunning voor het uitbreiden van een kabelnetwerk op de locatie nabij Kögellaan 26 in Utrecht (code HDSR758520)",
+    "abstract": "Geen vergunning nodig voor aanvraag omgevingsvergunning voor het uitbreiden van een kabelnetwerk op de locatie nabij Kögellaan 26 in Utrecht."
+   },
+   {
+    "n": 10,
+    "id": "gmb-2026-416338",
+    "title": "Verleende Omgevingsvergunning, het slopen en bouwen van een jongeren huiskamer aan het buurtcentrum De Boog, Gambiadreef 100, 3564ES Utrecht, GU-Z2026-0054151",
+    "abstract": "Toelichting: het slopen en bouwen van een jongeren huiskamer aan het buurtcentrum De Boog"
+   },
+   {
+    "n": 11,
+    "id": "wsb-2026-25794",
+    "title": "Hoogheemraadschap De Stichtse Rijnlanden – Geen vergunning nodig voor aanvraag omgevingsvergunning voor het leggen van kabels op de locatie bij Kögllaan 25 in Utrecht (code HDSR764757)",
+    "abstract": "Geen vergunning nodig voor aanvraag omgevingsvergunning voor het leggen van kabels op de locatie bij Kögllaan 25 in Utrecht."
+   },
+   {
+    "n": 12,
+    "id": "wsb-2026-19049",
+    "title": "Hoogheemraadschap De Stichtse Rijnlanden – Geen vergunning nodig voor aanvraag omgevingsvergunning voor het aanleggen van een kabel op de locatie nabij Orteliuslaan 750 in Utrecht (code HDSR752123)",
+    "abstract": "Geen vergunning nodig voor aanvraag omgevingsvergunning voor het aanleggen van een kabel op de locatie nabij Orteliuslaan 750 in Utrecht."
+   },
+   {
+    "n": 13,
+    "id": "gmb-2026-410595",
+    "title": "Vergunning verleend - Kajuitweg 8, Amsterdam - Slopen  deel betonvloer en toevoegen van fundatie",
+    "abstract": "het slopen van een deel van de bestaande betonvloer en het toevoegen van fundatie t.b.v. de nieuwe silo en de daarbij behorende staalconstructie"
+   },
+   {
+    "n": 14,
+    "id": "gmb-2026-486313",
+    "title": "Besluit maatwerkvoorschrift bouwlawaai/werktijden Anton Waldorpstraat 1 1062AS Amsterdam",
+    "abstract": "(MV) maatwerkvoorschriften geluidhinder sloopwerkzaamheden (slopen en saneren) gebouw voor de periode van 5 oktober 2026 t/m 5 februari 2027"
+   },
+   {
+    "n": 15,
+    "id": "wsb-2026-25130",
+    "title": "Hoogheemraadschap De Stichtse Rijnlanden – Geen vergunning nodig voor aanvraag omgevingsvergunning voor het aanleggen van een dakterras op de locatie Duifstraat 19 in Utrecht (code HDSR763404)",
+    "abstract": "Geen vergunning nodig voor aanvraag omgevingsvergunning voor het aanleggen van een dakterras op de locatie Duifstraat 19 in Utrecht."
+   },
+   {
+    "n": 16,
+    "id": "wsb-2026-26576",
+    "title": "Hoogheemraadschap De Stichtse Rijnlanden – Geen vergunning nodig voor aanvraag omgevingsvergunning voor het leggen van glasvezel op de locatie bij Philipsguldenhof 11 in Utrecht (code HDSR765957)",
+    "abstract": "Geen vergunning nodig voor aanvraag omgevingsvergunning voor het leggen van glasvezel op de locatie bij Philipsguldenhof 11 in Utrecht."
+   }
+  ]
+ },
+ {
+  "query": "有人申请在外墙挂广告牌吗",
+  "candidates": [
+   {
+    "n": 1,
+    "id": "gmb-2026-294359",
+    "title": "Aanvraag omgevingsvergunning Reestraat 12-H 1016DN Amsterdam",
+    "abstract": "verven van de gevel, het maken van reclame plat op de gevel en het plaatsen van een uithangbord ten behoeve van de winkel"
+   },
+   {
+    "n": 2,
+    "id": "wsb-2026-22384",
+    "title": "Hoogheemraadschap De Stichtse Rijnlanden – Geen vergunning nodig voor aanvraag omgevingsvergunning voor het uitbreiden van een kabelnetwerk op de locatie nabij Kögellaan 26 in Utrecht (code HDSR758520)",
+    "abstract": "Geen vergunning nodig voor aanvraag omgevingsvergunning voor het uitbreiden van een kabelnetwerk op de locatie nabij Kögellaan 26 in Utrecht."
+   },
+   {
+    "n": 3,
+    "id": "wsb-2026-27868",
+    "title": "Hoogheemraadschap De Stichtse Rijnlanden – Geen vergunning nodig voor aanvraag omgevingsvergunning voor het leggen van glasvezel op de locatie bij Hazelnootstraat 11 in Utrecht (code HDSR766969)",
+    "abstract": "Geen vergunning nodig voor aanvraag omgevingsvergunning voor het leggen van glasvezel op de locatie bij Hazelnootstraat 11 in Utrecht."
+   },
+   {
+    "n": 4,
+    "id": "gmb-2026-439967",
+    "title": "Aanvraag omgevingsvergunning Verrijn Stuartweg 55, 1112AW Diemen -aanbrengen batterijen , zonnepanelen en unit tbv service en mutatie Hemubo en het aanbrengen van reclame",
+    "abstract": "Aanvraag omgevingsvergunning Verrijn Stuartweg 55, 1112AW Diemen - Service en Mutatie HEMUBO nieuwe pand 1"
+   },
+   {
+    "n": 5,
+    "id": "wsb-2026-24675",
+    "title": "Hoogheemraadschap De Stichtse Rijnlanden – Geen vergunning nodig voor aanvraag omgevingsvergunning voor het leggen van glasvezel op de locatie bij Parkweg 2A in Vleuten (code HDSR762484)",
+    "abstract": "Geen vergunning nodig voor aanvraag omgevingsvergunning voor het leggen van glasvezel op de locatie bij Parkweg 2A in Vleuten."
+   },
+   {
+    "n": 6,
+    "id": "wsb-2026-25130",
+    "title": "Hoogheemraadschap De Stichtse Rijnlanden – Geen vergunning nodig voor aanvraag omgevingsvergunning voor het aanleggen van een dakterras op de locatie Duifstraat 19 in Utrecht (code HDSR763404)",
+    "abstract": "Geen vergunning nodig voor aanvraag omgevingsvergunning voor het aanleggen van een dakterras op de locatie Duifstraat 19 in Utrecht."
+   },
+   {
+    "n": 7,
+    "id": "gmb-2026-324111",
+    "title": "Aanvraag omgevingsvergunning, het bouwen van een dakopbouw en dakkapellen, wijzigen trap en intern wijzigen, Van den Boschstraat 21, 3531GK Utrecht, GU-Z2026-0059899",
+    "abstract": "Toelichting: het bouwen van een dakopbouw en dakkapellen, wijzigen trap en intern wijzigen"
+   },
+   {
+    "n": 8,
+    "id": "gmb-2026-109186",
+    "title": "Aanvraag omgevingsvergunning Kalverstraat 179 1012XB Amsterdam, Rokin 136F 1012LD Amsterdam",
+    "abstract": "vervangen van reclame plat op de gevel en de uithangborden en het schilderen van de gevel ten behoeve van de winkel"
+   },
+   {
+    "n": 9,
+    "id": "gmb-2026-281697",
+    "title": "Aanvraag vergunning ontvangen - Sardiniëweg 8, Amsterdam - Vervangen bestaande onverlichte gevelreclame door verlichte gevelreclame",
+    "abstract": "het vervangen van bestaande onverlichte gevelreclame door verlichte gevelreclame"
+   },
+   {
+    "n": 10,
+    "id": "wsb-2026-26576",
+    "title": "Hoogheemraadschap De Stichtse Rijnlanden – Geen vergunning nodig voor aanvraag omgevingsvergunning voor het leggen van glasvezel op de locatie bij Philipsguldenhof 11 in Utrecht (code HDSR765957)",
+    "abstract": "Geen vergunning nodig voor aanvraag omgevingsvergunning voor het leggen van glasvezel op de locatie bij Philipsguldenhof 11 in Utrecht."
+   },
+   {
+    "n": 11,
+    "id": "gmb-2026-166173",
+    "title": "Aanvraag omgevingsvergunning, het plaatsen van diverse reclame-uitingen en bouwwerken (Foodcourt De Meern), Tijdelijk Foodcourt De Meern - reclame, GU-Z2026-0051029",
+    "abstract": "Toelichting: het plaatsen van diverse reclame-uitingen en bouwwerken (Foodcourt De Meern)"
+   },
+   {
+    "n": 12,
+    "id": "gmb-2026-392369",
+    "title": "Verleende Omgevingsvergunning, het wijzigen van de zijgevel(wijziging eerder verleende vergunning), Rijnlaan 216, 3522BZ Utrecht, GU-Z2026-0058610",
+    "abstract": "Toelichting: het wijzigen van de zijgevel(wijziging eerder verleende vergunning)"
+   },
+   {
+    "n": 13,
+    "id": "gmb-2026-236726",
+    "title": "Aanvraag omgevingsvergunning, het wijzigen van de gevel en bouwen van een buiten-unit, Chrysantstraat 2, 3551TT Utrecht, GU-Z2026-0054236",
+    "abstract": "Toelichting: het wijzigen van de gevel en bouwen van een buiten-unit"
+   },
+   {
+    "n": 14,
+    "id": "gmb-2026-258602",
+    "title": "Verleende Omgevingsvergunning, het wijzigen van gevels en het aanbrengen van reclame, Australiëlaan 18, 20 en 22 in Utrecht, GU-Z2026-0049981",
+    "abstract": "Toelichting: het wijzigen van gevels en het aanbrengen van reclame"
+   },
+   {
+    "n": 15,
+    "id": "gmb-2026-147950",
+    "title": "Aanvraag omgevingsvergunning, het wijzigen van gevels en het aanbrengen van reclame, Australiëlaan 18, 20 en 22 in Utrecht, GU-Z2026-0049981",
+    "abstract": "Toelichting: het wijzigen van gevels en het aanbrengen van reclame"
+   },
+   {
+    "n": 16,
+    "id": "wsb-2026-20818",
+    "title": "Hoogheemraadschap De Stichtse Rijnlanden – Geen vergunning nodig voor aanvraag omgevingsvergunning voor een wateractiviteit voor het leggen van kabels bij nabij Hondsrug 807 in Utrecht. (code HDSR751949)",
+    "abstract": "Geen vergunning nodig voor aanvraag omgevingsvergunning voor een wateractiviteit voor het leggen van kabels bij nabij Hondsrug 807 in Utrecht"
+   },
+   {
+    "n": 17,
+    "id": "gmb-2026-392311",
+    "title": "Aanvraag omgevingsvergunning Eekholt 1, 1112XA Diemen - het splitsen, wijzigen van de gevels en gebouwinstallatie realiseren",
+    "abstract": "Aanvraag omgevingsvergunning Eekholt 1, 1112XA Diemen - het splitsen, wijzigen van de gevels en gebouwinstallatie realiseren"
+   },
+   {
+    "n": 18,
+    "id": "gmb-2026-266660",
+    "title": "Aanvraag omgevingsvergunning, het wijzigen van de gevel en bouwen van een dakterras, Leidseweg 26-BS, 3531BA Utrecht, GU-Z2026-0056956",
+    "abstract": "Toelichting: het wijzigen van de gevel en bouwen van een dakterras"
+   },
+   {
+    "n": 19,
+    "id": "gmb-2026-339616",
+    "title": "Aanvraag omgevingsvergunning Van Woustraat 66-H 1073LN Amsterdam, Van Woustraat 68-1 1073LN Amsterdam",
+    "abstract": "plaatsen van reclame plat op de gevel en een bord haaks op de gevel, ter hoogte van de begane grond (legalisatie)"
+   },
+   {
+    "n": 20,
+    "id": "gmb-2026-253455",
+    "title": "Verleende Omgevingsvergunning, het intern verbouwen, wijzigen gevels, bouwen van een pergola en maken terras, Oranjelaan 10, 3454BT De Meern, GU-Z2026-0052151",
+    "abstract": "Toelichting: het intern verbouwen, wijzigen gevels, bouwen van een pergola en maken terras"
+   },
+   {
+    "n": 21,
+    "id": "gmb-2026-382506",
+    "title": "Vergunning verleend - De Boelelaan 1104, Amsterdam - Wijzigen  gevel, brandcompartiment en  daktoegang - Matrix Innovation Centers C.V.",
+    "abstract": "het wijzigen van de gevel, brandcompartiment en daktoegang van het bedrijfsverzamelgebouw (wijziging op vergunning zaak 13485260)"
+   },
+   {
+    "n": 22,
+    "id": "gmb-2026-68143",
+    "title": "Aanvraag omgevingsvergunning, Het wijzigen gebruik naar wonen, wijzigen gevel en wijzigen brandcompartiment, Minister Talmastraat 39, 3555GB Utrecht, GU-Z2026-0044972",
+    "abstract": "Toelichting: Het wijzigen gebruik naar wonen, wijzigen gevel en wijzigen brandcompartiment"
+   },
+   {
+    "n": 23,
+    "id": "wsb-2026-25794",
+    "title": "Hoogheemraadschap De Stichtse Rijnlanden – Geen vergunning nodig voor aanvraag omgevingsvergunning voor het leggen van kabels op de locatie bij Kögllaan 25 in Utrecht (code HDSR764757)",
+    "abstract": "Geen vergunning nodig voor aanvraag omgevingsvergunning voor het leggen van kabels op de locatie bij Kögllaan 25 in Utrecht."
+   },
+   {
+    "n": 24,
+    "id": "gmb-2026-351864",
+    "title": "Aanvraag vergunning ontvangen - Gustav Mahlerlaan 320, Amsterdam - Aanbrengen nieuwe reclame aan de gevel",
+    "abstract": "het aanbrengen van nieuwe reclame aan de gevel"
+   }
+  ]
+ },
+ {
+  "query": "附近有环保或土壤污染相关的审批吗",
+  "candidates": [
+   {
+    "n": 1,
+    "id": "gmb-2026-485995",
+    "title": "Intrekking omgevingsvergunning, intrekken omgevingsvergunning met kenmerk GU-Z2024-0005121 op eigen verzoek, Bemuurde Weerd W.Z. 2, 3513BH Utrecht, GU-Z2026-0047527",
+    "abstract": "Toelichting: intrekken omgevingsvergunning met kenmerk GU-Z2024-0005121 op eigen verzoek"
+   },
+   {
+    "n": 2,
+    "id": "gmb-2026-633",
+    "title": "Gemeente Diemen: besluit verlenen Omgevingsvergunning voor Tijdelijke omgevingsvergunning t.b.v. het afwijken van regels in bestemmingsplan te Nienoord 10, 1112XG Diemen",
+    "abstract": "Diemen besluit Z2025-00002783 Tijdelijke omgevingsvergunning t.b.v. het afwijken van regels in bestemmingsplan"
+   },
+   {
+    "n": 3,
+    "id": "gmb-2026-327381",
+    "title": "Verleende Omgevingsvergunning, het wijzigen van de verleende omgevingsvergunning HZ_WABO-21-21217, Biltstraat 86-88, 3572BH Utrecht , GU-Z2026-0043247",
+    "abstract": "Toelichting: het wijzigen van de verleende omgevingsvergunning HZ_WABO-21-21217"
+   },
+   {
+    "n": 4,
+    "id": "gmb-2026-65869",
+    "title": "Aanvraag omgevingsvergunning, wijzigen van een eerder verleende omgevingsvergunning m.b.t. de gebruiksfuncties, Nijverheidsweg 6, 3534AM Utrecht, GU-Z2026-0045241",
+    "abstract": "Toelichting: wijzigen van een eerder verleende omgevingsvergunning m.b.t. de gebruiksfuncties"
+   },
+   {
+    "n": 5,
+    "id": "gmb-2026-35322",
+    "title": "Aanvraag omgevingsvergunning, Het gedeeltelijk wijzigen van een omgevingsvergunning voor een parkeergarage, Ingetekende geometrie, GU-Z2026-0043154",
+    "abstract": "Toelichting: Het gedeeltelijk wijzigen van een omgevingsvergunning voor een parkeergarage"
+   },
+   {
+    "n": 6,
+    "id": "gmb-2026-501810",
+    "title": "Besluit omgevingsvergunning reguliere procedure verleend Kramatweg 87-H Amsterdam",
+    "abstract": "plegen van funderingsherstel voor een perceel in afwijking van een eerder verleende omgevingsvergunning met kenmerk Z2024‐043045"
+   },
+   {
+    "n": 7,
+    "id": "wsb-2026-20378",
+    "title": "Hoogheemraadschap De Stichtse Rijnlanden – Nieuwe aanvraag omgevingsvergunning voor een wateractiviteit voor het onttrekken van grondwater voor menselijke consumptie nabij Strijkviertel 27 te De Meern met code HDSR754316.",
+    "abstract": "Hoogheemraadschap De Stichtse Rijnlanden – Nieuwe aanvraag omgevingsvergunning voor een wateractiviteit voor het onttrekken van grondwater voor menselijke consumptie nabij Strijkviertel 27 te De Meern."
+   },
+   {
+    "n": 8,
+    "id": "wsb-2026-21784",
+    "title": "Hoogheemraadschap De Stichtse Rijnlanden – Nieuwe aanvraag omgevingsvergunning voor een wateractiviteit voor het tijdelijk onttrekken van grondwater en het retourneren van bronneringswater voor de realisatie van een fietskelder op de uithof Universiteit Utrecht, Genevelaan 8 te Utrecht met code HDSR753953.",
+    "abstract": "Nieuwe aanvraag omgevingsvergunning voor een wateractiviteit voor het tijdelijk onttrekken van grondwater en het retourneren van bronneringswater voor de realisatie van een fietskelder op de uithof Universiteit Utrecht, Genevelaan 8 te Utrecht"
+   },
+   {
+    "n": 9,
+    "id": "gmb-2026-491590",
+    "title": "Intrekking omgevingsvergunning, ambtshalve intrekken omgevingsvergunning met kenmerk HZ_WABO-20-14315, Noordersluis 10, 3526KX Utrecht, GU-Z2024-0009323",
+    "abstract": "Toelichting: ambtshalve intrekken omgevingsvergunning met kenmerk HZ_WABO-20-14315"
+   },
+   {
+    "n": 10,
+    "id": "gmb-2026-34539",
+    "title": "Aanvraag omgevingsvergunning, het wijzigen van de verleende omgevingsvergunning HZ_WABO-21-21217, Biltstraat 86-88, 3572BH Utrecht , GU-Z2026-0043247",
+    "abstract": "Toelichting: het wijzigen van de verleende omgevingsvergunning HZ_WABO-21-21217"
+   },
+   {
+    "n": 11,
+    "id": "gmb-2026-345333",
+    "title": "Aanvraag omgevingsvergunning,  wijzigen v/e eerder verleende omgevingsvergunning m.b.t. de gebruiksfuncties, Nijverheidsweg 6, 3534AM Utrecht, GU-Z2026-0061754",
+    "abstract": "Toelichting:  wijzigen v/e eerder verleende omgevingsvergunning m.b.t. de gebruiksfuncties"
+   },
+   {
+    "n": 12,
+    "id": "gmb-2026-326118",
+    "title": "Aanvraag omgevingsvergunning, het slopen van een schoorsteen en saneren asbest (schoorsteen) pijp, Zadelstraat 17, 3511LR Utrecht, GU-Z2026-0060413",
+    "abstract": "Toelichting: het slopen van een schoorsteen en saneren asbest (schoorsteen) pijp"
+   }
+  ]
+ }
+]

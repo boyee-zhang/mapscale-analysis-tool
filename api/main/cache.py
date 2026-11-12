@@ -1,5 +1,6 @@
 import json
-import httpx
+
+from . import http_client
 from .config import UPSTASH_URL, UPSTASH_TOKEN
 from .logger import get_logger
 
@@ -22,13 +23,13 @@ async def kv_get(key: str):
     if not UPSTASH_URL or not UPSTASH_TOKEN:
         return None
     try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
-            resp = await client.get(
-                f"{UPSTASH_URL}/get/{key}",
-                headers={"Authorization": f"Bearer {UPSTASH_TOKEN}"},
-            )
-            result = resp.json().get("result")
-            return json.loads(result) if result else None
+        resp = await http_client.get().get(
+            f"{UPSTASH_URL}/get/{key}",
+            headers={"Authorization": f"Bearer {UPSTASH_TOKEN}"},
+            timeout=3.0,
+        )
+        result = resp.json().get("result")
+        return json.loads(result) if result else None
     except Exception as e:
         logger.warning("kv get failed", extra={"key": key, "error": str(e)})
         return None
@@ -39,11 +40,11 @@ async def kv_set(key: str, value, ttl_seconds: int):
     if not UPSTASH_URL or not UPSTASH_TOKEN:
         return
     try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
-            await client.post(
-                f"{UPSTASH_URL}/set/{key}",
-                headers={"Authorization": f"Bearer {UPSTASH_TOKEN}"},
-                json={"value": json.dumps(value), "ex": ttl_seconds},
-            )
+        await http_client.get().post(
+            f"{UPSTASH_URL}/set/{key}",
+            headers={"Authorization": f"Bearer {UPSTASH_TOKEN}"},
+            json={"value": json.dumps(value), "ex": ttl_seconds},
+            timeout=3.0,
+        )
     except Exception as e:
         logger.warning("kv set failed", extra={"key": key, "error": str(e)})

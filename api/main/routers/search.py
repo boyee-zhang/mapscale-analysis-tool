@@ -1,9 +1,9 @@
 import asyncio
 import re
-import httpx
 from fastapi import APIRouter, Query
 from typing import List
 from pydantic import BaseModel
+from .. import http_client
 from ..config import ES_URL
 from ..logger import get_logger
 from ..upstream.es_client import get_es, INDEX
@@ -72,10 +72,9 @@ async def _pdok_search(q: str, size: int) -> list[dict]:
     """PDOK Locatieserver — Dutch address data (BAG). Has coordinates."""
     params = {"q": q, "fq": "type:adres", "rows": size, "fl": "*"}
     try:
-        async with httpx.AsyncClient(timeout=8.0) as client:
-            resp = await client.get(PDOK_FREE, params=params)
-            resp.raise_for_status()
-            docs = resp.json().get("response", {}).get("docs", [])
+        resp = await http_client.get().get(PDOK_FREE, params=params, timeout=8.0)
+        resp.raise_for_status()
+        docs = resp.json().get("response", {}).get("docs", [])
     except Exception as e:
         logger.warning("pdok search failed", extra={"error": str(e)})
         return []
@@ -110,10 +109,9 @@ async def _nominatim_search(q: str, size: int) -> list[dict]:
         "addressdetails": 0,
     }
     try:
-        async with httpx.AsyncClient(timeout=8.0, headers=_NOMINATIM_HEADERS) as client:
-            resp = await client.get(NOMINATIM_URL, params=params)
-            resp.raise_for_status()
-            docs = resp.json()
+        resp = await http_client.get().get(NOMINATIM_URL, params=params, timeout=8.0, headers=_NOMINATIM_HEADERS)
+        resp.raise_for_status()
+        docs = resp.json()
     except Exception as e:
         logger.warning("nominatim search failed", extra={"error": str(e)})
         return []

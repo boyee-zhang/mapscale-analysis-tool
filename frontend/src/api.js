@@ -11,9 +11,136 @@ export const api = {
   fetchIsochrone: (lng, lat, minutes, profile) => 
     client.get('/api/main/isochrone', { params: { lng, lat, minutes, profile } }).then(res => res.data),
     
-  fetchPOIs: (lng, lat, minutes, profile) => 
-    client.get('/api/main/pois', { params: { lng, lat, minutes, profile } }).then(res => res.data.elements || []),
+  /**
+   * @param {number} lng
+   * @param {number} lat
+   * @param {number} minutes
+   * @param {'walking'|'cycling'|'driving'} profile
+   * @param {string[]} [categories]  poi_category keys; omitted = backend's legacy default.
+   *   Only honoured on the Postgres path — the Overpass fallback ignores it.
+   * @returns {Promise<Array<{ type, id, lon, lat, category?, tags }>>}
+   */
+  fetchPOIs: (lng, lat, minutes, profile, categories) => {
+    // Built by hand because axios serialises an array as `categories[]=a&categories[]=b`
+    // (verified, axios 1.13.2), while FastAPI's `list[str] = Query(...)` only reads the
+    // bracket-less repeated form. Passing the array straight through silently fell back to
+    // the backend's default three categories instead of erroring.
+    const params = new URLSearchParams({ lng, lat, minutes, profile });
+    // An empty array appends nothing, so the request looks identical to one that never
+    // mentioned categories — and the backend treats an omitted param as "use the default
+    // three". That is why callers must not reach here with an empty selection; MapContainer
+    // returns before fetching instead. (This comment previously described that fallback as
+    // intended behaviour; it was the bug.)
+    (categories || []).forEach(c => params.append('categories', c));
+    return client.get('/api/main/pois', { params }).then(res => res.data.elements || []);
+  },
     
+  /**
+   * Official government announcements whose geometry meets the same isochrone /pois uses.
+   *
+   * @param {object} q
+   * @param {number} q.lng
+   * @param {number} q.lat
+   * @param {number} q.minutes
+   * @param {'walking'|'cycling'|'driving'} q.profile
+   * @param {string} q.dateFrom  ISO date, inclusive
+   * @param {string} q.dateTo    ISO date, inclusive
+   * @param {boolean} [q.buildingPermits]  shorthand for omgevingsvergunning + bouwen
+   * @returns {Promise<{
+   *   shape: 'isochrone'|'circle'|'unavailable'|'none',
+   *   window: { from: string, to: string },
+   *   total: number, truncated: boolean,
+   *   months: Array<{ month: string, count: number }>,
+   *   by_type: Array<{ doc_type: string, count: number }>,
+   *   by_activiteit: Array<{ activiteit: string, count: number }>,
+   *   by_stage: Array<{ stage: string, count: number }>,
+   *   items: Array<{ identifier, title, doc_type, published_at, activiteit, stage,
+   *                  gemeente, url, lon, lat }>
+   * }>}
+   *
+   * `total` counts every match; `items` is capped by the backend at 500 and `truncated`
+   * says whether that happened. The month histogram is computed over all matches, so a
+   * truncated list does not under-report a month — do not re-derive it from `items`.
+   */
+  fetchBekendmakingen: async ({ lng, lat, minutes, profile, dateFrom, dateTo, buildingPermits,
+                               noise, sort }) => {
+    // Hand-built for the same reason as fetchPOIs: axios would send `doc_type[]=`, which
+    // FastAPI's repeated-param reader ignores. No array params are sent today, but the
+    // shorthand flag is here instead precisely so callers are not tempted to pass one.
+    const params = new URLSearchParams({ lng, lat, minutes, profile });
+    if (dateFrom) params.append('date_from', dateFrom);
+    if (dateTo) params.append('date_to', dateTo);
+    if (buildingPermits) params.append('building_permits', 'true');
+    // Repeated param, not `noise[]=` — same reason as the comment above. `noise` is an array
+    // of buckets (`noisy` / `quiet` / `unscored`); omitting it means every bucket.
+    (noise || []).forEach(n => params.append('noise', n));
+    // `sort=noise` is not cosmetic: `items` is capped at 500 server-side, so a date order
+    // fills the cap with the newest publications and the loudest ones may never be returned.
+    if (sort) params.append('sort', sort);
+    try {
+      const res = await client.get('/api/main/bekendmakingen', { params });
+      console.log('[api] fetchBekendmakingen', {
+        shape: res.data.shape, total: res.data.total, truncated: res.data.truncated,
+        sort: res.data.sort,
+        byNoise: Object.fromEntries((res.data.by_noise || []).map(b => [b.noise, b.count])),
+        byEventDate: res.data.by_event_date,
+      });
+      return res.data;
+    } catch (err) {
+      console.error('[api] fetchBekendmakingen failed', err);
+      throw err;
+    }
+  },
+
+  /**
+   * Semantic search over publications: ranked by meaning, not by wording.
+   *
+   * Separate from `searchAddress`, which resolves a place name to a coordinate. Sharing a
+   * method would make one look like a mode of the other.
+   *
+   * Throws on 503 with the server's reason attached. That is deliberate: the encoder is an
+   * optional dependency, and "search is unavailable" must reach the user as itself rather
+   * than as an empty result list.
+   *
+   * @param {{ q: string, lng?: number, lat?: number, minutes?: number, profile?: string,
+   *           dateFrom?: string, dateTo?: string, limit?: number }} opts
+   * @returns {Promise<{ shape: string, total: number, items: object[], weaker: object[],
+   *                      weaker_total: number, relevance_margin: number,
+   *                      background: number|null }>}
+   *   `items` is the ANSWERS and nothing else, so it is what a reader should be shown.
+   *   A nearest-neighbour query always returns `limit` rows, so the near-misses it also
+   *   produced are in `weaker` instead of being mixed in — served, not dropped, so the
+   *   "show weaker matches" disclosure costs no second request. `background` is the query's
+   *   baseline similarity: null means the split could not be measured (everything is then in
+   *   `items`), which is a different fact from an empty `items` with a baseline present.
+   */
+  searchNotices: async ({ q, lng, lat, minutes, profile, dateFrom, dateTo, limit }) => {
+    const params = new URLSearchParams({ q });
+    if (lng != null && lat != null) {
+      params.append('lng', lng);
+      params.append('lat', lat);
+      if (minutes) params.append('minutes', minutes);
+      if (profile) params.append('profile', profile);
+    }
+    if (dateFrom) params.append('date_from', dateFrom);
+    if (dateTo) params.append('date_to', dateTo);
+    if (limit) params.append('limit', limit);
+    try {
+      const res = await client.get('/api/main/search/notices', { params });
+      console.log('[api] searchNotices', {
+        q, shape: res.data.shape, total: res.data.total,
+        weaker: res.data.weaker_total, top: res.data.items?.[0]?.similarity,
+      });
+      return res.data;
+    } catch (err) {
+      const detail = err.response?.data?.detail;
+      console.error('[api] searchNotices failed', detail || err.message);
+      const e = new Error(detail || 'Search failed');
+      e.unavailable = err.response?.status === 503;
+      throw e;
+    }
+  },
+
   /**
    * @param {{ lng: number, lat: number }} start
    * @param {{ lng: number, lat: number }} end

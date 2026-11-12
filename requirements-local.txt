@@ -3,3 +3,15 @@ elasticsearch[async]==8.14.0
 osmium==4.3.1          # scripts/import_poi.py only; not imported by the API
 pytest==8.3.5
 ruff==0.9.10
+# Local-only: /metrics degrades to 503 without it, and scraping Vercel is pointless
+# anyway — every invocation is a fresh process, so a counter never accumulates.
+prometheus_client==0.21.1
+
+# Local-only, ~1.1 GB installed: the query encoder for /search/notices. Without it that
+# endpoint 503s and says so, the same way /metrics does without prometheus_client — an
+# unavailable encoder and a query with no matches must not look alike.
+#
+# Only QUERIES are encoded in the request path (one short forward pass). Document vectors are
+# precomputed by scripts/embed_bekendmaking.py, which runs in its own throwaway venv and does
+# not need this to be installed here.
+sentence-transformers==3.4.1

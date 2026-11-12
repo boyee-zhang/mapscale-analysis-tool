@@ -1,5 +1,6 @@
 import httpx
 from fastapi import HTTPException
+from .. import http_client
 from ..errors import ExternalServiceError
 from ..logger import get_logger
 
@@ -29,16 +30,15 @@ async def fetch_region(lng: float, lat: float) -> dict:
     params = {"lat": lat, "lon": lng, "type": "gemeente", "fl": "gemeentecode,gemeentenaam,id"}
     logger.info("→ region", extra={"lng": lng, "lat": lat})
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(PDOK_URL, params=params)
-            resp.raise_for_status()
-            docs = resp.json().get("response", {}).get("docs", [])
-            if not docs:
-                raise HTTPException(status_code=404, detail="No municipality found for these coordinates")
-            doc = docs[0]
-            result = {"name": doc.get("gemeentenaam", ""), "regionCode": f"GM{doc.get('gemeentecode', '')}"}
-            logger.info("← region", extra={"result": result})
-            return result
+        resp = await http_client.get().get(PDOK_URL, params=params, timeout=10.0)
+        resp.raise_for_status()
+        docs = resp.json().get("response", {}).get("docs", [])
+        if not docs:
+            raise HTTPException(status_code=404, detail="No municipality found for these coordinates")
+        doc = docs[0]
+        result = {"name": doc.get("gemeentenaam", ""), "regionCode": f"GM{doc.get('gemeentecode', '')}"}
+        logger.info("← region", extra={"result": result})
+        return result
     except HTTPException:
         raise
     except httpx.TimeoutException:

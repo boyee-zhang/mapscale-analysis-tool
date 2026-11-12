@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import maplibregl from 'maplibre-gl';
 import { renderToStaticMarkup } from 'react-dom/server';
 import PoiPopup from './PoiPopup';
+import { colorFor } from '../constants/poiCategories';
 
 // Hover used to also fetch /directions from the centre to this POI and hand it to a
 // `setHoveredRoute` setter in MapContainer whose state value was destructured away —
@@ -14,8 +15,11 @@ const PoiMarker = ({ poi, map }) => {
     // 用来存放延迟关闭的定时器
     let hideTimer = null;
 
-    const { lon, lat, tags = {} } = poi;
-    const isShop = !!tags.shop;
+    const { lon, lat, category } = poi;
+    // Was `tags.shop ? gold : orange-red`, which could only ever show two colours and did
+    // not match the legend. The backend returns `category` on the Postgres path; on the
+    // Overpass fallback it does not, and colorFor() yields the neutral colour for those.
+    const dotColor = colorFor(category);
 
     const container = document.createElement('div');
     Object.assign(container.style, {
@@ -26,7 +30,7 @@ const PoiMarker = ({ poi, map }) => {
     const dot = document.createElement('div');
     Object.assign(dot.style, {
       width: '14px', height: '14px',
-      backgroundColor: isShop ? '#FFD700' : '#FF4500',
+      backgroundColor: dotColor,
       borderRadius: '50%', border: '2px solid white',
       boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
       transition: 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)'

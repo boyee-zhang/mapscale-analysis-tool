@@ -19,7 +19,15 @@ services:
   postgres:
     # arm64 mirror of postgis/postgis:16-3.4 — the official image is amd64-only and
     # would run under emulation on Apple Silicon, distorting every EXPLAIN timing.
-    image: imresamu/postgis:16-3.4
+    #
+    # BUILT, not pulled, since semantic search needs pgvector as well: no multi-arch image
+    # ships PostGIS and pgvector together, so the one extension is added on top of the
+    # arch-native base rather than giving the base up. docker/postgres.Dockerfile says why
+    # this does not reinitialise the data directory.
+    build:
+      context: .
+      dockerfile: docker/postgres.Dockerfile
+    image: mapscale-postgis-pgvector:16-3.4
     container_name: mapscale-pg
     environment:
       POSTGRES_USER: mapscale
@@ -76,32 +84,123 @@ services:
       - ors_graphs:/home/ors/graphs
       - ors_elevation:/home/ors/elevation_cache
     environment:
-      # Noord-Holland only. This is the real cost of self-hosting — coverage drops from
-      # global to one province — but it matches the `poi` table, which is also NH-only,
-      # so it removes an inconsistency rather than creating one.
+      # Noord-Holland only. This is the real cost of self-hosting, and it is now WORSE than
+      # when this was written: the comment used to say it matched the `poi` table, which was
+      # also NH-only. Stage 1 then imported the whole country, so `poi` holds 512,844 rows
+      # spanning 3.36..7.22 lng / 50.73..53.50 lat. Outside Noord-Holland there are now POIs
+      # but no isochrone — /pois falls back to its geodesic circle there.
+      #
+      # Why not the national extract: ORS needs roughly 8-10x the extract size in heap to
+      # build, so netherlands-latest.osm.pbf (1.3 GB) wants 10-13 GB. This Docker VM has 8.2
+      # GB total. Measured before trying, not after an OOM.
       ors.engine.profile_default.build.source_file: /home/ors/files/noord-holland-latest.osm.pbf
       # Only the three MODE_MAPPING targets. Every enabled profile is a separate graph:
       # more RAM, more build time, and ORS enables driving-car only by default.
+      # foot-HIKING, not foot-walking: MODE_MAPPING["walking"] points at foot-hiking (the
+      # public instance black-holes foot-walking). Enabling the wrong one here would 404
+      # every walking request against our own server — the default mode.
       ors.engine.profiles.driving-car.enabled: "true"
       ors.engine.profiles.cycling-regular.enabled: "true"
-      ors.engine.profiles.foot-walking.enabled: "true"
-      # Starting point, not a measured figure: the Docker VM has 8 GB and three graphs over
-      # a 190 MB extract are built in sequence. Raise if the build OOMs, and record what it
-      # actually needed.
+      ors.engine.profiles.foot-hiking.enabled: "true"
+      # MEASURED 2026-10-28, three graphs over the 190 MB NH extract, built in sequence:
+      # peak heap 2.03 GB of the 4 GB max, peak container RSS 2987 MiB, total build 211.79 s
+      # (foot-hiking 121 s + driving-car 34 s + cycling-regular 56 s). 4g is kept rather than
+      # trimmed to ~2.5g because the figure is for ONE extract; the headroom is what absorbs a
+      # larger one. This is no longer a guess.
       XMS: 1g
       XMX: 4g
       REBUILD_GRAPHS: "False"
     healthcheck:
-      # /v2/health exists on a self-hosted instance and 404s on the public gateway, so this
-      # is also the first thing self-hosting buys: you can ask which graphs are loaded.
-      test: ["CMD-SHELL", "curl -sf http://localhost:8082/ors/v2/health | grep -q ready"]
+      # /v2/status and /v2/health exist on a self-hosted instance and 404 on the public
+      # gateway, so this is also the first thing self-hosting buys: you can ask which graphs
+      # are loaded.
+      #
+      # Two measured corrections to the obvious probe, both found 2026-10-28:
+      #  1. wget, not curl — this image has no curl. The first version used curl and reported
+      #     `unhealthy` for an hour over `/bin/sh: curl: not found` while the graphs built and
+      #     served fine. A probe that cannot run is indistinguishable from a service that is
+      #     down, so check the probe's own output, not only its verdict.
+      #  2. /v2/status, not /v2/health — `/v2/health` answered {"status":"ready"} 20 s after
+      #     start, while /v2/status still listed zero profiles and the graphs took another
+      #     40 s. "ready" means the HTTP layer is up, not that anything is routable, which is
+      #     the same trap as trusting a 200 from the public API. Asserting the three enabled
+      #     profile names is the check that would actually have caught it.
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/ors/v2/status > /tmp/ors_status && grep -q foot-hiking /tmp/ors_status && grep -q driving-car /tmp/ors_status && grep -q cycling-regular /tmp/ors_status"]
       interval: 30s
       timeout: 5s
       retries: 60
       start_period: 300s
+
+  # ── Monitoring ─────────────────────────────────────────────────────────────
+  #
+  # All three carry profiles: ["monitoring"], which is what actually keeps them out of a
+  # bare `docker compose up -d` — a comment does not (the ors service learned that the
+  # hard way; `docker compose config --services` listed it anyway). Start with:
+  #     docker compose --profile monitoring up -d
+  #
+  # Deliberately local-only. Scraping the Vercel deployment is not possible: each
+  # invocation is a fresh process, so counters reset and there is no stable target.
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: mapscale-prometheus
+    profiles: ["monitoring"]
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    # The backend runs on the host under `uvicorn --reload`, not in a container, so
+    # Prometheus reaches it through the host gateway. Docker Desktop provides this name
+    # automatically; the explicit mapping is what makes it work on Linux too.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      # 7 days is plenty: this is for watching load tests, not for long-term capacity
+      # planning, and the default 15 days of 5-second samples is a lot of disk for that.
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle
+
+  grafana:
+    image: grafana/grafana:11.5.1
+    container_name: mapscale-grafana
+    profiles: ["monitoring"]
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"
+    environment:
+      # Anonymous admin, no login page. This binds to localhost on a single-user dev
+      # machine and holds nothing but its own query history — a password here would be
+      # ceremony. Do not copy this block to anything reachable from a network.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_USERS_DEFAULT_THEME: light
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    container_name: mapscale-pg-exporter
+    profiles: ["monitoring"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATA_SOURCE_NAME: "postgresql://mapscale:mapscale@postgres:5432/mapscale?sslmode=disable"
+    # The API's own db_pool_* gauges say how many connections WE hold; this says what the
+    # server sees — including the connections the psql sessions and the importers open.
+    # The two disagreeing is itself the signal that something outside the app is busy.
 
 volumes:
   esdata:
   pgdata:
   ors_graphs:
   ors_elevation:
+  promdata:
+  grafanadata:

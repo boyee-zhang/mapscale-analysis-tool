@@ -1,0 +1,1362 @@
+{
+ "我家附近有人要砍树吗": {
+  "fts_title": {
+   "ndcg": 1.0,
+   "p": 1.0,
+   "p_strict": 1.0,
+   "recall": 0.4,
+   "recall2": 0.4,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 1.0,
+   "p": 1.0,
+   "p_strict": 1.0,
+   "recall": 0.4,
+   "recall2": 0.4,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 1.0,
+   "p": 1.0,
+   "p_strict": 1.0,
+   "recall": 0.4,
+   "recall2": 0.4,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 1.0,
+   "p": 1.0,
+   "p_strict": 1.0,
+   "recall": 0.4,
+   "recall2": 0.4,
+   "returned": 10
+  }
+ },
+ "附近有什么会吵的工程": {
+  "fts_title": {
+   "ndcg": 1.0,
+   "p": 1.0,
+   "p_strict": 1.0,
+   "recall": 0.3448275862068966,
+   "recall2": 0.37037037037037035,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.6944429697645211,
+   "p": 0.9,
+   "p_strict": 0.7,
+   "recall": 0.3103448275862069,
+   "recall2": 0.25925925925925924,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 1.0,
+   "p": 1.0,
+   "p_strict": 1.0,
+   "recall": 0.3448275862068966,
+   "recall2": 0.37037037037037035,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.7799082337019199,
+   "p": 1.0,
+   "p_strict": 0.8,
+   "recall": 0.3448275862068966,
+   "recall2": 0.2962962962962963,
+   "returned": 10
+  }
+ },
+ "有人要占用我家门口的停车位吗": {
+  "fts_title": {
+   "ndcg": 0.1196514033905449,
+   "p": 0.2,
+   "p_strict": 0.0,
+   "recall": 0.14285714285714285,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.10626464196157544,
+   "p": 0.3,
+   "p_strict": 0.0,
+   "recall": 0.21428571428571427,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 1.0,
+   "p": 1.0,
+   "p_strict": 1.0,
+   "recall": 0.7142857142857143,
+   "recall2": 1.0,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.5283224302584394,
+   "p": 0.8,
+   "p_strict": 0.5,
+   "recall": 0.5714285714285714,
+   "recall2": 0.5,
+   "returned": 10
+  }
+ },
+ "附近有新开的餐厅或酒吧在申请许可吗": {
+  "fts_title": {
+   "ndcg": 0.4325092705603818,
+   "p": 1.0,
+   "p_strict": 0.2,
+   "recall": 0.30303030303030304,
+   "recall2": 0.10526315789473684,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.5739935145423248,
+   "p": 1.0,
+   "p_strict": 0.4,
+   "recall": 0.30303030303030304,
+   "recall2": 0.21052631578947367,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.8532721558012799,
+   "p": 1.0,
+   "p_strict": 0.9,
+   "recall": 0.30303030303030304,
+   "recall2": 0.47368421052631576,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.9477344873475498,
+   "p": 1.0,
+   "p_strict": 0.9,
+   "recall": 0.30303030303030304,
+   "recall2": 0.47368421052631576,
+   "returned": 10
+  }
+ },
+ "有人要把一套房子拆成多套出租吗": {
+  "fts_title": {
+   "ndcg": 1.0,
+   "p": 1.0,
+   "p_strict": 1.0,
+   "recall": 0.3448275862068966,
+   "recall2": 0.4,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.4123667953576228,
+   "p": 0.8,
+   "p_strict": 0.4,
+   "recall": 0.27586206896551724,
+   "recall2": 0.16,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 1.0,
+   "p": 1.0,
+   "p_strict": 1.0,
+   "recall": 0.3448275862068966,
+   "recall2": 0.4,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.7973234779560929,
+   "p": 0.8,
+   "p_strict": 0.7,
+   "recall": 0.27586206896551724,
+   "recall2": 0.28,
+   "returned": 10
+  }
+ },
+ "附近最近要办什么活动吗": {
+  "fts_title": {
+   "ndcg": 0.8909724089198024,
+   "p": 1.0,
+   "p_strict": 0.8,
+   "recall": 0.3333333333333333,
+   "recall2": 0.2857142857142857,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 1.0,
+   "p": 1.0,
+   "p_strict": 1.0,
+   "recall": 0.3333333333333333,
+   "recall2": 0.35714285714285715,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 1.0,
+   "p": 1.0,
+   "p_strict": 1.0,
+   "recall": 0.3333333333333333,
+   "recall2": 0.35714285714285715,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 1.0,
+   "p": 1.0,
+   "p_strict": 1.0,
+   "recall": 0.3333333333333333,
+   "recall2": 0.35714285714285715,
+   "returned": 10
+  }
+ },
+ "有人申请加盖阳台或改造屋顶吗": {
+  "fts_title": {
+   "ndcg": 1.0,
+   "p": 1.0,
+   "p_strict": 1.0,
+   "recall": 0.37037037037037035,
+   "recall2": 0.4166666666666667,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.7935840677649109,
+   "p": 0.8,
+   "p_strict": 0.7,
+   "recall": 0.2962962962962963,
+   "recall2": 0.2916666666666667,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.7162874455029681,
+   "p": 0.9,
+   "p_strict": 0.7,
+   "recall": 0.3333333333333333,
+   "recall2": 0.2916666666666667,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.7983974463374327,
+   "p": 1.0,
+   "p_strict": 0.7,
+   "recall": 0.37037037037037035,
+   "recall2": 0.2916666666666667,
+   "returned": 10
+  }
+ },
+ "附近有拍电影或拍摄活动吗": {
+  "fts_title": {
+   "ndcg": 0.0,
+   "p": 0.0,
+   "p_strict": 0.0,
+   "recall": 0.0,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.0,
+   "p": 0.0,
+   "p_strict": 0.0,
+   "recall": 0.0,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.7696875818647532,
+   "p": 0.9,
+   "p_strict": 0.3,
+   "recall": 1.0,
+   "recall2": 1.0,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.30156466435213264,
+   "p": 0.4,
+   "p_strict": 0.1,
+   "recall": 0.4444444444444444,
+   "recall2": 0.3333333333333333,
+   "returned": 10
+  }
+ },
+ "残疾人专用停车位有什么变动吗": {
+  "fts_title": {
+   "ndcg": 0.9134166588977729,
+   "p": 1.0,
+   "p_strict": 0.8,
+   "recall": 0.625,
+   "recall2": 0.6666666666666666,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 1.0,
+   "p": 1.0,
+   "p_strict": 1.0,
+   "recall": 0.625,
+   "recall2": 0.8333333333333334,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.1196514033905449,
+   "p": 0.2,
+   "p_strict": 0.0,
+   "recall": 0.125,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.632782515390192,
+   "p": 0.7,
+   "p_strict": 0.5,
+   "recall": 0.4375,
+   "recall2": 0.4166666666666667,
+   "returned": 10
+  }
+ },
+ "有人要装电动车充电桩吗": {
+  "fts_title": {
+   "ndcg": 0.15896536005158246,
+   "p": 0.1,
+   "p_strict": 0.1,
+   "recall": 0.125,
+   "recall2": 1.0,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.0,
+   "p": 0.0,
+   "p_strict": 0.0,
+   "recall": 0.0,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.8760149672749166,
+   "p": 0.8,
+   "p_strict": 0.1,
+   "recall": 1.0,
+   "recall2": 1.0,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.48437280682562844,
+   "p": 0.5,
+   "p_strict": 0.1,
+   "recall": 0.625,
+   "recall2": 1.0,
+   "returned": 10
+  }
+ },
+ "有人要在路边放建筑垃圾箱吗": {
+  "fts_title": {
+   "ndcg": 0.0,
+   "p": 0.0,
+   "p_strict": 0.0,
+   "recall": 0.0,
+   "recall2": NaN,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.0,
+   "p": 0.0,
+   "p_strict": 0.0,
+   "recall": 0.0,
+   "recall2": NaN,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 1.0,
+   "p": 0.3,
+   "p_strict": 0.0,
+   "recall": 1.0,
+   "recall2": NaN,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.6653497124326151,
+   "p": 0.3,
+   "p_strict": 0.0,
+   "recall": 1.0,
+   "recall2": NaN,
+   "returned": 10
+  }
+ },
+ "有什么跟自行车有关的决定吗": {
+  "fts_title": {
+   "ndcg": 0.3098064936645125,
+   "p": 0.4,
+   "p_strict": 0.4,
+   "recall": 0.21052631578947367,
+   "recall2": 0.21052631578947367,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.933745776545611,
+   "p": 0.9,
+   "p_strict": 0.9,
+   "recall": 0.47368421052631576,
+   "recall2": 0.47368421052631576,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 1.0,
+   "p": 1.0,
+   "p_strict": 1.0,
+   "recall": 0.5263157894736842,
+   "recall2": 0.5263157894736842,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 1.0,
+   "p": 1.0,
+   "p_strict": 1.0,
+   "recall": 0.5263157894736842,
+   "recall2": 0.5263157894736842,
+   "returned": 10
+  }
+ },
+ "附近有要拆房子的吗": {
+  "fts_title": {
+   "ndcg": 0.6937567549501791,
+   "p": 0.9,
+   "p_strict": 0.4,
+   "recall": 0.6923076923076923,
+   "recall2": 0.5714285714285714,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.710141517504778,
+   "p": 1.0,
+   "p_strict": 0.5,
+   "recall": 0.7692307692307693,
+   "recall2": 0.7142857142857143,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.0,
+   "p": 0.0,
+   "p_strict": 0.0,
+   "recall": 0.0,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.29791435115417897,
+   "p": 0.5,
+   "p_strict": 0.1,
+   "recall": 0.38461538461538464,
+   "recall2": 0.14285714285714285,
+   "returned": 10
+  }
+ },
+ "有人申请在外墙挂广告牌吗": {
+  "fts_title": {
+   "ndcg": 0.7799082337019199,
+   "p": 0.9,
+   "p_strict": 0.9,
+   "recall": 0.3333333333333333,
+   "recall2": 0.34615384615384615,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.8532721558012799,
+   "p": 1.0,
+   "p_strict": 0.9,
+   "recall": 0.37037037037037035,
+   "recall2": 0.34615384615384615,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 1.0,
+   "p": 1.0,
+   "p_strict": 1.0,
+   "recall": 0.37037037037037035,
+   "recall2": 0.38461538461538464,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.9510907186004267,
+   "p": 1.0,
+   "p_strict": 0.9,
+   "recall": 0.37037037037037035,
+   "recall2": 0.34615384615384615,
+   "returned": 10
+  }
+ },
+ "附近有环保或土壤污染相关的审批吗": {
+  "fts_title": {
+   "ndcg": 1.0,
+   "p": 1.0,
+   "p_strict": 1.0,
+   "recall": 0.47619047619047616,
+   "recall2": 0.5,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 1.0,
+   "p": 1.0,
+   "p_strict": 1.0,
+   "recall": 0.47619047619047616,
+   "recall2": 0.5,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.028381039213873666,
+   "p": 0.1,
+   "p_strict": 0.0,
+   "recall": 0.047619047619047616,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.5761058420421409,
+   "p": 0.6,
+   "p_strict": 0.5,
+   "recall": 0.2857142857142857,
+   "recall2": 0.25,
+   "returned": 10
+  }
+ },
+ "周末有没有集市或者跳蚤市场": {
+  "fts_title": {
+   "ndcg": 0.5219048690701444,
+   "p": 0.9,
+   "p_strict": 0.4,
+   "recall": 0.42857142857142855,
+   "recall2": 0.3076923076923077,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.4159701289567631,
+   "p": 0.7,
+   "p_strict": 0.3,
+   "recall": 0.3333333333333333,
+   "recall2": 0.23076923076923078,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.7702043899253146,
+   "p": 0.7,
+   "p_strict": 0.7,
+   "recall": 0.3333333333333333,
+   "recall2": 0.5384615384615384,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.576669299949219,
+   "p": 0.7,
+   "p_strict": 0.5,
+   "recall": 0.3333333333333333,
+   "recall2": 0.38461538461538464,
+   "returned": 10
+  }
+ },
+ "附近有音乐节或者露天演出吗": {
+  "fts_title": {
+   "ndcg": 0.5686307721622641,
+   "p": 1.0,
+   "p_strict": 0.4,
+   "recall": 0.37037037037037035,
+   "recall2": 0.26666666666666666,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.5709557724450102,
+   "p": 0.9,
+   "p_strict": 0.3,
+   "recall": 0.3333333333333333,
+   "recall2": 0.2,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.9432379215722527,
+   "p": 1.0,
+   "p_strict": 0.9,
+   "recall": 0.37037037037037035,
+   "recall2": 0.6,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.7832906583706655,
+   "p": 1.0,
+   "p_strict": 0.6,
+   "recall": 0.37037037037037035,
+   "recall2": 0.4,
+   "returned": 10
+  }
+ },
+ "有没有马拉松或者骑行比赛要封路": {
+  "fts_title": {
+   "ndcg": 0.18826048988800703,
+   "p": 0.5,
+   "p_strict": 0.1,
+   "recall": 0.23809523809523808,
+   "recall2": 0.06666666666666667,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.9305687780632227,
+   "p": 0.9,
+   "p_strict": 0.9,
+   "recall": 0.42857142857142855,
+   "recall2": 0.6,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.6525178838217405,
+   "p": 0.7,
+   "p_strict": 0.5,
+   "recall": 0.3333333333333333,
+   "recall2": 0.3333333333333333,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.8881549192639215,
+   "p": 0.9,
+   "p_strict": 0.8,
+   "recall": 0.42857142857142855,
+   "recall2": 0.5333333333333333,
+   "returned": 10
+  }
+ },
+ "哪条路要封闭施工": {
+  "fts_title": {
+   "ndcg": 0.3812470646147998,
+   "p": 0.8,
+   "p_strict": 0.2,
+   "recall": 0.36363636363636365,
+   "recall2": 0.2222222222222222,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.5379290853984455,
+   "p": 1.0,
+   "p_strict": 0.4,
+   "recall": 0.45454545454545453,
+   "recall2": 0.4444444444444444,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.7047090756625378,
+   "p": 0.9,
+   "p_strict": 0.5,
+   "recall": 0.4090909090909091,
+   "recall2": 0.5555555555555556,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.5255447408926225,
+   "p": 0.9,
+   "p_strict": 0.3,
+   "recall": 0.4090909090909091,
+   "recall2": 0.3333333333333333,
+   "returned": 10
+  }
+ },
+ "有人申请夜间施工许可吗": {
+  "fts_title": {
+   "ndcg": 0.0,
+   "p": 0.0,
+   "p_strict": 0.0,
+   "recall": 0.0,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.0,
+   "p": 0.0,
+   "p_strict": 0.0,
+   "recall": 0.0,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.9895948844467957,
+   "p": 0.9,
+   "p_strict": 0.9,
+   "recall": 1.0,
+   "recall2": 1.0,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.4753427689850081,
+   "p": 0.5,
+   "p_strict": 0.5,
+   "recall": 0.5555555555555556,
+   "recall2": 0.5555555555555556,
+   "returned": 10
+  }
+ },
+ "附近有放烟花的活动吗": {
+  "fts_title": {
+   "ndcg": 0.0,
+   "p": 0.0,
+   "p_strict": 0.0,
+   "recall": 0.0,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.3562071871080222,
+   "p": 0.1,
+   "p_strict": 0.1,
+   "recall": 1.0,
+   "recall2": 1.0,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.0,
+   "p": 0.0,
+   "p_strict": 0.0,
+   "recall": 0.0,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.0,
+   "p": 0.0,
+   "p_strict": 0.0,
+   "recall": 0.0,
+   "recall2": 0.0,
+   "returned": 10
+  }
+ },
+ "有人要开民宿或者短租公寓吗": {
+  "fts_title": {
+   "ndcg": 0.0,
+   "p": 0.0,
+   "p_strict": 0.0,
+   "recall": 0.0,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.16525871494199548,
+   "p": 0.1,
+   "p_strict": 0.1,
+   "recall": 0.125,
+   "recall2": 0.25,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.80887702329173,
+   "p": 0.7,
+   "p_strict": 0.3,
+   "recall": 0.875,
+   "recall2": 0.75,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.5134965320286765,
+   "p": 0.4,
+   "p_strict": 0.3,
+   "recall": 0.5,
+   "recall2": 0.75,
+   "returned": 10
+  }
+ },
+ "附近有儿童游乐场要改建吗": {
+  "fts_title": {
+   "ndcg": 0.06453405875479715,
+   "p": 0.2,
+   "p_strict": 0.0,
+   "recall": 0.18181818181818182,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.0,
+   "p": 0.0,
+   "p_strict": 0.0,
+   "recall": 0.0,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.8334207000639543,
+   "p": 0.9,
+   "p_strict": 0.6,
+   "recall": 0.8181818181818182,
+   "recall2": 1.0,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.3143691510888615,
+   "p": 0.4,
+   "p_strict": 0.2,
+   "recall": 0.36363636363636365,
+   "recall2": 0.3333333333333333,
+   "returned": 10
+  }
+ },
+ "有人申请摆露天座位的许可吗": {
+  "fts_title": {
+   "ndcg": 0.6947651160602988,
+   "p": 0.8,
+   "p_strict": 0.8,
+   "recall": 0.5,
+   "recall2": 0.5333333333333333,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.6530488081313035,
+   "p": 0.6,
+   "p_strict": 0.6,
+   "recall": 0.375,
+   "recall2": 0.4,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.2449756268600118,
+   "p": 0.3,
+   "p_strict": 0.2,
+   "recall": 0.1875,
+   "recall2": 0.13333333333333333,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.5244226922422562,
+   "p": 0.5,
+   "p_strict": 0.4,
+   "recall": 0.3125,
+   "recall2": 0.26666666666666666,
+   "returned": 10
+  }
+ },
+ "附近有加装太阳能板的申请吗": {
+  "fts_title": {
+   "ndcg": 0.3310575737214606,
+   "p": 0.7,
+   "p_strict": 0.2,
+   "recall": 0.30434782608695654,
+   "recall2": 0.15384615384615385,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.21964364149044777,
+   "p": 0.3,
+   "p_strict": 0.2,
+   "recall": 0.13043478260869565,
+   "recall2": 0.15384615384615385,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.8122418648457492,
+   "p": 1.0,
+   "p_strict": 0.6,
+   "recall": 0.43478260869565216,
+   "recall2": 0.46153846153846156,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.7631925784528221,
+   "p": 0.7,
+   "p_strict": 0.7,
+   "recall": 0.30434782608695654,
+   "recall2": 0.5384615384615384,
+   "returned": 10
+  }
+ },
+ "有没有关于养狗或者遛狗区域的规定": {
+  "fts_title": {
+   "ndcg": 0.0,
+   "p": 0.0,
+   "p_strict": 0.0,
+   "recall": 0.0,
+   "recall2": NaN,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.44830398990253034,
+   "p": 0.2,
+   "p_strict": 0.0,
+   "recall": 0.2857142857142857,
+   "recall2": NaN,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.7640814291585591,
+   "p": 0.5,
+   "p_strict": 0.0,
+   "recall": 0.7142857142857143,
+   "recall2": NaN,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.8020378746650064,
+   "p": 0.5,
+   "p_strict": 0.0,
+   "recall": 0.7142857142857143,
+   "recall2": NaN,
+   "returned": 10
+  }
+ },
+ "附近有马戏团或者游乐场来吗": {
+  "fts_title": {
+   "ndcg": 1.0,
+   "p": 1.0,
+   "p_strict": 1.0,
+   "recall": 0.5,
+   "recall2": 0.625,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.6733406737901081,
+   "p": 0.7,
+   "p_strict": 0.6,
+   "recall": 0.35,
+   "recall2": 0.375,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.08428034239505915,
+   "p": 0.3,
+   "p_strict": 0.0,
+   "recall": 0.15,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.38465144498721904,
+   "p": 0.4,
+   "p_strict": 0.2,
+   "recall": 0.2,
+   "recall2": 0.125,
+   "returned": 10
+  }
+ },
+ "有人要在运河或者水上办活动吗": {
+  "fts_title": {
+   "ndcg": 0.04600401404045722,
+   "p": 0.1,
+   "p_strict": 0.0,
+   "recall": 0.1,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.1473606392307116,
+   "p": 0.2,
+   "p_strict": 0.0,
+   "recall": 0.2,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.6341165879746998,
+   "p": 0.7,
+   "p_strict": 0.1,
+   "recall": 0.7,
+   "recall2": 1.0,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.2930841457476793,
+   "p": 0.4,
+   "p_strict": 0.0,
+   "recall": 0.4,
+   "recall2": 0.0,
+   "returned": 10
+  }
+ },
+ "附近有新的住宅开发项目吗": {
+  "fts_title": {
+   "ndcg": 0.29067419414790074,
+   "p": 0.5,
+   "p_strict": 0.1,
+   "recall": 0.45454545454545453,
+   "recall2": 0.16666666666666666,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.11077480730619611,
+   "p": 0.2,
+   "p_strict": 0.1,
+   "recall": 0.18181818181818182,
+   "recall2": 0.16666666666666666,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.6580520930295559,
+   "p": 0.4,
+   "p_strict": 0.4,
+   "recall": 0.36363636363636365,
+   "recall2": 0.6666666666666666,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.3813755674584945,
+   "p": 0.3,
+   "p_strict": 0.3,
+   "recall": 0.2727272727272727,
+   "recall2": 0.5,
+   "returned": 10
+  }
+ },
+ "有没有关于限速或者单行道的交通决定": {
+  "fts_title": {
+   "ndcg": 0.694355946562825,
+   "p": 1.0,
+   "p_strict": 0.0,
+   "recall": 0.4166666666666667,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.8259896754927477,
+   "p": 1.0,
+   "p_strict": 0.1,
+   "recall": 0.4166666666666667,
+   "recall2": 1.0,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.694355946562825,
+   "p": 1.0,
+   "p_strict": 0.0,
+   "recall": 0.4166666666666667,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.7962372977085499,
+   "p": 1.0,
+   "p_strict": 0.1,
+   "recall": 0.4166666666666667,
+   "recall2": 1.0,
+   "returned": 10
+  }
+ },
+ "有人申请安装通信基站或者天线吗": {
+  "fts_title": {
+   "ndcg": 0.6843830725976618,
+   "p": 0.6,
+   "p_strict": 0.6,
+   "recall": 0.5,
+   "recall2": 0.5454545454545454,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.413107528150607,
+   "p": 0.5,
+   "p_strict": 0.5,
+   "recall": 0.4166666666666667,
+   "recall2": 0.45454545454545453,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.6705677658827746,
+   "p": 0.6,
+   "p_strict": 0.5,
+   "recall": 0.5,
+   "recall2": 0.45454545454545453,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.7885497208855956,
+   "p": 0.7,
+   "p_strict": 0.7,
+   "recall": 0.5833333333333334,
+   "recall2": 0.6363636363636364,
+   "returned": 10
+  }
+ },
+ "附近有教堂或者宗教活动的许可吗": {
+  "fts_title": {
+   "ndcg": 0.034482383019389544,
+   "p": 0.1,
+   "p_strict": 0.0,
+   "recall": 0.09090909090909091,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.4963424865239238,
+   "p": 0.6,
+   "p_strict": 0.2,
+   "recall": 0.5454545454545454,
+   "recall2": 0.5,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.3753319858878953,
+   "p": 0.4,
+   "p_strict": 0.2,
+   "recall": 0.36363636363636365,
+   "recall2": 0.5,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.4802149709243168,
+   "p": 0.6,
+   "p_strict": 0.2,
+   "recall": 0.5454545454545454,
+   "recall2": 0.5,
+   "returned": 10
+  }
+ },
+ "有人要砍掉一整片树林吗": {
+  "fts_title": {
+   "ndcg": 0.8727162110070169,
+   "p": 1.0,
+   "p_strict": 0.3,
+   "recall": 0.4,
+   "recall2": 0.75,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.8694642314741198,
+   "p": 1.0,
+   "p_strict": 0.3,
+   "recall": 0.4,
+   "recall2": 0.75,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.47001826010185915,
+   "p": 1.0,
+   "p_strict": 0.0,
+   "recall": 0.4,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.7495564346936439,
+   "p": 1.0,
+   "p_strict": 0.3,
+   "recall": 0.4,
+   "recall2": 0.75,
+   "returned": 10
+  }
+ },
+ "附近有酒类销售许可的申请吗": {
+  "fts_title": {
+   "ndcg": 0.34809749117230654,
+   "p": 1.0,
+   "p_strict": 0.0,
+   "recall": 0.38461538461538464,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.34809749117230654,
+   "p": 1.0,
+   "p_strict": 0.0,
+   "recall": 0.38461538461538464,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.9981666155888351,
+   "p": 1.0,
+   "p_strict": 0.9,
+   "recall": 0.38461538461538464,
+   "recall2": 1.0,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.657974634826736,
+   "p": 1.0,
+   "p_strict": 0.5,
+   "recall": 0.38461538461538464,
+   "recall2": 0.5555555555555556,
+   "returned": 10
+  }
+ },
+ "有没有要征求居民意见的规划方案": {
+  "fts_title": {
+   "ndcg": 0.0,
+   "p": 0.0,
+   "p_strict": 0.0,
+   "recall": 0.0,
+   "recall2": NaN,
+   "returned": 0
+  },
+  "fts_body": {
+   "ndcg": 0.0,
+   "p": 0.0,
+   "p_strict": 0.0,
+   "recall": 0.0,
+   "recall2": NaN,
+   "returned": 0
+  },
+  "vec": {
+   "ndcg": 0.5706417189553201,
+   "p": 0.2,
+   "p_strict": 0.0,
+   "recall": 1.0,
+   "recall2": NaN,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.5706417189553201,
+   "p": 0.2,
+   "p_strict": 0.0,
+   "recall": 1.0,
+   "recall2": NaN,
+   "returned": 10
+  }
+ },
+ "有人申请在人行道上搭脚手架吗": {
+  "fts_title": {
+   "ndcg": 0.0,
+   "p": 0.0,
+   "p_strict": 0.0,
+   "recall": 0.0,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.48351500957048305,
+   "p": 0.3,
+   "p_strict": 0.2,
+   "recall": 1.0,
+   "recall2": 1.0,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.0,
+   "p": 0.0,
+   "p_strict": 0.0,
+   "recall": 0.0,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.18543279769614657,
+   "p": 0.1,
+   "p_strict": 0.1,
+   "recall": 0.3333333333333333,
+   "recall2": 0.5,
+   "returned": 10
+  }
+ },
+ "附近有圣诞市场或者节日灯饰吗": {
+  "fts_title": {
+   "ndcg": 0.0,
+   "p": 0.0,
+   "p_strict": 0.0,
+   "recall": 0.0,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.2048342475185909,
+   "p": 0.2,
+   "p_strict": 0.2,
+   "recall": 0.16666666666666666,
+   "recall2": 0.16666666666666666,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 1.0,
+   "p": 1.0,
+   "p_strict": 1.0,
+   "recall": 0.8333333333333334,
+   "recall2": 0.8333333333333334,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.6036081270984907,
+   "p": 0.7,
+   "p_strict": 0.7,
+   "recall": 0.5833333333333334,
+   "recall2": 0.5833333333333334,
+   "returned": 10
+  }
+ },
+ "有人要改建成办公楼或者商铺吗": {
+  "fts_title": {
+   "ndcg": 0.8122418648457492,
+   "p": 1.0,
+   "p_strict": 0.6,
+   "recall": 0.43478260869565216,
+   "recall2": 0.6,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.2874476364692017,
+   "p": 0.4,
+   "p_strict": 0.4,
+   "recall": 0.17391304347826086,
+   "recall2": 0.4,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.38224261473290666,
+   "p": 1.0,
+   "p_strict": 0.1,
+   "recall": 0.43478260869565216,
+   "recall2": 0.1,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.3316941484128835,
+   "p": 0.5,
+   "p_strict": 0.1,
+   "recall": 0.21739130434782608,
+   "recall2": 0.1,
+   "returned": 10
+  }
+ },
+ "附近有体育场馆的活动许可吗": {
+  "fts_title": {
+   "ndcg": 0.6591435896468396,
+   "p": 0.7,
+   "p_strict": 0.4,
+   "recall": 0.4666666666666667,
+   "recall2": 0.5714285714285714,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.7529523161925625,
+   "p": 0.8,
+   "p_strict": 0.5,
+   "recall": 0.5333333333333333,
+   "recall2": 0.7142857142857143,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.35030821689600755,
+   "p": 0.6,
+   "p_strict": 0.2,
+   "recall": 0.4,
+   "recall2": 0.2857142857142857,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.625864094007858,
+   "p": 0.7,
+   "p_strict": 0.4,
+   "recall": 0.4666666666666667,
+   "recall2": 0.5714285714285714,
+   "returned": 10
+  }
+ },
+ "有没有关于噪音扰民的特别规定": {
+  "fts_title": {
+   "ndcg": 0.0,
+   "p": 0.0,
+   "p_strict": 0.0,
+   "recall": 0.0,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "fts_body": {
+   "ndcg": 0.0,
+   "p": 0.0,
+   "p_strict": 0.0,
+   "recall": 0.0,
+   "recall2": 0.0,
+   "returned": 10
+  },
+  "vec": {
+   "ndcg": 0.9785774417896257,
+   "p": 0.8,
+   "p_strict": 0.7,
+   "recall": 1.0,
+   "recall2": 1.0,
+   "returned": 10
+  },
+  "hybrid": {
+   "ndcg": 0.4630528422067464,
+   "p": 0.4,
+   "p_strict": 0.4,
+   "recall": 0.5,
+   "recall2": 0.5714285714285714,
+   "returned": 10
+  }
+ }
+}

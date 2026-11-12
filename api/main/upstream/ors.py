@@ -1,7 +1,10 @@
 import httpx
+
+from .. import http_client
 from ..config import ORS_API_KEY, ORS_BASE_URL, MODE_MAPPING
 from ..errors import ExternalServiceError
 from ..logger import get_logger
+from ..metrics import track_upstream
 
 logger = get_logger("client.ors")
 
@@ -13,8 +16,10 @@ async def fetch_isochrone(lng: float, lat: float, minutes: int, profile: str) ->
 
     logger.info("→ isochrone", extra={"ors_profile": ors_profile, "lng": lng, "lat": lat, "minutes": minutes})
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(url, json=body, headers={"Authorization": ORS_API_KEY})
+        async with track_upstream("ors"):
+            resp = await http_client.get().post(
+                url, json=body, headers={"Authorization": ORS_API_KEY}, timeout=15.0
+            )
             resp.raise_for_status()
             data = resp.json()
             logger.info("← isochrone", extra={"features": len(data.get("features", []))})
@@ -39,8 +44,8 @@ async def fetch_directions(
 
     logger.info("→ directions", extra={"profile": profile})
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(url, params=params)
+        async with track_upstream("ors"):
+            resp = await http_client.get().get(url, params=params, timeout=15.0)
             resp.raise_for_status()
             logger.info("← directions ok")
             return resp.json()

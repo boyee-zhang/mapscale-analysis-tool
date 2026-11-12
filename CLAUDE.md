@@ -53,7 +53,14 @@ python scripts/migrate.py                   # apply pending migrations (idempote
 python scripts/migrate.py --status          # list applied / pending
 python scripts/seed_municipalities.py       # seed municipality from PDOK CBS WFS (~342 rows)
 python scripts/import_poi.py data/noord-holland-latest.osm.pbf   # OSM POI import
+python scripts/import_bekendmaking.py --gemeente Utrecht --from 2026-01-01  # announcements
 ```
+
+`import_bekendmaking.py` is scoped **per municipality** (or an RD New circle), because those
+are the only two ways KOOP's SRU service narrows by place. Widening coverage is therefore
+re-running it, once per municipality — there is no national mode. It only ever upserts, so a
+re-run is idempotent and a short fetch costs coverage, never correctness. Both importers read
+`.env` via `load_dotenv`; neither requires `DATABASE_URL` to be exported by hand.
 
 `import_poi.py` needs `osmium` (pyosmium) from `requirements-local.txt` — a Python
 package, not `brew install osmium-tool`; nothing system-level is required. It takes a
@@ -86,6 +93,69 @@ the command above is unaffected. Reads the same
 backend at it with `ORS_BASE_URL=http://localhost:8080/ors/v2`. The why, the measured
 preconditions and the three things to measure after the build are in `docs/ors-self-host.md`.
 
+### Monitoring (optional) — Prometheus + Grafana
+```bash
+./scripts/monitoring.sh up       # :9090 Prometheus, :3000 Grafana, then prints target health
+./scripts/monitoring.sh down     # stops ONLY these three. A bare `docker compose down`
+                                 # removes mapscale-pg and leaves all four profiled
+                                 # containers running — see below.
+./scripts/monitoring.sh status
+
+# Stopping EVERYTHING. The profiles are not optional here: a bare `docker compose down`
+# targets only the services WITHOUT a profile, so it removes mapscale-pg and then fails
+# with "Network ... Resource is still in use" because ors/prometheus/grafana/
+# postgres-exporter are still attached (measured 2026-10-30; an earlier note in this file
+# claimed it took ors with it, which was wrong in the direction that matters — it cleans
+# up LESS than it looks, and the one thing it does clean up is the database).
+# `docker compose ps -a` lists all five, which is exactly what made that easy to get
+# wrong: ps sees more than down targets.
+docker compose --profile ors --profile monitoring down   # 5 containers + network
+# No -v, so all seven volumes survive (verified: identical `docker volume ls` before and
+# after). `-v` is the command that actually costs 40 minutes of graph rebuilding.
+.venv/bin/python scripts/loadtest.py --scenario all         # every LOCAL endpoint
+.venv/bin/python scripts/loadtest.py --scenario search --probe 5   # third-party: timed, not loaded
+```
+`loadtest.py` **refuses to saturate** `region`, `search`, `traffic_flow` and
+`traffic_incidents`: each leaves the machine on every request, so hammering them measures
+PDOK/Nominatim/TomTom's rate limiter and burns a metered quota or abuses a free public
+service. The constraint lives in `THIRD_PARTY` in the script, not in a comment. `--probe N`
+times them sequentially instead.
+All three carry `profiles: ["monitoring"]`, which is what keeps them out of a bare
+`docker compose up -d`. The backend exposes `/metrics` — **not** under `/api/main`, since
+that prefix is what vercel.json routes to the serverless function. `prometheus_client`
+lives in `requirements-local.txt`, so `/metrics` returns **503, not an empty 200**, where
+it is absent; an empty 200 charts as a flat zero that looks like "no traffic". Scraping
+Vercel would be pointless regardless: each invocation is a fresh process.
+
+Request labels use the **route template** (`scope["route"].path`), never the raw path —
+`/api/main/pois?lng=…&lat=…` as a label is one time series per coordinate the browser
+ever sent. Pool and loop-lag gauges are sampled by a 1 s background task rather than read
+inside the scrape handler, because reading them on scrape observes them only at the one
+moment the pool is guaranteed idle.
+
+Measured ceilings and which resource binds them: `docs/monitoring.md`. Headline — the wall
+was **constructing an `httpx.AsyncClient` per call**: building its TLS context costs
+**13.88 ms of CPU**, and with the Upstash host NXDOMAIN every request paid that for a
+cache lookup that could never hit. `api/main/http_client.py` is now the one shared client;
+**use it, never `httpx.AsyncClient(...)` in a request path**. Measured: 22.3 → 7.5 ms CPU
+per request, 40.9 → 119.4 req/s, p95 1495 → 364 ms, with the dead cache still configured
+and still called every request. Not the pool (10→30 changed nothing), not ORS (4% of
+request time), not Postgres (1.3–4.3 of 8 cores, one active query most samples).
+`--workers 4` buys +80% but only adds cores to burn on the same waste — fix the waste
+first. The doc records the first, wrong conclusion too.
+
+Full-surface measurement (2026-10-29, warm, generator ceiling 5,290 req/s): `/health`
+**4,346 req/s**, `/traffic/tile-url` 3,062, `/pois` 844 deduplicated and 445 when every
+request is distinct, `/directions` 431, `/isochrone` 410, `/bekendmakingen` 142,
+`/bulk_directions` 65. Carry forward the **per-core** costs, not the peaks: 0.67 / 3.55 /
+7.22 ms of CPU per request for `/health` / `/pois` / `/bekendmakingen`, i.e. 1,498 / 282 /
+138 req/s on one dedicated core. Three traps the sweep found: **more workers made
+`/bekendmakingen` slower** (142 on 2 workers, 119 on 6 — twelve hungry processes on eight
+cores); **`DB_POOL_MAX_SIZE` is per worker** and times `--workers` it will exceed Postgres's
+`max_connections=100`, which collapses the service outright (the pool itself is still not a
+bottleneck — it never held more than 15 connections); and **the first run after a restart
+reads ~3x low** (268 req/s cold against 782/837/844 warm), so discard it.
+
 ### Elasticsearch (optional)
 ```bash
 docker compose up -d elasticsearch   # :9200, single-node, security disabled
@@ -113,10 +183,58 @@ ORS_API_KEY=                   # required for isochrone + directions
 ORS_BASE_URL=                  # optional; defaults to the public host. See docs/ors-self-host.md
 TOMTOM_API_KEY=                # required for traffic
 DATABASE_URL=                  # optional; omit to run without Postgres (see below)
+DB_POOL_MAX_SIZE=              # optional, default 10. An env var so it can be VARIED while
+                               # measuring — that is the only way to tell "the pool is the
+                               # wall" from "the pool is merely full". Measured: it is not.
 ES_URL=                        # optional; omit to disable ES and fall back to PDOK/Nominatim
-UPSTASH_REDIS_REST_URL=        # optional; omit to disable caching (degrades silently)
-UPSTASH_REDIS_REST_TOKEN=
+UPSTASH_REDIS_REST_URL=        # optional; omit to disable caching (degrades silently).
+UPSTASH_REDIS_REST_TOKEN=      # COMMENTED OUT locally 2026-10-29: the instance is gone
+                               # (NXDOMAIN), so every call threw and the cache could never
+                               # hit. Unset costs 24% less CPU per request than configured-
+                               # and-failing, and buys zero throughput — see docs/monitoring.md.
+                               # .env is gitignored, so PRODUCTION ON VERCEL STILL HAS IT SET.
 ```
+
+### Portable deployment (another machine)
+
+`docker-compose.yml` is the DEVELOPMENT stack: Postgres in a container, API and frontend
+on the host via `scripts/dev.sh`, Postgres parameters deliberately small so bloat and
+buffer reads show up at 10-20M rows. `docker-compose.deploy.yml` is the portable one:
+API and frontend containerised too, its own project name (`mapscale-deploy`) and its own
+volumes, so both can run side by side.
+
+```bash
+./scripts/package.sh                 # dist/mapscale-bundle-<date>.tar.gz: source + 35 MB dump
+./scripts/package.sh --with-extract  # also the 181 MB NH extract, for self-hosted ORS
+# on the target:
+cp deploy/env.example .env && docker compose -f docker-compose.deploy.yml up -d --build
+```
+
+Full operator notes, including the three routing options and what each missing key
+degrades: `deploy/README.md`. Measured: 37 s cold start (22 s of it restoring the dump),
+16 s warm, 914 MB of images, 335 MB of restored database.
+
+It ships SOURCE, not images — `docker save` archives are locked to the architecture that
+built them, and all three base images are multi-arch, so building on the target is the
+thing that works on an arm64 laptop and an amd64 server alike.
+
+Two healthcheck bugs were measured and fixed while building it, both the same shape:
+**the probe answered from a different surface than the real client.**
+  - `pg_isready` with no `-h` probes the UNIX SOCKET. During initdb the entrypoint runs a
+    temporary server with `listen_addresses=''`, so the socket says "accepting
+    connections" while TCP is not listening at all. Compose called Postgres healthy 22 s
+    before the dump finished restoring, started `api`, and asyncpg exited 1 on
+    ECONNREFUSED. The deploy stack now probes `-h 127.0.0.1`. **`docker-compose.yml` still
+    has the socket-only probe** — harmless there only because nothing restores a dump
+    during its initdb, so the window is ~1 s instead of 22.
+  - busybox `wget http://localhost/` resolves `::1` first and `listen 80` is IPv4-only, so
+    nginx reported `unhealthy` while its own access log showed 200s. Probe `127.0.0.1`.
+
+Running it on THIS machine needs `--env-file`: `docker compose -f
+docker-compose.deploy.yml` reads `./.env` for substitution, and this repo's `.env` points
+`ORS_BASE_URL` at the host's `:8080`, which inside a container is the container.
+`deploy/api-entrypoint.sh` warns at boot when it sees a localhost URL, because the symptom
+otherwise is a working map with a silently wrong catchment.
 
 ## Architecture
 
@@ -153,9 +271,11 @@ api/main/
   upstream/       transport only: ors, overpass, pdok, tomtom, es_client
   domains/
     geo/          spatial primitives: isochrone + POI-inside-a-shape (service.py)
-  routers/        isochrone, pois, directions, region, traffic, search, health
-                  — isochrone/pois are thin callers of domains/geo; the rest are
-                    not yet folded into domains/ (refactor phases B & C)
+    bekendmaking/ official announcements for a place and a time window (service.py);
+                  composes domains/geo's isochrone, owns no shape of its own
+  routers/        isochrone, pois, bekendmakingen, directions, region, traffic,
+                  search, health — isochrone/pois/bekendmakingen are thin callers of
+                  domains/; the rest are not yet folded in (refactor phases B & C)
 ```
 
 **`upstream/` is a transport layer only.** It may not contain business rules, caching
@@ -167,7 +287,8 @@ decisions, or domain types. Judgement call: if a function in `upstream/` needs t
 `db.enabled()` is the guard; the pre-Postgres code path stays in place behind it, exactly
 as `cache.py` degrades when Upstash is unconfigured. This keeps the Vercel deployment
 working while Postgres is local-only. Current tables: `municipality` (stage 0); `etl_run`,
-`poi_category`, `poi_category_rule`, `poi`, `poi_import` (stage 1). `geocode_cache` is also
+`poi_category`, `poi_category_rule`, `poi`, `poi_import` (stage 1); `bekendmaking`,
+`bekendmaking_locatie` (official announcements, loaded by `scripts/import_bekendmaking.py`). `geocode_cache` is also
 still there but no longer read or written — its only caller was the housing geocoder.
 
 A refactor is in progress — see `docs/architecture-refactor-plan.md` (structure) and
@@ -184,6 +305,7 @@ All under the `/api/main` prefix.
 | `/health` | GET | — | — |
 | `/isochrone` | GET | ORS | 24h |
 | `/pois` | GET | `poi` table (Overpass as fallback) | 6h on the Overpass path only |
+| `/bekendmakingen` | GET | `bekendmaking` tables + ORS for the shape | — |
 | `/region` | GET | PDOK reverse | 7d |
 | `/directions` | GET | ORS | — |
 | `/bulk_directions` | GET | ORS (`asyncio.gather`) | — |
@@ -219,6 +341,33 @@ inside the `Index Cond` and is now slightly ahead (91 buffers against 98). The i
 still load-bearing. Re-measure before quoting either number. Likewise the
 radius is a buffer polygon, not `ST_DWithin(geom::geography, …)`, which is unindexable against a
 `geometry` GiST. Both are measured in `docs/pg-notes/stage1-poi-import.md`; do not "simplify".
+
+`/bekendmakingen` answers "what has been happening here, month by month" over the same
+isochrone. `building_permits=true` is shorthand for `doc_type=omgevingsvergunning` +
+`activiteit=bouwen` — `doc_type` alone also covers felling, signage and zoning. Four things
+about its contract are easy to get wrong:
+- `total` and `months` count every match; `items` is capped at 500 and `truncated` says so.
+  **Never re-derive the month histogram from `items`** — a truncated list under-reports.
+- `by_activiteit` counts do **not** sum to `total`: one permit can carry several activities.
+  Correct as a bar chart, wrong as a pie.
+- `stage` (aanvraag / ontwerp / besluit / overig) is **derived from the title**, not a field
+  the source publishes. 99.8% of building permits classify; the UI labels it as derived.
+- without `DATABASE_URL` it returns `shape: "unavailable"`, not `total: 0`. There is no
+  Overpass-equivalent to degrade to, and "no source" must not look like "no permits".
+
+The spatial predicate is `ST_Intersects`, not the `ST_Contains` `/pois` uses: announcement
+geometry is 16% POLYGON and 13% LINESTRING, and a plot straddling the isochrone edge is
+within reach. One row per publication comes from `DISTINCT ON` in the same index pass —
+a publication carries 2.5 geometries on average. Measured in
+`docs/pg-notes/bekendmaking-map-layer.md`; do not "simplify" either.
+
+**`db.py` sets `plan_cache_mode=force_custom_plan` on every pooled connection, and that is
+load-bearing.** asyncpg sends queries as server-side prepared statements and caches them;
+PostgreSQL switches to a generic plan on the 6th execution, and our spatial queries pass the
+search shape as a parameter, so the planner has no bounding box to estimate from. Measured:
+the same wide query took 2.4-3.1 s for five executions and **104 s on the sixth**, reproduced
+independently in psql with PREPARE/EXECUTE (77.5 s on the sixth). `/pois` passes its polygon
+the same way and had the same latent exposure. Do not remove the setting.
 
 Mode constants live **only** in `config.py`:
 - `MODE_MAPPING`: `walking → foot-hiking`, `cycling → cycling-regular`, `driving → driving-car`
@@ -263,7 +412,16 @@ fetch was removed rather than wired up — drawing the route is a feature, not a
 `api.fetchDirections` is still there if it is ever wanted.
 
 Components: `SearchBar`, `CenterMarker`, `PoiMarker`, `PoiPopup`, `LegendPanel`,
-`AnalysisPanel` + `AnalysisResultPanel` (AI service).
+`AnalysisPanel` + `AnalysisResultPanel` (AI service), `PermitLayer` + `PermitPanel`.
+
+`PermitLayer` is a GeoJSON source plus two circle layers, **not** one DOM marker per item
+the way `PoiMarker` is: `/bekendmakingen` returns up to 500 and a driving isochrone hits
+that cap every time. Both circle layers are interactive and both are in `MapContainer`'s
+click guard — the dot is 2-7px and the halo around it is 4-18px, so hit-testing only the dot
+let a click that visibly landed on a permit fall through and move the centre instead.
+`e.originalEvent.stopPropagation()` does **not** stop MapLibre's own dispatch to the bare
+`map.on('click')` handler; the guard has to live in that handler, via
+`queryRenderedFeatures`.
 
 `AnalysisResultPanel` still renders a **Housing Price Trend** chart. That is deliberate and is
 not part of the removed subsystem: the data is CBS OData from the sibling `mapscale-ai-service`
@@ -356,18 +514,28 @@ console.log('[api] fetchIsochrone response', { featureCount: data.features?.leng
 
 ## Known Issues
 
-- **ORS's `cycling-*` graphs are broken upstream and return HTTP 200, so `cycling` mode
-  silently under-reports.** All four cycling profiles answer a 600 s isochrone with the same
-  0.031 km² blob (`reachfactor` 0.0016 against foot's 1.0; a bike covers ~9x a walk, so this is
-  ~400x too small), and `/matrix/cycling-regular` returns `null` durations between points 800 m
-  apart. Because it is a 200 with a well-formed polygon, neither `raise_for_status()` nor the
-  `/pois` circle fallback can detect it. `MODE_MAPPING["cycling"]` is deliberately **not**
-  re-pointed — all four cycling graphs are equally broken, and substituting a foot or driving
-  graph for a bike request would be a worse lie. `foot-walking` was broken the same way but
-  louder (it black-holes the request entirely), and `walking` is therefore mapped to
-  `foot-hiking`, which is measured-equivalent. Both profiles are still current in the official
-  spec, so this is an outage, not a deprecation. Full evidence and the narrowing steps:
-  `docs/pg-notes/ors-profile-outage.md`. Revert the walking remap if upstream recovers.
+- **A `cycling-*` isochrone can be ~400x too small and still answer HTTP 200, so `cycling`
+  mode silently under-reports.** At `(4.9003, 52.3791)` a 600 s cycling isochrone is a
+  0.031 km² blob (`reachfactor` 0.0016 against foot's 1.0) and `/directions` from it fails
+  with ORS code 2009. Because it is a 200 with a well-formed polygon, neither
+  `raise_for_status()` nor the `/pois` circle fallback can detect it.
+  **Corrected 2026-10-28:** this was recorded as "all four cycling graphs are broken upstream",
+  which did not survive a second coordinate. A self-hosted v10.1.0 built from our own extract
+  reproduces the blob at that exact point and returns 10–16 km² with `reachfactor` 0.50–0.82
+  at Haarlem, Alkmaar, Hoorn and 200 m in any direction from the test point — the healthy
+  figure the original note itself predicted. The point snaps to a bike-disconnected component.
+  The original conclusion came from testing every profile at one coordinate, so it measured
+  the coordinate. Whether the *public* graph behaves the same away from that point is
+  **untested** (its 50/day quota was spent that day).
+  `MODE_MAPPING["cycling"]` is still **not** re-pointed, and the plausibility check is still
+  owed — it is what would have caught this in either reading.
+  `foot-walking` is a different fault: the public instance black-holes it entirely, while a
+  self-hosted instance serves it identically to `foot-hiking` (1.489 km², `reachfactor` 1.0,
+  routes 731 m), so that one is in the deployment, not in ORS or a graph. `walking` stays
+  mapped to `foot-hiking` regardless, because production on Vercel talks to the public API —
+  re-pointing it would fix localhost by breaking prod. Both profiles are still current in the
+  official spec, so neither is a deprecation. Full evidence and the narrowing steps:
+  `docs/pg-notes/ors-profile-outage.md`.
 - The official ORS OpenAPI spec is at `https://docs.openrouteservice.org/openrouteservice/v2/docs`
   (every `…/api-docs` URL 404s, and the `/dev/` docs page is a JS SPA that fetches it). It
   declares `servers[0]` as **`https://api.heigit.org`** with paths prefixed
@@ -412,6 +580,8 @@ What that took with it, so the absences are not mistaken for gaps:
 - **`cache.py` was kept** (`/region`, `/traffic`, `domains/geo`); only the housing-specific
   `domains/housing/upstash.py` went. Note the configured Upstash instance no longer resolves
   (NXDOMAIN as of 2026-10-28), so caching is silently degraded — `cache.py` handles that by
-  design, which is why nothing fails.
+  design, which is why nothing fails. **Commented out of `.env` 2026-10-29** so the failing
+  path is not even entered locally; Vercel's env is separate and unchanged. If caching is ever
+  wanted again, point these two variables at a live instance — no code change is needed.
 - `docs/data-source-feasibility.md` and the housing sections of the two refactor plans were
   deleted. `docs/pg-notes/` never mentioned housing and is untouched.

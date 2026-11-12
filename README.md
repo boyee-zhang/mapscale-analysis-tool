@@ -77,7 +77,8 @@ api/main/
   upstream/         transport only — ors, overpass, pdok, tomtom, es_client. No business rules.
   domains/
     geo/            spatial primitives: isochrone, POI-inside-a-shape
-  routers/          isochrone, pois, directions, region, traffic, search, health
+  routers/          isochrone, pois, bekendmakingen, directions, region, traffic,
+                    search, health
 migrations/         0001_init … 0004_poi_category_seed  (+ .noxact.sql for CREATE INDEX CONCURRENTLY)
 scripts/            dev.sh, migrate.py, import_poi.py, seed_municipalities.py, ingest_addresses.py
 docs/pg-notes/      raw EXPLAIN / lock / vacuum output per stage
@@ -143,6 +144,32 @@ These are the reason the project exists in its current form. Each one is reprodu
 
 ---
 
+## Monitoring and measured capacity
+
+`docker compose up -d prometheus grafana postgres-exporter` brings up a local-only
+Prometheus + Grafana (profile-gated, so a bare `up -d` does not start them), and
+`scripts/loadtest.py` ramps concurrency against it.
+
+The ceiling is endpoint-shaped, not one number: `/health` peaks near **3,000 req/s** and
+`/bekendmakingen` originally near **40 req/s**. Chasing that gap found a real defect —
+every upstream helper opened its own `httpx.AsyncClient` per call, and building that
+client's TLS context costs **13.88 ms of CPU**. With the Upstash host NXDOMAIN, every
+request paid it for a cache lookup that could never hit. One shared client
+(`api/main/http_client.py`) took per-request CPU from **22.3 ms to 7.5 ms** and throughput
+from **40.9 to 119.4 req/s**, with the dead cache still configured and still failing on
+every request.
+
+Not the connection pool (tripled, no effect), not ORS (4% of request time), not Postgres
+(1.3–4.3 of 8 cores). `--workers 4` buys +80%, but only by adding cores to burn on the
+same waste.
+
+Three measurement mistakes are recorded alongside the results in `docs/monitoring.md`,
+because each produced a confident wrong answer first: a single-process load generator that
+was itself the bottleneck (caught by pointing it at a Go server), reading the loop-lag
+gauge *after* the run instead of during it, and attributing the CPU to "parsing and
+serialisation" by listing plausible work instead of measuring it (that work is 4.5 ms of
+the 22.3).
+
 ## Endpoints
 
 All under `/api/main`.
@@ -152,10 +179,21 @@ All under `/api/main`.
 | `/health` | — | — |
 | `/isochrone` | ORS | 24h |
 | `/pois` | `poi` table (Overpass fallback) | 6h on the Overpass path only |
+| `/bekendmakingen` | `bekendmaking` tables, clipped to the isochrone | — |
 | `/region` | PDOK reverse | 7d |
 | `/directions`, `/bulk_directions` | ORS | — |
 | `/traffic/tile-url`, `/traffic/flow`, `/traffic/incidents` | TomTom | 5m |
 | `/search` | ES → PDOK → Nominatim | — |
+
+**Announcements on the map.** `/bekendmakingen` answers "what has been happening here,
+month by month" over the same isochrone `/pois` uses, from the KOOP publications loaded by
+`scripts/import_bekendmaking.py`. `building_permits=true` narrows it to
+`omgevingsvergunning` + activity `bouwen`; `doc_type` on its own also covers tree felling,
+signage and zoning. `total` and the month histogram count every match while `items` is
+capped at 500, so the bars must not be re-derived from the list. `stage`
+(applied / draft / decided) is **derived from the publication title**, not a field the
+source publishes — 99.8% of building permits classify, and the UI says it is derived.
+Without `DATABASE_URL` it reports `shape: "unavailable"` rather than zero results.
 
 **Search waterfall.** Elasticsearch `nl_addresses` (weights overridable per request via
 `w_street` / `w_city` / `w_postcode` / `w_label`, accepted only above `ES_MIN_SCORE=15`) → PDOK,
@@ -240,12 +278,16 @@ every `EXPLAIN ANALYZE` timing meaningless.
 
 Honest list; what remains is upstream, or missing work rather than a defect.
 
-- **ORS's `cycling-*` graphs are broken upstream and return HTTP 200**, so cycling mode silently
-  under-reports — all four profiles answer a 600 s isochrone with the same 0.031 km² blob,
-  roughly 400x too small. `MODE_MAPPING["cycling"]` is deliberately *not* re-pointed; every
-  cycling graph is equally broken and serving a walking graph for a bike request would be a
-  worse lie. `walking` *is* remapped to `foot-hiking`, which is measured-equivalent, because
-  `foot-walking` black-holes the request. Evidence:
+- **An ORS `cycling-*` isochrone can come back ~400x too small with HTTP 200**, and nothing in
+  the stack can tell: the polygon is well-formed, so neither `raise_for_status()` nor the
+  `/pois` circle fallback fires, and cycling mode silently under-reports POI. This was first
+  read as "all four cycling graphs are broken upstream"; re-measuring on a self-hosted instance
+  showed it is a property of the *coordinate*, not the graph — the original test point returns
+  0.031 km², and 200 m away in any direction returns 10–15 km² with a healthy `reachfactor`.
+  What is still missing is the plausibility check, which is what would catch either version.
+  `walking` *is* remapped to `foot-hiking`, which is measured-equivalent, because the public
+  instance black-holes `foot-walking` (a self-hosted one serves it fine, so that fault is in
+  the deployment). Evidence:
   [`docs/pg-notes/ors-profile-outage.md`](docs/pg-notes/ors-profile-outage.md).
 - No test coverage for any error path. Removing the housing subsystem took
   `tests/unit/test_geocode_key.py` with it — 16 of the 25 unit tests — so `pytest tests/unit`
@@ -264,6 +306,11 @@ which is authoritative.
   guard. `geocode_cache` is now an orphan: its only caller was the removed housing geocoder, and
   `0001_init.sql` is deliberately left untouched rather than adding a migration to drop it.
 - **Stage 1 — done.** Offline OSM POI import, `etl_run`, `/pois` answered from PostGIS.
+  Official announcements (`bekendmaking`, `bekendmaking_locatie`) landed on the same
+  footing, with `/bekendmakingen` and a map layer on top of them. Finding the plan-cache
+  cliff that this endpoint exposed — a prepared statement 31x slower on its 6th execution,
+  which `/pois` was equally exposed to — is in
+  `docs/pg-notes/bekendmaking-map-layer.md`.
 - **Stage 2.** A transactional outbox plus a `FOR UPDATE SKIP LOCKED` worker. Needs a long-lived
   process, so the backend has to leave Vercel first.
 - **Stage 3.** Synthetic snapshots at scale: partitioning, autovacuum and bloat behaviour, tuning.

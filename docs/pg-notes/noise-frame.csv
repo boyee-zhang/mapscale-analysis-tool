@@ -1,0 +1,4 @@
+name,lng,lat,radius_m,note
+ams-centrum-300,4.892,52.373,300,"Central Amsterdam, the canal belt. Dense pre-war fabric, heavy on renovation permits."
+ams-osdorp-600,4.802,52.36,600,"Osdorp, Nieuw-West: post-war garden-city Amsterdam. Second held-out block, chosen to test whether cls_works generalises off the canal belt. 600 m rather than 300 m because the density is a fifth of the centre's."
+utr-binnenstad-300,5.1214,52.0907,300,"Utrecht binnenstad, around the Domtoren. Held out: a method tuned to Amsterdam vocabulary should show a gap here."

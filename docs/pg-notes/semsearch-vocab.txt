@@ -1,0 +1,22 @@
+doc_type (15 values, 53% fall in the catch-all 'andere vergunning'):
+andere vergunning, omgevingsvergunning, verkeersbesluit of -mededeling,
+exploitatievergunning, evenementenvergunning, omgevingsmelding, andere beschikking,
+ander besluit van algemene strekking, andere voorlichtingsinformatie,
+overige overheidsinformatie, andere melding, participatie,
+vergunning voor activiteiten op of in oppervlaktewater,
+ruimtelijk plan of omgevingsdocument, evenementmelding
+
+activiteit (9 values, EMPTY on 69% of rows):
+bouwen, ruimtelijke ordening, kappen, milieu, reclame, uitweg en inrit, natuur,
+slopen, brandveilig gebruik
+
+Most frequent abstract prefixes, with row counts. These are the words that actually
+occur in the text. Note the jargon abbreviations:
+TVM parkeervak 12301 (TVM = Tijdelijke Verkeersmaatregel), Object 7462,
+onttrekkingsvergunning voor een tweede woning 1292,
+aanleg gehandicaptenparkeerplaats op kenteken 370, Filmen 350,
+wijzigen kenteken gehandicaptenparkeerplaats 282,
+aanleg twee elektrische oplaadvakken 241, Splitsingsvergunning 185, RVV 178,
+TVM stremmen 173, opheffen gehandicaptenparkeerplaats 167, Fietsen 157,
+Vergunning voor woningvormen 155, gevelreclame 132, dakkapel 123+81,
+kappen van een boom 114, Nachtwerk 111, realiseren van een dakopbouw 85

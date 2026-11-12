@@ -58,7 +58,12 @@ python scripts/import_bekendmaking.py --gemeente Utrecht --from 2026-01-01  # an
 
 `import_bekendmaking.py` is scoped **per municipality** (or an RD New circle), because those
 are the only two ways KOOP's SRU service narrows by place. Widening coverage is therefore
-re-running it, once per municipality — there is no national mode. It only ever upserts, so a
+re-running it, once per municipality. **Corrected 2026-11-04: "there is no national mode" was
+wrong, and it was load-bearing.** SRU needs no place scope at all — `dt.type == X and
+dt.date >= Y` returns the whole country (2026: evenementenvergunning 34,481, omgevingsvergunning
+303,186, omgevingsmelding 23,036, verkeersbesluit 21,011). Widening is a scope argument, not 342
+imports. The per-municipality flag is still how this script is *invoked*, not a limit of the
+upstream. It only ever upserts, so a
 re-run is idempotent and a short fetch costs coverage, never correctness. Both importers read
 `.env` via `load_dotenv`; neither requires `DATABASE_URL` to be exported by hand.
 
@@ -512,6 +517,46 @@ console.log('[api] fetchIsochrone response', { featureCount: data.features?.leng
 
 ---
 
+## Measurement discipline (how a number becomes durable here)
+
+This project's expensive failures were never missing features. They were conclusions that were
+wrong while looking right: an HTTP 200 from a stranded graph fragment, a load generator that was
+itself the bottleneck, a row count that could not see the field it never parsed, a mechanism
+story typed into a comment before anything was measured. Two rules are load-bearing.
+
+### 1. Run the `falsifier` agent before a measured conclusion becomes durable
+
+Before any of:
+
+- writing a finding into `docs/pg-notes/`
+- an `experiment(...)` / `perf(...)` / `fix(...)` commit that cites a number
+- changing a threshold, index, or config on the strength of a measurement
+- telling the user "X is N times faster" or "Y is broken"
+
+spawn `falsifier` (defined in `.claude/agents/falsifier.md`, which also carries the full
+catalogue of mistake families this project has actually paid for) and give it four things:
+
+1. the conclusion in one sentence
+2. the exact commands that produced it
+3. the paths to the raw output
+4. the axis you believe you varied
+
+It returns `DESTROYED | SURVIVED | REFUSED`, its objections with the commands and bytes behind
+each one, and a `SCOPE` line: the narrowest form of the claim its evidence does not break.
+**Paste that `SCOPE` line into the notes or the commit message, not your original wording.**
+
+It refuses rather than guesses when any of the four inputs is missing, and that refusal is the
+feature — not being able to state what you measured means there is nothing to record yet.
+
+### 2. Every issue found while working gets an explicit disposition
+
+Noticing something broken and quietly moving on is not allowed. Surface it and decide out loud:
+fix now / fix in the next commit / defer to phase N. Deferring is a fine answer; silence is not.
+Anything deferred goes into `## Known Issues` below **with an owner phase**, so that section
+stays the single place that knows what is outstanding.
+
+---
+
 ## Known Issues
 
 - **A `cycling-*` isochrone can be ~400x too small and still answer HTTP 200, so `cycling`
@@ -528,7 +573,17 @@ console.log('[api] fetchIsochrone response', { featureCount: data.features?.leng
   the coordinate. Whether the *public* graph behaves the same away from that point is
   **untested** (its 50/day quota was spent that day).
   `MODE_MAPPING["cycling"]` is still **not** re-pointed, and the plausibility check is still
-  owed — it is what would have caught this in either reading.
+  owed. **Its design was wrong and is corrected here (2026-11-12): it must key on
+  `properties.center`, the snapped start node, NOT on `reachfactor`.** Measured over 131
+  isochrone responses: healthy driving-car `reachfactor` is 0.0010–0.0993 (0 of 30 rows above
+  0.15) while the stranded Utrecht fragment reaches 0.2305, and at driving-car 300 s the
+  fragment (0.0159) outranks healthy Amsterdam (0.0034–0.012) — the ordering inverts, so no
+  threshold in either direction works, per profile or globally. A `rf > 0.15` gate would degrade
+  32 of 83 healthy isochrones to a circle, all 30 driving-car rows among them. Snap distance
+  separates cleanly instead: 0.8–49.4 m for all 83 healthy rows against 8,916–9,426 m for all 48
+  Utrecht rows, a 191x gap with no overlap. It is also free — `center` is already present in the
+  response under the exact body `upstream/ors.py` sends today, where `reachfactor` is absent and
+  would need a new request parameter.
   `foot-walking` is a different fault: the public instance black-holes it entirely, while a
   self-hosted instance serves it identically to `foot-hiking` (1.489 km², `reachfactor` 1.0,
   routes 731 m), so that one is in the deployment, not in ORS or a graph. `walking` stays
@@ -537,7 +592,12 @@ console.log('[api] fetchIsochrone response', { featureCount: data.features?.leng
   official spec, so neither is a deprecation. Full evidence and the narrowing steps:
   `docs/pg-notes/ors-profile-outage.md`.
 - The official ORS OpenAPI spec is at `https://docs.openrouteservice.org/openrouteservice/v2/docs`
-  (every `…/api-docs` URL 404s, and the `/dev/` docs page is a JS SPA that fetches it). It
+  (every `…/api-docs` URL 404s **on the public gateway** — but not on our own instance:
+  `http://localhost:8080/ors/v2/api-docs` answers 200 with 93,517 bytes of OpenAPI, measured
+  2026-11-12, and it documents `reachfactor` as "the ratio between the area of a circle with a
+  radius based on the average speed and the area of the isochrone polygon", range 0–1. Believing
+  the blanket "404s" is what sent a whole round of reverse-engineering after a formula the vendor
+  ships on localhost). The `/dev/` docs page is a JS SPA that fetches it. It
   declares `servers[0]` as **`https://api.heigit.org`** with paths prefixed
   `/openrouteservice/v2/…`; the `ORS_BASE_URL` default is still the undocumented legacy
   `https://api.openrouteservice.org/v2`. Measured identical behaviour, so migrating is now a
@@ -551,12 +611,38 @@ console.log('[api] fetchIsochrone response', { featureCount: data.features?.leng
 - `/traffic/flow` has an `api.js` method but no caller; `/bulk_directions` has no frontend method.
 - Traffic data in the AI service is a PV27 (North Holland) provincial proxy applied to **every**
   municipality; results for other provinces are not location-specific.
-- `ruff check tests/` reports 3 pre-existing violations (two unused `pytest` imports in
-  `tests/integration/`, one `E741` in `test_search_logic.py`). CI only lints `api/`, so they
-  are invisible there.
+- CI only lints `api/`, so violations elsewhere are invisible: `ruff check tests/` reports 3
+  (two unused `pytest` imports in `tests/integration/`, one `E741` in `test_search_logic.py`)
+  and **`ruff check scripts/` reports 31, all in `scripts/experiments/`** (measured
+  2026-11-12). `api/`, `scripts/import_bekendmaking_body.py` and every
+  `scripts/experiments/tussenkop_*.py` are clean.
 - No test coverage for any error path (502/504 handling). Removing the housing subsystem also
   removed `tests/unit/test_geocode_key.py`, which was 16 of the 25 unit tests — `pytest
   tests/unit` is now 9, all of them `test_search_logic.py`.
+- **`tussenkop` was dropped from every stored body until 2026-11-12, and the deferral that
+  allowed it rested on three wrong numbers.** The old entry read "6.3% of body text … those
+  headings are appeal boilerplate … switching costs 94,183 fetches". Measured: the loss is
+  **0.60–0.69%** of stored body characters (plain random n=400 twice, bootstrap 95% CI
+  0.579–0.727%); "appeal boilerplate" is an **Amsterdam-only** finding (Amsterdam carries a
+  heading in 63.0% of documents against 5.8% elsewhere, and its 491 headings are 3 distinct
+  texts) while a 294-gemeente sweep found 37 distinct heading texts in 18 municipalities,
+  including `Datum evenement` and `Datum besluit`; and `gmb-2026-209074` (Nissewaard) held its
+  **entire event period only in headings** while the row read `status='no_period'` with NULL
+  dates. Now fixed — ElementTree, headings interleaved in document order, and Dutch month-name
+  dates (`18 mei 2026`, which the numeric-only pattern could never match). Verified: 122 rows
+  that already parsed are unchanged to the date, and an exhaustive Nissewaard+Rhenen re-parse
+  gains **1 period in 89 rows**. Full write-up, including two conclusions that were wrong first:
+  `docs/pg-notes/bekendmaking-tussenkop.md`.
+- **The period label vocabulary is Amsterdam's.** `Looptijd` / `Datum van` / `Datum t/m` /
+  `Tijd van` / `Datum en tijd` miss `Datum evenement`, `Soort procedure`, `Verzenddatum` and the
+  other heading texts the sweep found. Widening needs a per-publisher survey, not a guess —
+  **owner: unassigned.** Related: times in recovered rows stay NULL (`15.30 – 19:00 uur` carries
+  no `Tijd van` keyword), which is correct under "nothing is inferred" but recoverable.
+- **A full `--refetch` of all 94,183 bodies is owed but not urgent.** Justified by the 0.6% of
+  text and the recovered labels, both of which reach the FTS index and the embeddings; NOT
+  justified by the period payoff (~1 row in 89). It rewrites every row, which makes that run's
+  `last_changed_run` useless as an upstream-change signal — the same cost already recorded for
+  the mixed-`raw`-format deferral.
 - No rate limiting; upstream quotas are the only backpressure.
 
 ---

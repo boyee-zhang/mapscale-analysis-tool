@@ -305,7 +305,7 @@ as `cache.py` degrades when Upstash is unconfigured. The reason used to be that 
 no Postgres; the deploy stack ships one, so the guard is now about running the API against a
 partial environment rather than about a deployment that cannot have a database. Current tables: `municipality` (stage 0); `etl_run`,
 `poi_category`, `poi_category_rule`, `poi`, `poi_import` (stage 1); `bekendmaking`,
-`bekendmaking_locatie` (official announcements, loaded by `scripts/import_bekendmaking.py`). `geocode_cache` is also
+`bekendmaking_locatie` (official announcements, loaded by `scripts/import_bekendmaking.py`); `claim`, `evidence`, `verdict` (0021-0022 — the measurement ledger, see below; nothing in `api/` reads them). `geocode_cache` is also
 still there but no longer read or written — its only caller was the housing geocoder.
 
 A refactor is in progress — see `docs/architecture-refactor-plan.md` (structure) and
@@ -563,6 +563,36 @@ each one, and a `SCOPE` line: the narrowest form of the claim its evidence does 
 
 It refuses rather than guesses when any of the four inputs is missing, and that refusal is the
 feature — not being able to state what you measured means there is nothing to record yet.
+
+### 1b. Record the claim, its evidence and its verdict
+
+`docs/pg-notes/` is for a human reader and cannot answer "which of these numbers is still
+true". The `claim` / `evidence` / `verdict` tables (migration 0021) can:
+
+- `claim.context` is **jsonb on purpose** — it holds the measurement's own dimensions
+  (`corpus_size`, `graph_date`, `coordinate`, `n_responses`, whatever was actually varied).
+  A generic schema would store only command, path and timestamp, and drop exactly the fields
+  that decide when a claim expires.
+- `evidence` refuses a row that names a file without a `sha256`. Scratch files get overwritten;
+  a path with no digest still points at something afterwards, so the record reads as supported
+  when the bytes are gone.
+- `verdict.scope` is the deliverable — the narrowest surviving form, the line that gets pasted
+  into the notes instead of the original wording. `DESTROYED`/`SURVIVED` must carry one.
+
+The query worth running:
+
+```sql
+SELECT * FROM claim_stale(jsonb_build_object(
+    'corpus_size', (SELECT count(*) FROM bekendmaking),
+    'graph_date',  '<from /ors/v2/status>'));
+```
+
+It knows nothing about what the keys mean — any recorded dimension whose value has since
+changed is reported, so it catches the next stale number and not only the two already known.
+Verified on this session's own claims: it flags `2.5 geometries per publication` (measured at
+10,342 rows, now 94,183) and leaves the two that are still current alone. A JSON `null` on
+either side means "not measured" and never expires a claim (0022, after the first run produced
+one false positive out of three rows).
 
 ### 2. Every issue found while working gets an explicit disposition
 

@@ -375,7 +375,11 @@ about its contract are easy to get wrong:
 The spatial predicate is `ST_Intersects`, not the `ST_Contains` `/pois` uses: announcement
 geometry is 16% POLYGON and 13% LINESTRING, and a plot straddling the isochrone edge is
 within reach. One row per publication comes from `DISTINCT ON` in the same index pass —
-a publication carries 2.5 geometries on average. Measured in
+a publication carries **1.72** geometries on average — 160,477 `bekendmaking_locatie` rows
+over the 93,123 publications that have any, measured 2026-11-12. **The 2.5 this file carried
+until then was measured at 10,342 building permits, before the national import took the corpus
+to 94,183; a measured result has a scale of validity and that one was never re-measured when
+the scale moved 9x.** `DISTINCT ON` is still required — only the average moved. Measured in
 `docs/pg-notes/bekendmaking-map-layer.md`; do not "simplify" either.
 
 **`db.py` sets `plan_cache_mode=force_custom_plan` on every pooled connection, and that is

@@ -573,6 +573,59 @@ stays the single place that knows what is outstanding.
 
 ---
 
+## Enforced rules: the guard hook
+
+Everything in this file is advice. Claude reads it and mostly complies — but "mostly" is what
+let `git push origin --delete` remove 13 remote branches in one call with nothing asking, and
+what lets a `httpx.AsyncClient(...)` reappear in a request path after the comment saying not to.
+
+`.claude/hooks/guard.py` is a `PreToolUse` hook, wired up in `.claude/settings.json` on the
+`Bash|Write|Edit` matcher. The harness runs it, not Claude, so it is the only part of this file
+that is **deterministic** rather than probabilistic. What it decides:
+
+| call | decision | why |
+|---|---|---|
+| `git push … --delete` / `… :branch` | **ask** | irreversible for anyone who has not fetched, and it closes the PR whose head it is |
+| `git push --force` (not `--force-with-lease`) | **deny** | rewrites published history |
+| `docker compose … down -v` / `--volumes` | **ask** | the one command that really costs 40 minutes of ORS graph rebuilding |
+| `git reset --hard` / `git clean -f…` | **ask** | discards uncommitted work |
+| Write/Edit an existing `migrations/NNNN_*.sql` | **deny** | forward-only, no `down` — editing an applied file leaves databases in a state no file describes |
+| `httpx.AsyncClient(` under `api/main/` (except `http_client.py`) | **deny** | measured 22.3 → 7.5 ms CPU/request, 40.9 → 119.4 req/s |
+| an Edit to `db.py` that drops `plan_cache_mode` | **ask** | without it the same query took 2.4–3.1 s five times and 104 s on the sixth |
+
+Three properties it is built to have, each because the alternative failed in testing:
+
+- **Silence means "not my business".** When no rule matches it prints nothing. Emitting
+  `permissionDecision: "allow"` would bypass the normal permission flow and make the guard a
+  back door.
+- **A command that only MENTIONS a blocked command is not blocked.** The first version denied
+  `grep -rn 'git push --force' docs/`. Patterns now require command position — line start, or
+  after `;` `&&` `||` `|`, with `sudo`/`env`/`time` prefixes allowed.
+- **It fails open, but never silently.** A bug inside the guard prints a `systemMessage` saying
+  the checks were skipped, and lets the call through. A guard that quietly stops enforcing is
+  worse than no guard, because the rules still look live — the same shape as the empty-200
+  problem recorded above. (This was not hypothetical: an undefined name made every path rule
+  silently pass, and only a cwd-independence test caught it.)
+
+- **A heredoc body is data, not commands.** The guard blocked its own commit: the message,
+  delivered through `git commit -F - <<'MSG' … MSG`, quoted a blocked command as an example,
+  and the body is part of the Bash tool's `command` string. Bodies are now stripped before
+  matching — except where the command executes its stdin (`bash`, `sh`, `zsh`, `eval`), where
+  the body really is commands.
+
+Both of those false positives were found by the guard stopping work that was legitimate, not
+by a test written in advance. The second one took a third fix with it: `_POS` anchored on `^`
+with no `re.MULTILINE`, so in a multi-line command **every line after the first was invisible**
+— which silently made the `bash <<EOF` exception do nothing. A newline now counts as a command
+separator. Tests: `python3 .claude/hooks/test_guard.py`, 37 cases, and the must-NOT-fire half
+is the half that matters — a guard with false positives gets switched off, and then it protects
+nothing.
+
+Adding a rule means adding a pattern plus both tests — one that must fire and one that must not.
+To turn the whole thing off, delete the `hooks` block from `.claude/settings.json`.
+
+---
+
 ## Known Issues
 
 - **A `cycling-*` isochrone can be ~400x too small and still answer HTTP 200, so `cycling`

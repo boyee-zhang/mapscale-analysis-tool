@@ -11,7 +11,8 @@ was removed — see the note at the end of this file.
 
 **Tech Stack:**
 - Frontend: React 18 + Vite 6, MapLibre GL 5, Axios, Recharts
-- Backend: FastAPI (Python 3.12), HTTPX (async), deployed as a single Vercel serverless function via Mangum
+- Backend: FastAPI (Python 3.12), HTTPX (async), run as a container behind nginx (`deploy/`)
+  - **Vercel was dropped 2026-11-12.** It was never actually wrapped in Mangum either — `mangum` sat in `requirements.txt` with no importer anywhere in `api/`, so Vercel's Python runtime had been serving the ASGI app directly all along. Both are gone.
 - Database: PostgreSQL 16 + PostGIS 3.4, local Docker, `asyncpg` with hand-written SQL (no ORM)
 - Cache: Upstash Redis (REST API)
 - Search: Elasticsearch 8.14 (optional — local via Docker, falls back to PDOK/Nominatim)
@@ -127,10 +128,11 @@ service. The constraint lives in `THIRD_PARTY` in the script, not in a comment. 
 times them sequentially instead.
 All three carry `profiles: ["monitoring"]`, which is what keeps them out of a bare
 `docker compose up -d`. The backend exposes `/metrics` — **not** under `/api/main`, since
-that prefix is what vercel.json routes to the serverless function. `prometheus_client`
-lives in `requirements-local.txt`, so `/metrics` returns **503, not an empty 200**, where
-it is absent; an empty 200 charts as a flat zero that looks like "no traffic". Scraping
-Vercel would be pointless regardless: each invocation is a fresh process.
+that prefix is what `deploy/nginx.conf` proxies to this service. `/metrics` returns
+**503, not an empty 200**, where `prometheus_client` is absent; an empty 200 charts as a flat
+zero that looks like "no traffic". nginx has **no `/metrics` location**, so it is unreachable
+from outside the compose network — `deploy/prometheus.yml` scrapes `api:8000` directly, on the
+network, which is also why the package moved into `requirements.txt`.
 
 Request labels use the **route template** (`scope["route"].path`), never the raw path —
 `/api/main/pois?lng=…&lat=…` as a label is one time series per coordinate the browser
@@ -197,14 +199,21 @@ UPSTASH_REDIS_REST_TOKEN=      # COMMENTED OUT locally 2026-10-29: the instance 
                                # (NXDOMAIN), so every call threw and the cache could never
                                # hit. Unset costs 24% less CPU per request than configured-
                                # and-failing, and buys zero throughput — see docs/monitoring.md.
-                               # .env is gitignored, so PRODUCTION ON VERCEL STILL HAS IT SET.
+                               # The Vercel env that still had it set is no longer a deployment
+                               # target; a deploy stack gets its own env file (deploy/env.example).
 ```
 
-### Portable deployment (another machine)
+### Deployment
+
+**This is the only deployment path.** Vercel was dropped 2026-11-12: the architecture had
+outgrown a single serverless function — Postgres + PostGIS with hand-written SQL, a 512k-row
+`poi` table, pgvector embeddings, a self-hosted ORS container and a Prometheus surface are none
+of them things a per-invocation process can hold. `vercel.json` and the unused `mangum` pin are
+gone with it.
 
 `docker-compose.yml` is the DEVELOPMENT stack: Postgres in a container, API and frontend
 on the host via `scripts/dev.sh`, Postgres parameters deliberately small so bloat and
-buffer reads show up at 10-20M rows. `docker-compose.deploy.yml` is the portable one:
+buffer reads show up at 10-20M rows. `docker-compose.deploy.yml` is the deployed one:
 API and frontend containerised too, its own project name (`mapscale-deploy`) and its own
 volumes, so both can run side by side.
 
@@ -258,16 +267,18 @@ Browser → api.js → Vite proxy → FastAPI (api/main/app.py)
 - `/api/main/*` → `http://localhost:8000` (path forwarded as-is; FastAPI routes include the prefix)
 - `/api/ai/*` → `https://mapscale-ai-service.vercel.app`, rewritten to `/api/*`
 
-`vercel.json` (prod):
-- `/api/main/:path*` → `/api/main/index` (the single Mangum-wrapped function)
-- `/api/ai/:path*` → `https://mapscale-ai-service.vercel.app/api/:path*`
-- everything else → `/index.html` (SPA fallback)
+`deploy/nginx.conf` (deployed):
+- `/api/main/` → `http://api:8000` on the compose network (prefix forwarded as-is)
+- `/api/ai/(.*)` → `https://mapscale-ai-service.vercel.app/api/$1` — the sibling AI service is
+  a separate repository and is **still on Vercel**; dropping Vercel here did not move it
+- `/assets/` → immutable, 1-year cache
+- everything else → `try_files ... /index.html` (SPA fallback)
+- no `/metrics` location, deliberately: see the monitoring note above
 
 ### Backend layout
 ```
 api/main/
   app.py          FastAPI instance, middleware, exception handlers, router registration
-  index.py        re-exports app for Vercel
   config.py       env vars + MODE_MAPPING + SPEED_MAP
   errors.py       ExternalServiceError, InternalError
   cache.py        Upstash KV get/set
@@ -290,8 +301,9 @@ decisions, or domain types. Judgement call: if a function in `upstream/` needs t
 
 **Every Postgres-backed path must degrade, not fail, when `DATABASE_URL` is unset.**
 `db.enabled()` is the guard; the pre-Postgres code path stays in place behind it, exactly
-as `cache.py` degrades when Upstash is unconfigured. This keeps the Vercel deployment
-working while Postgres is local-only. Current tables: `municipality` (stage 0); `etl_run`,
+as `cache.py` degrades when Upstash is unconfigured. The reason used to be that Vercel had
+no Postgres; the deploy stack ships one, so the guard is now about running the API against a
+partial environment rather than about a deployment that cannot have a database. Current tables: `municipality` (stage 0); `etl_run`,
 `poi_category`, `poi_category_rule`, `poi`, `poi_import` (stage 1); `bekendmaking`,
 `bekendmaking_locatie` (official announcements, loaded by `scripts/import_bekendmaking.py`). `geocode_cache` is also
 still there but no longer read or written — its only caller was the housing geocoder.
@@ -330,8 +342,8 @@ and `/pois`: the browser issues them concurrently for identical parameters, so b
 before either writes — measured 38 ORS calls for 18 unique parameter sets. The free tier is
 **50 requests/day/endpoint**, so the amplifier, not the usage, is what exhausts the quota.
 Both awaits are `asyncio.shield`ed; without that, one client disconnecting cancels the shared
-task and fails the other request too. This is per-process, so it does not help across Vercel
-instances — see `docs/ors-self-host.md` for the structural fix.
+task and fails the other request too. This is per-process, so it does not help across
+`--workers` or across replicas — see `docs/ors-self-host.md` for the structural fix.
 
 `/pois` answers from the `poi` table when `db.enabled()`, clipping to the real isochrone
 polygon with `ST_Contains`; it degrades to a geodesic-buffer circle (still Postgres) if ORS is
@@ -587,8 +599,10 @@ stays the single place that knows what is outstanding.
   `foot-walking` is a different fault: the public instance black-holes it entirely, while a
   self-hosted instance serves it identically to `foot-hiking` (1.489 km², `reachfactor` 1.0,
   routes 731 m), so that one is in the deployment, not in ORS or a graph. `walking` stays
-  mapped to `foot-hiking` regardless, because production on Vercel talks to the public API —
-  re-pointing it would fix localhost by breaking prod. Both profiles are still current in the
+  mapped to `foot-hiking` regardless, and dropping Vercel did not change that: `ORS_BASE_URL`
+  is an env var but `MODE_MAPPING` is one global constant, so it cannot follow the base URL, and
+  a deployment may still point at the public host (`deploy/README.md` offers three routing
+  options). foot-hiking works against both; foot-walking only against a self-hosted instance. Both profiles are still current in the
   official spec, so neither is a deprecation. Full evidence and the narrowing steps:
   `docs/pg-notes/ors-profile-outage.md`.
 - The official ORS OpenAPI spec is at `https://docs.openrouteservice.org/openrouteservice/v2/docs`
@@ -643,6 +657,15 @@ stays the single place that knows what is outstanding.
   justified by the period payoff (~1 row in 89). It rewrites every row, which makes that run's
   `last_changed_run` useless as an upstream-change signal — the same cost already recorded for
   the mixed-`raw`-format deferral.
+- **The sibling `mapscale-ai-service` is still on Vercel.** `/api/ai/*` proxies to it from both
+  `frontend/vite.config.js` and `deploy/nginx.conf`, so the AI analysis panel still depends on a
+  Vercel deployment — in a different repository. Dropping Vercel here did not move it, and
+  moving it is a change over there. **Owner: unassigned.**
+- **Two remote branches are dead after this change**, both carrying a single Vercel-only commit:
+  `vercel/install-vercel-web-analytics-1f9fmn` (adds `@vercel/analytics` to the frontend) and
+  `feature/housing-layer` (`fix: move curl_cffi to requirements.txt for Vercel deployment`,
+  while the housing subsystem itself was removed 2026-10-28). Eight further remote branches are
+  0 commits ahead of `main` and fully merged. None has been deleted — **owner: unassigned.**
 - No rate limiting; upstream quotas are the only backpressure.
 
 ---
@@ -667,7 +690,8 @@ What that took with it, so the absences are not mistaken for gaps:
   `domains/housing/upstash.py` went. Note the configured Upstash instance no longer resolves
   (NXDOMAIN as of 2026-10-28), so caching is silently degraded — `cache.py` handles that by
   design, which is why nothing fails. **Commented out of `.env` 2026-10-29** so the failing
-  path is not even entered locally; Vercel's env is separate and unchanged. If caching is ever
-  wanted again, point these two variables at a live instance — no code change is needed.
+  path is not even entered locally. The Vercel env that still had it set is no longer a
+  deployment target. If caching is ever wanted again, point these two variables at a live
+  instance — no code change is needed.
 - `docs/data-source-feasibility.md` and the housing sections of the two refactor plans were
   deleted. `docs/pg-notes/` never mentioned housing and is untouched.

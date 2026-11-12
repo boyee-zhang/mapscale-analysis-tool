@@ -1,0 +1,20 @@
+# Deploy-stack scrape config. It is NOT monitoring/prometheus.yml: there the API runs on
+# the host under uvicorn --reload and is reached through host.docker.internal, while here
+# it is a container on the compose network. Pointing the dev config at this stack would
+# scrape nothing and chart a flat zero.
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: mapscale-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api:8000"]
+
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

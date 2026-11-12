@@ -1,0 +1,32 @@
+# FastAPI backend. Build context is the repository root, not deploy/ — the image needs
+# requirements.txt, api/, migrations/ and scripts/migrate.py, which live there.
+#
+#   docker compose -f docker-compose.deploy.yml build api
+FROM python:3.12-slim
+
+# curl is for the healthcheck only. Without it the probe cannot run, and a probe that
+# cannot run is indistinguishable from a service that is down — the same trap the ors
+# healthcheck in docker-compose.yml hit (it used curl in an image that has none).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# requirements.txt only — requirements-local.txt pulls in osmium (a C build), ruff and
+# pytest, none of which the running API imports. prometheus_client is the one exception
+# worth taking from it: without it /metrics answers 503 instead of serving the gauges,
+# and this image is the thing Prometheus scrapes in the deploy stack.
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# migrate.py resolves ROOT as its own parent's parent, so scripts/ and migrations/ must
+# keep this relative layout.
+COPY api/ ./api/
+COPY migrations/ ./migrations/
+COPY scripts/migrate.py ./scripts/migrate.py
+COPY deploy/api-entrypoint.sh /usr/local/bin/api-entrypoint.sh
+RUN chmod +x /usr/local/bin/api-entrypoint.sh
+
+EXPOSE 8000
+ENTRYPOINT ["/usr/local/bin/api-entrypoint.sh"]

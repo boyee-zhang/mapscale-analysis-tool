@@ -1,0 +1,24 @@
+# Without this, `docker build` with context `.` uploads data/ (1.5 GB of OSM extracts),
+# .venv, node_modules and 40 MB of screenshots to the daemon before reading the first
+# Dockerfile line — on every build, cached or not.
+.git
+.venv
+**/node_modules
+**/dist
+**/__pycache__
+.pytest_cache
+.ruff_cache
+.DS_Store
+
+# Extracts and the database dump. The containers read these through bind mounts declared
+# in docker-compose.deploy.yml, never from an image layer.
+data
+dist
+reports
+
+# Real API keys. The api container gets its environment from compose.
+.env
+
+docs
+tests
+monitoring

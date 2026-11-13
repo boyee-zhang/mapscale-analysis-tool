@@ -93,11 +93,26 @@ with near-duplicates breaks this metric, and a judged relevance set is what woul
 
 **That judged set now exists: `semsearch-judgeset.md`** (built 2026-11-05, 40 queries, 1,085
 judged pairs, four arms pooled at depth 10). Measured there: the embedding beats the best FTS
-configuration by **+0.194 nDCG@10** (0.669 against 0.475), 95% CI [+0.024, +0.361], and a control
-arm running the same FTS terms over the *same* text the embedding saw rules out the source text
-as the explanation (+0.037, interval crosses zero). Read the magnitude with its caveat: 40
-queries have 80% power only for an effect of 0.241, so the direction is sound and the point
-estimate is probably inflated. `noise-retrieval-fts.md` has FTS at F1 0.475 on a different task with a different
+configuration **in direction, by at least roughly +0.10 nDCG@10, magnitude unresolved** — it
+wins 25 of 40 queries and loses 13, and the gap is positive under every scoring convention
+tested (+0.108 to +0.369). A control arm running the same FTS terms over the *same* text the
+embedding saw rules out the source text as the explanation (+0.037, interval crosses zero), and
+that part is unaffected by the correction below.
+
+> **Corrected 2026-11-13.** This paragraph read "**+0.194 nDCG@10** (0.669 against 0.475), 95%
+> CI [+0.024, +0.361]" and called it significant. That number was destroyed (ledger claim 4,
+> verdict 12): it is the value of one unnamed convention — scoring document ids in whatever
+> order the SQL returned exact-score ties — and the significance fails Holm correction across
+> the five comparisons the scorer itself prints (p=0.0295 vs 0.0167), fails when byte-identical
+> stored body texts are counted once (+0.108, CI [−0.060, +0.278]), and fails when each arm's
+> exact-score ties are resolved in its own favour (+0.137, CI [−0.033, +0.310]). `ts_rank_cd`
+> emits a median of 2 distinct scores across `fts_body`'s whole top 10, so nDCG@10 was largely
+> scoring an arbitrary tie order. Do not quote +0.194. Full objections, mechanisms and raw
+> output: the correction section in `semsearch-judgeset.md`.
+
+Read any magnitude from that set with its caveat: 40 queries have 80% power only for an effect
+of 0.241, and the smallest effect the design could ever have declared significant is 0.174, so
+the direction is sound and any point estimate near that floor is inflated. `noise-retrieval-fts.md` has FTS at F1 0.475 on a different task with a different
 ground truth; the two are **not comparable** and are not compared here.
 
 ## 5. The index silently returned ZERO rows for a filtered search

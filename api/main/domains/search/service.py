@@ -50,7 +50,10 @@ MAX_LIMIT = 50
 #     音乐节                                     top 0.782    <- the right event still ranks FIRST
 #
 # The ranking is correct in all three (the judged set is entirely Chinese and the embedding still
-# wins there by +0.194 nDCG). What shifts is the absolute scale: multilingual-e5 places a
+# wins there -- 25 of 40 queries to 13, positive under every scoring convention tested; the
+# +0.194 nDCG this comment used to cite was destroyed 2026-11-13 and the surviving form is
+# direction plus "at least roughly +0.10, magnitude unresolved", see semsearch-judgeset.md).
+# What shifts is the absolute scale: multilingual-e5 places a
 # cross-language pair further apart than a same-language pair even when both are about the same
 # thing. So a single global number quietly makes the floor strictest for whoever is not writing
 # Dutch, and this project's user types Chinese.

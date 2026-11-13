@@ -1,0 +1,34 @@
+PROBE 0 -- calibration against the published table
+  fts_title  0.437   published {'fts_title': 0.437, 'fts_body': 0.475, 'vec': 0.669}['fts_title']
+  fts_body   0.475   published {'fts_title': 0.437, 'fts_body': 0.475, 'vec': 0.669}['fts_body']
+  vec        0.669   published {'fts_title': 0.437, 'fts_body': 0.475, 'vec': 0.669}['vec']
+
+PROBE 1 -- exact-score ties
+  fts_title  distinct scores in top-10: median 2 (min 0, max 4)   tie groups touching top-10  65, mixed-grade  29 (45%)
+  fts_body   distinct scores in top-10: median 2 (min 0, max 3)   tie groups touching top-10  82, mixed-grade  34 (41%)
+  vec        distinct scores in top-10: median 8 (min 2, max 10)   tie groups touching top-10  70, mixed-grade   0 (0%)
+  ties=as_is  vec 0.669  fts_body 0.475  diff +0.194 CI [+0.024,+0.361]  significant
+  ties=best   vec 0.669  fts_body 0.532  diff +0.137 CI [-0.033,+0.310]  INSIDE NOISE
+  ties=worst  vec 0.642  fts_body 0.273  diff +0.369 CI [+0.227,+0.506]  significant
+  ties=rand   200 draws: diff +0.280 [+0.263,+0.299]  (tie-break randomness only, not query sampling)
+
+PROBE 2 -- distinct stored body text
+  fts_title  repeated-text slots dropped  34/400 (15 of them grade 2)   distinct-text nDCG@10 0.412
+  fts_body   repeated-text slots dropped  24/400 (6 of them grade 2)   distinct-text nDCG@10 0.478
+  vec        repeated-text slots dropped 108/400 (51 of them grade 2)   distinct-text nDCG@10 0.586
+  hybrid     repeated-text slots dropped  62/400 (24 of them grade 2)   distinct-text nDCG@10 0.587
+  vec    -fts_body  +0.108 CI [-0.060,+0.278] p=0.2215  INSIDE NOISE
+  vec    -fts_title +0.174 CI [+0.010,+0.335] p=0.0454  significant
+
+PROBE 3 -- multiplicity over the five comparisons the scorer prints
+  hybrid   -fts_body  +0.131 p=0.0074  Holm thr 0.0100 -> pass
+  vec      -fts_title +0.232 p=0.0116  Holm thr 0.0125 -> pass
+  vec      -fts_body  +0.194 p=0.0295  Holm thr 0.0167 -> FAIL
+  hybrid   -vec       -0.063 p=0.1737  Holm thr 0.0250 -> FAIL
+  fts_body -fts_title +0.037 p=0.3873  Holm thr 0.0500 -> FAIL
+
+PROBE 4 -- fragility of the published interval
+  as published: +0.194 CI [+0.024,+0.361]  t=2.260 p=0.0295 sd=0.543
+  drop-one-query jackknife: 0 of 40 removals put 0 inside the CI
+  smallest effect this design could declare significant = t.975*se = 0.174; observed +0.194 is 112% of it
+  MDE at power .80 = 2.80*sd/sqrt(40) = 0.241

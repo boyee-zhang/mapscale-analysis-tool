@@ -55,19 +55,65 @@ def digest_of(payload: dict) -> str:
     return hashlib.sha256(canon.encode("utf-8")).hexdigest()
 
 
-def probe_code() -> dict:
-    """HEAD, plus whether the tree is dirty.
+def _git(*a) -> str:
+    return subprocess.run(["git", *a], cwd=ROOT, capture_output=True, text=True).stdout.strip()
 
-    `dirty` is part of the payload because a dirty HEAD does not describe the code that was
-    actually measured -- without it one digest would stand for every uncommitted variant.
+
+def _sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _worktree_digest() -> str | None:
+    """A true identity for an uncommitted working tree, or None when it is clean.
+
+    0023 hashed `dirty_files`, a COUNT, which is the weakest identity available: seven dirty
+    files could be any seven, so it moved on edits that did not matter and could not tell apart
+    states that did. This hashes the tracked diff AND the content of every untracked file,
+    because an untracked file is code too -- the two files a falsifier added mid-session were
+    untracked, and they moved the old digest while changing nothing the measurement read.
     """
-    def git(*a):
-        return subprocess.run(["git", *a], cwd=ROOT, capture_output=True, text=True).stdout.strip()
-    porcelain = git("status", "--porcelain")
-    return {"head": git("rev-parse", "HEAD"),
-            "branch": git("rev-parse", "--abbrev-ref", "HEAD"),
-            "dirty": bool(porcelain),
-            "dirty_files": len(porcelain.splitlines())}
+    porcelain = _git("status", "--porcelain", "--untracked-files=all")
+    if not porcelain:
+        return None
+    h = hashlib.sha256()
+    h.update(_git("diff", "HEAD").encode("utf-8"))
+    for line in sorted(porcelain.splitlines()):
+        rel = line[3:].strip().strip('"')
+        f = ROOT / rel
+        h.update(rel.encode("utf-8"))
+        h.update((_sha256_file(f) if f.is_file() else "absent").encode("utf-8"))
+    return h.hexdigest()
+
+
+def probe_code() -> dict:
+    """HEAD, its tree, and a true digest of the working tree when it is dirty.
+
+    `branch` is deliberately absent: the same commit under two branch names is the same code,
+    and 0023 put it in the payload, so a `checkout -b` expired every verdict anchored to `code`.
+    """
+    worktree = _worktree_digest()
+    return {"head": _git("rev-parse", "HEAD"),
+            "tree": _git("rev-parse", "HEAD^{tree}"),
+            "dirty": worktree is not None,
+            "worktree_sha256": worktree}
+
+
+def probe_paths(paths: list[str]) -> dict:
+    """Digest each declared path. A missing path is recorded, not skipped.
+
+    Silently dropping an absent file would make a facet whose inputs have been deleted compare
+    EQUAL to one where they are intact -- the same shape as an unreachable ORS comparing equal
+    to a reachable one, which is what 0023 exists to avoid.
+    """
+    out = {}
+    for rel in paths:
+        f = ROOT / rel
+        out[rel] = _sha256_file(f) if f.is_file() else "ABSENT"
+    return {"files": out, "absent": sorted(k for k, v in out.items() if v == "ABSENT")}
 
 
 async def probe_corpus(conn) -> dict:
@@ -105,10 +151,13 @@ def probe_graph() -> dict:
 
 async def take_snapshot(conn) -> list[tuple[str, str, bool]]:
     """Probe every facet and upsert. Returns [(facet, digest, changed)]."""
-    facets = [r["name"] for r in await conn.fetch("SELECT name FROM world_facet ORDER BY name")]
+    facets = await conn.fetch("SELECT name, paths FROM world_facet ORDER BY name")
     out = []
-    for facet in facets:
-        if facet == "code":
+    for row in facets:
+        facet, paths = row["name"], row["paths"]
+        if paths:
+            payload = probe_paths(list(paths))
+        elif facet == "code":
             payload = probe_code()
         elif facet == "corpus":
             payload = await probe_corpus(conn)
@@ -116,9 +165,9 @@ async def take_snapshot(conn) -> list[tuple[str, str, bool]]:
             payload = probe_graph()
         else:
             raise SystemExit(
-                f"facet {facet!r} is registered in world_facet but this script has no probe "
-                f"for it. A facet nobody probes never reports stale -- add the probe or "
-                f"delete the row.")
+                f"facet {facet!r} is registered in world_facet with no paths and this script "
+                f"has no probe for it. A facet nobody probes never reports stale -- add the "
+                f"probe, give it paths, or delete the row.")
         d = digest_of(payload)
         before = await conn.fetchval(
             "SELECT digest FROM world_current WHERE facet = $1", facet)
@@ -192,7 +241,10 @@ async def cmd_verdict(conn, args):
     elif args.facets:
         chosen = [f.strip() for f in args.facets.split(",") if f.strip()]
     else:
-        chosen = [r["facet"] for r in await conn.fetch("SELECT facet FROM world_current")]
+        # The default lives in world_facet.default_anchor, not here, so that adding a facet
+        # cannot silently change what every future verdict anchors to.
+        chosen = [r["name"] for r in await conn.fetch(
+            "SELECT name FROM world_facet WHERE default_anchor ORDER BY name")]
 
     rows = await conn.fetch(
         "SELECT id, facet, digest FROM world_current WHERE facet = ANY($1::text[])", chosen)
@@ -211,6 +263,12 @@ async def cmd_verdict(conn, args):
                 vid, r["id"])
 
     print(f"verdict {vid}: {args.verdict} on claim {args.claim_id}")
+    optional = [r["name"] for r in await conn.fetch(
+        "SELECT name FROM world_facet WHERE NOT default_anchor ORDER BY name")]
+    unused = [f for f in optional if f not in {r["facet"] for r in rows}]
+    if unused and args.facets is None:
+        print(f"  not anchored to: {', '.join(unused)} — name them in --facets if this "
+              f"measurement depends on them")
     if rows:
         for r in rows:
             print(f"  anchored to {r['facet']:8} {r['digest'][:16]}")
@@ -235,6 +293,18 @@ async def cmd_evidence(conn, args):
         VALUES ($1, $2, $3, $4) RETURNING id""",
         args.claim_id, args.command, args.output, sha)
     print(f"evidence {eid} on claim {args.claim_id}" + (f"  sha256={sha[:16]}…" if sha else ""))
+
+
+async def cmd_facets(conn, args):
+    for r in await conn.fetch("""
+            SELECT f.name, f.default_anchor, f.paths, f.probe, w.digest
+            FROM world_facet f LEFT JOIN world_current w ON w.facet = f.name
+            ORDER BY f.default_anchor DESC, f.name"""):
+        tag = "default" if r["default_anchor"] else "opt-in "
+        print(f"  {tag} {r['name']:10} {(r['digest'] or '(never probed)')[:16]}")
+        print(f"            {r['probe']}")
+        for path in (r["paths"] or []):
+            print(f"              {path}")
 
 
 async def cmd_stale(conn, args):
@@ -311,6 +381,9 @@ def build_parser():
     e.add_argument("--command", required=True)
     e.add_argument("--output", help="path to raw output; it is hashed here, not described")
 
+    f = sub.add_parser("facets", help="what the world is made of, and what anchors by default")
+    f.add_argument("--unused", action="store_true", help=argparse.SUPPRESS)
+
     s = sub.add_parser("stale", help="verdicts whose world has moved")
     s.add_argument("--topic")
 
@@ -328,7 +401,8 @@ async def main():
     conn = await asyncpg.connect(dsn)
     try:
         await {"snapshot": cmd_snapshot, "new": cmd_new, "verdict": cmd_verdict,
-               "evidence": cmd_evidence, "stale": cmd_stale, "show": cmd_show}[args.cmd](conn, args)
+               "evidence": cmd_evidence, "stale": cmd_stale, "show": cmd_show,
+               "facets": cmd_facets}[args.cmd](conn, args)
     finally:
         await conn.close()
 

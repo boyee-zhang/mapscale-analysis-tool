@@ -8,7 +8,7 @@ import json
 
 import pytest
 
-from scripts.claims import digest_of, probe_code, probe_graph
+from scripts.claims import digest_of, probe_code, probe_graph, probe_paths
 
 
 # ── the digest is the contract ───────────────────────────────────────────────
@@ -58,11 +58,56 @@ def test_one_profile_moving_is_a_different_world():
 
 
 def test_a_dirty_tree_is_not_the_same_world_as_its_HEAD():
-    # Without `dirty` in the payload, one digest would stand for HEAD plus every
-    # uncommitted variant of it.
-    clean = {"head": "047bd14", "branch": "main", "dirty": False, "dirty_files": 0}
-    dirty = {"head": "047bd14", "branch": "main", "dirty": True, "dirty_files": 3}
+    # Without the worktree term, one digest would stand for HEAD plus every uncommitted
+    # variant of it.
+    clean = {"head": "047bd14", "tree": "t", "dirty": False, "worktree_sha256": None}
+    dirty = {"head": "047bd14", "tree": "t", "dirty": True, "worktree_sha256": "a" * 64}
     assert digest_of(clean) != digest_of(dirty)
+
+
+def test_a_count_of_dirty_files_cannot_be_an_identity():
+    # 0023 hashed `dirty_files`. Two completely different working trees with the same number
+    # of changed files collided; this is the regression that cost the project a facet. The
+    # content digest tells them apart.
+    a = {"head": "h", "tree": "t", "dirty": True, "dirty_files": 3}
+    b = {"head": "h", "tree": "t", "dirty": True, "dirty_files": 3}
+    assert digest_of(a) == digest_of(b)          # the bug, as a test
+    a2 = {"head": "h", "tree": "t", "dirty": True, "worktree_sha256": "a" * 64}
+    b2 = {"head": "h", "tree": "t", "dirty": True, "worktree_sha256": "b" * 64}
+    assert digest_of(a2) != digest_of(b2)        # the fix
+
+
+def test_branch_is_not_part_of_the_code_identity():
+    # 0023 put `branch` in the payload, so `git checkout -b` expired every verdict anchored
+    # to `code` while the code was byte-identical.
+    assert "branch" not in probe_code()
+
+
+# ── path facets: a facet defined by the bytes a measurement reads ────────────
+
+def test_a_path_facet_digests_the_files_it_declares():
+    out = probe_paths(["CLAUDE.md", "scripts/claims.py"])
+    assert set(out["files"]) == {"CLAUDE.md", "scripts/claims.py"}
+    assert out["absent"] == []
+    assert all(len(v) == 64 for v in out["files"].values())
+
+
+def test_a_missing_declared_path_is_recorded_not_skipped():
+    # Dropping an absent file would make a facet whose inputs were DELETED compare equal to
+    # one where they are intact -- the same shape as an unreachable ORS comparing equal to a
+    # reachable one.
+    out = probe_paths(["CLAUDE.md", "docs/pg-notes/does-not-exist.json"])
+    assert out["files"]["docs/pg-notes/does-not-exist.json"] == "ABSENT"
+    assert out["absent"] == ["docs/pg-notes/does-not-exist.json"]
+    assert digest_of(out) != digest_of(probe_paths(["CLAUDE.md"]))
+
+
+def test_a_path_facet_ignores_files_it_did_not_declare():
+    # The whole point: this is why claim 4 should anchor to `judgeset` and not to `code`.
+    # Editing a note must not expire a measurement that never read it.
+    before = digest_of(probe_paths(["scripts/claims.py"]))
+    assert before == digest_of(probe_paths(["scripts/claims.py"]))
+    assert before != digest_of(probe_paths(["scripts/claims.py", "CLAUDE.md"]))
 
 
 def test_digest_satisfies_the_column_constraint():
@@ -84,8 +129,12 @@ def test_an_unreachable_ors_is_a_payload_not_an_exception(monkeypatch):
 
 def test_probe_code_reports_the_fields_the_digest_depends_on():
     out = probe_code()
-    assert set(out) == {"head", "branch", "dirty", "dirty_files"}
-    assert len(out["head"]) == 40 and isinstance(out["dirty"], bool)
+    assert set(out) == {"head", "tree", "dirty", "worktree_sha256"}
+    assert len(out["head"]) == 40 and len(out["tree"]) == 40
+    assert isinstance(out["dirty"], bool)
+    # The worktree term is present exactly when the tree is dirty, so a clean tree's identity
+    # is just its commit and cannot drift.
+    assert (out["worktree_sha256"] is not None) == out["dirty"]
 
 
 @pytest.mark.parametrize("payload", [{}, {"a": None}, {"nested": {"b": [1, 2]}}])

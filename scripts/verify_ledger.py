@@ -48,6 +48,9 @@ MUST_REJECT = [
     ("a verdict cannot anchor to a snapshot that is not there",
      "INSERT INTO verdict_world (verdict_id,snapshot_id) VALUES (9, 999999);",
      "verdict_world_snapshot_id_fkey"),
+    ("a path facet cannot declare an empty path set",
+     "INSERT INTO world_facet (name,probe,paths) VALUES ('t2','p',ARRAY[]::text[]);",
+     "world_facet_paths_nonempty"),
 ]
 
 MUST_HOLD = [
@@ -105,6 +108,40 @@ MUST_HOLD = [
     ("status is derived, and the two contradictory rows are gone",
      "SELECT id || '=' || status FROM claim_current WHERE id IN (1,2,3) ORDER BY id;",
      "1=destroyed"),
+
+    # 0025. A superseded verdict going stale is history, not news. 0023 reported every verdict
+    # ever recorded, so one could never be cleared -- and an entry nobody can act on trains the
+    # reader to skim, which is how the one real entry gets skimmed with it (the 0022 lesson).
+    ("verdict_stale() ignores a verdict that is not the latest on its claim",
+     FIXTURE + """
+     INSERT INTO world_snapshot (facet,digest,payload,first_seen_at,last_seen_at)
+       VALUES ('t_facet','aaaaaaaaaaaa','{}', now()-interval '2 h', now()-interval '2 h'),
+              ('t_facet','bbbbbbbbbbbb','{}', now(), now());
+     INSERT INTO claim (id,topic,text,made_by) VALUES (9001,'process','t','t');
+     INSERT INTO verdict (id,claim_id,agent,verdict,scope)
+       VALUES (9001,9001,'a','SURVIVED','old'), (9002,9001,'a','DESTROYED','new');
+     -- anchor ONLY the older verdict to the facet that has moved
+     INSERT INTO verdict_world (verdict_id, snapshot_id)
+       SELECT 9001, id FROM world_snapshot WHERE facet='t_facet' AND digest='aaaaaaaaaaaa';
+     SELECT 'stale_from_old=' || count(*) FROM verdict_stale() WHERE claim_id = 9001;
+     -- now anchor the LATEST one to it as well
+     INSERT INTO verdict_world (verdict_id, snapshot_id)
+       SELECT 9002, id FROM world_snapshot WHERE facet='t_facet' AND digest='aaaaaaaaaaaa';
+     SELECT 'stale_from_latest=' || count(*) FROM verdict_stale() WHERE claim_id = 9001;""",
+     "stale_from_old=0"),
+
+    ("verdict_unanchored is also latest-only",
+     """
+     INSERT INTO claim (id,topic,text,made_by) VALUES (9001,'process','t','t');
+     INSERT INTO verdict (id,claim_id,agent,verdict,scope)
+       VALUES (9001,9001,'a','SURVIVED','old'), (9002,9001,'a','DESTROYED','new');
+     SELECT 'unanchored_rows_for_claim=' || count(*)
+     FROM verdict_unanchored WHERE claim_id = 9001;""",
+     "unanchored_rows_for_claim=1"),
+
+    ("the default anchor set is in the table, not in the script",
+     "SELECT string_agg(name, ',' ORDER BY name) FROM world_facet WHERE default_anchor;",
+     "corpus,graph"),
 ]
 
 bad = 0

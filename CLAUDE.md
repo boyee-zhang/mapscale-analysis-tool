@@ -305,7 +305,7 @@ as `cache.py` degrades when Upstash is unconfigured. The reason used to be that 
 no Postgres; the deploy stack ships one, so the guard is now about running the API against a
 partial environment rather than about a deployment that cannot have a database. Current tables: `municipality` (stage 0); `etl_run`,
 `poi_category`, `poi_category_rule`, `poi`, `poi_import` (stage 1); `bekendmaking`,
-`bekendmaking_locatie` (official announcements, loaded by `scripts/import_bekendmaking.py`); `claim`, `evidence`, `verdict`, `world_facet`, `world_snapshot`, `verdict_world`, `topic` (0021-0024 — the measurement ledger, see below; nothing in `api/` reads them). `geocode_cache` is also
+`bekendmaking_locatie` (official announcements, loaded by `scripts/import_bekendmaking.py`); `claim`, `evidence`, `verdict`, `world_facet`, `world_snapshot`, `verdict_world`, `topic` (0021-0026 — the measurement ledger, see below; nothing in `api/` reads them). `geocode_cache` is also
 still there but no longer read or written — its only caller was the housing geocoder.
 
 A refactor is in progress — see `docs/architecture-refactor-plan.md` (structure) and
@@ -578,10 +578,11 @@ feature — not being able to state what you measured means there is nothing to 
 true". The ledger can. **`scripts/claims.py` is the only way in**:
 
 ```bash
+.venv/bin/python scripts/claims.py facets                   # what the world is made of
 .venv/bin/python scripts/claims.py snapshot                 # probe the world, record it
 .venv/bin/python scripts/claims.py new --topic search --text "..." [--ack 7,9]
 .venv/bin/python scripts/claims.py evidence 4 --command "..." --output path/to/raw.json
-.venv/bin/python scripts/claims.py verdict 4 --verdict SURVIVED --scope "..." --facets code
+.venv/bin/python scripts/claims.py verdict 4 --verdict SURVIVED --scope "..." --facets judgeset
 .venv/bin/python scripts/claims.py stale                    # THE query worth running
 .venv/bin/python scripts/claims.py show [4]
 ```
@@ -609,11 +610,44 @@ replaced `claim_stale(jsonb)`, which 0024 drops, for three measured reasons:
 
 The cost, stated: a digest is all-or-nothing where a key comparison was precise. One imported
 row moves the `corpus` digest and every verdict anchored to it is untested at once. Hence
-facets — currently `code` / `corpus` / `graph`, and adding one is an INSERT into
-`world_facet` plus a probe. **Anchoring defaults to every probed facet**; narrow it with
-`--facets` when a measurement genuinely does not depend on one (the judgeset scorer reads
-frozen files, so `--facets code`). `--facets none` is legal and makes a verdict that can
-never expire, which is why `verdict_unanchored` lists them.
+facets. `claims.py facets` lists them; **`world_facet.default_anchor` decides which ones a
+verdict anchors to when told nothing**, and the rule lives in the table so that adding a facet
+cannot silently change what every future verdict anchors to.
+
+| facet | kind | anchors by default |
+|---|---|---|
+| `corpus` | probe in code: row counts + a content digest of `bekendmaking` | **yes** |
+| `graph` | probe in code: every profile's `graph_build_date` + `osm_date` | **yes** |
+| `code` | probe in code: `HEAD` + `HEAD^{tree}` + a digest of the working tree when dirty | no |
+| `judgeset` | **path set**: the frozen judgeset inputs plus the two scripts that score them | no |
+
+**A facet may be defined by a path set** (0025), digested file by file, and that is the right
+shape for most measurements: a measurement does not depend on "the repository", it depends on
+specific bytes. Declaring one is an INSERT into `world_facet` with `paths`, no code change.
+A declared path that is missing is recorded as `ABSENT` rather than skipped — dropping it would
+make a facet whose inputs were *deleted* compare equal to one where they are intact.
+
+`corpus` and `graph` are on by default because forgetting them fails toward over-reporting,
+which is visible, where omitting them fails toward silence. `code` and every path facet are
+**off**, because anchoring to them is a *narrowing* assertion — "this measurement reads only
+these bytes" — and a narrowing assertion has to be made on purpose. `--facets none` is legal
+and makes a verdict that can never expire, which is why `verdict_unanchored` lists them.
+
+**Do not anchor an ordinary measurement to `code`.** 0023 did, and the result is the clearest
+thing this ledger has produced about itself: `probe_code` hashed `dirty_files`, a *count*, so
+the digest moved three times in one session while the measurement's frozen input stayed
+byte-identical — and then correcting the notes exactly as a verdict's own `SCOPE` instructed is
+what expired that verdict. 0025 fixes the probe (a content digest of the tracked diff *and*
+every untracked file; `branch` removed, since the same commit under two branch names is the
+same code and a `checkout -b` expired everything), but the deeper error was the shape. The
+judgeset measurement is anchored to `judgeset` + `corpus`, deliberately not to `code`.
+
+**Only the latest verdict on a claim can be news** (0025). `verdict_stale()` and
+`verdict_unanchored` both read `verdict_latest`. 0023's versions reported every verdict ever
+recorded, so a superseded one stayed in the report with no way to clear it — and an entry
+nobody can act on trains the reader to skim, which is how the one real entry gets skimmed with
+it. The older verdict is still in `verdict` and still joinable; it is just not something to
+act on.
 
 **`claim.status` is not a column** (0024). It was one, with a `DEFAULT 'open'` and a CHECK
 over four values, and nothing ever wrote it — the three rows backfilled by hand all said
@@ -638,9 +672,17 @@ to facets. Claim #2 had `corpus_size` (world) sitting next to `method` (experime
 conflation is why `claim_stale` had to guess with `now_ctx ? k`.
 
 Verify the schema against a live database with
-`.venv/bin/python -I scripts/verify_ledger.py` — 14 checks, every one in a rolled-back
+`.venv/bin/python -I scripts/verify_ledger.py` — 17 checks, every one in a rolled-back
 transaction, and it reads **both** streams because psql reports a constraint rejection on
 stderr and reading only stdout once made a correct rejection look like a failed test.
+
+Its must-reject half has already paid for itself twice. 0025's `world_facet_paths_nonempty`
+**did not reject an empty path set**: `array_length(ARRAY[]::text[], 1)` is `NULL`, not `0`,
+`NULL >= 1` is `NULL`, and **a CHECK passes on NULL**. An empty path facet is the worst row
+this schema can hold — `probe_paths([])` returns a constant, so its digest never moves, so a
+verdict anchored to it never reports stale. 0026 fixes it with a `coalesce`. Two bugs here now
+come from Postgres's three-valued logic (this one and 0022's `jsonb null IS DISTINCT FROM`), so:
+**any sub-expression in a CHECK that can go NULL is a hole, not a rejection.**
 
 **What is still advisory.** Nothing forces you through `claims.py`. The hook that would
 (`INSERT INTO claim|verdict` outside it → deny) is not written, nor is the `Stop` gate that

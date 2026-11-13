@@ -231,21 +231,46 @@ faults as `claim_stale(jsonb)` — somebody has to know which dimensions matter,
 be under-specified and still compare equal, and "could not be read" has to be distinguished from
 "unchanged" by a special case. Content-addressed facets have none of those; see §3.4.
 
-**A new gap the walk opened, measured.** `probe_code` hashes `dirty_files`, so the `code` digest
-moved **three times in one session** (5 → 7 → 9 dirty files) while the measurement's frozen input
-stayed byte-identical. Then, after the notes were corrected per verdict 12's own `SCOPE`, that
-very verdict went stale:
+**A gap the walk opened, measured — and closed in 0025/0026.** `probe_code` hashed
+`dirty_files`, a *count*, so the `code` digest moved **three times in one session**
+(5 → 7 → 9 dirty files) while the measurement's frozen input stayed byte-identical. Then,
+after the notes were corrected per verdict 12's own `SCOPE`, that very verdict went stale:
 
 ```
 verdict 12  claim 4  [search]  DESTROYED
   code: cb457d4dbfe1 -> 2b145620ca71          # judgeset-scores.json sha256 unchanged
 ```
 
-Writing the correction the verdict asked for is what expired the verdict. `code` as currently
-probed is a false-staleness generator: it is issuing an identity to an uncommitted working tree.
-The fix is already half-present — for a measurement over frozen inputs the right anchor is the
-digest of those inputs, which `evidence.sha256` carries. **Owner: unassigned.** Until then,
-anchor exploratory work with `--facets none` and accept that it never expires, or commit first.
+Writing the correction the verdict asked for is what expired the verdict.
+
+Two separate errors, and the second is the one worth remembering. The probe was weak — a count
+is the weakest identity available, since seven dirty files could be any seven, so it both moved
+on edits that did not matter and could not tell apart states that did; `branch` was in there
+too, so a `checkout -b` expired everything while the code was byte-identical. But the deeper
+error was the **shape**: a measurement does not depend on "the repository", it depends on
+specific bytes. Anchoring the judgeset scorer — which reads three frozen JSON files and two
+scripts — to the whole repo guarantees that every unrelated commit expires it.
+
+0025 therefore lets a facet be defined by a **path set**, digested file by file, which keeps
+one concept instead of two (still global, still shared, still content-addressed; declaring one
+is an INSERT). `world_facet.default_anchor` moves the "what do I anchor to by default" rule into
+the table, with `corpus`/`graph` on and `code`/path-facets off, because anchoring to a narrow
+facet is a *narrowing assertion* that should be made on purpose. Verified: touching an unrelated
+file moves `code` and leaves `judgeset` alone; touching a declared input moves `judgeset`.
+Claim 4 was re-anchored (verdict 13, `judgeset` + `corpus`) and `claims.py stale` is clean.
+
+0025 also makes `verdict_stale()` and `verdict_unanchored` read only the **latest** verdict per
+claim. Without that, verdict 12 would have stayed in the report forever with no way to clear it,
+and an entry nobody can act on trains the reader to skim — the 0022 lesson, from the other side.
+
+0026 is the smaller and more embarrassing half: 0025's own `CHECK (paths IS NULL OR
+array_length(paths,1) >= 1)` **did not reject an empty path set**, because
+`array_length(ARRAY[]::text[],1)` is `NULL`, `NULL >= 1` is `NULL`, and a CHECK passes on NULL.
+An empty path facet has a constant digest, so a verdict anchored to it never reports stale — a
+facet whose whole job is to expire claims, silently unable to. Caught by the must-reject half of
+`verify_ledger.py` on its first run after 0025. That is now two bugs in this repo from
+three-valued logic, so it is written down as a rule: **any sub-expression in a CHECK that can go
+NULL is a hole, not a rejection.**
 
 ### 4.3 Nothing surfaces stale claims at the moment they matter
 

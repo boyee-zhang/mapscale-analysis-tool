@@ -622,6 +622,7 @@ that is **deterministic** rather than probabilistic. What it decides:
 | Write/Edit an existing `migrations/NNNN_*.sql` | **deny** | forward-only, no `down` — editing an applied file leaves databases in a state no file describes |
 | `httpx.AsyncClient(` under `api/main/` (except `http_client.py`) | **deny** | measured 22.3 → 7.5 ms CPU/request, 40.9 → 119.4 req/s |
 | an Edit to `db.py` that drops `plan_cache_mode` | **ask** | without it the same query took 2.4–3.1 s five times and 104 s on the sixth |
+| a `shard-judge` spawned with no fan-out plan in its prompt | **ask** | every extra agent is ~71,600 tokens for wall-clock time alone — see below |
 
 Three properties it is built to have, each because the alternative failed in testing:
 
@@ -653,6 +654,60 @@ nothing.
 
 Adding a rule means adding a pattern plus both tests — one that must fire and one that must not.
 To turn the whole thing off, delete the `hooks` block from `.claude/settings.json`.
+
+---
+
+## Fanning out: the measured economics
+
+`scripts/fanout.py` decides how many agents a judgement needs. The answer is almost always one,
+and the reason is counter-intuitive enough to be worth the numbers.
+
+Judging 191 `tussenkop` headings on 2026-11-12, five `shard-judge` agents were spawned, one per
+`doc_type`. Their measured costs:
+
+```
+shard                   units   tokens      ms          tokens ~ 70,609 + 25.3 * units
+omgevingsvergunning         3   66,898  14,908          R2 = 0.033
+evenementenvergunning       3   68,844  15,461
+exploitatievergunning      52   74,975  17,663          An agent judging 3 units cost 66,898.
+andere vergunning          92   68,085  23,493          One judging 92 cost 68,085.
+verkeersbesluit            41   79,075  23,574          The cost is FIXED, ~71,600 per agent.
+                               -------
+                               357,877
+```
+
+So the waste has two parts, and the obvious one is the small one:
+
+```
+all 191 units inline, as payload      ~35,800 tokens
+the 8 distinct texts among them           ~30 tokens
+actually spent                        357,877 tokens
+```
+
+De-duplicating would have saved ~35,800. **Not fanning out would have saved ~286,000** — eight
+times more. Fanning out buys wall-clock time, not tokens: those five ran in ~24 s against ~95 s
+serial, so it was ~286,000 tokens for 71 seconds.
+
+Hence the order of questions in `plan()`: *can one agent hold this* first, *how much is
+repeated* second.
+
+```python
+from scripts.fanout import plan
+p = plan(units, key=lambda u: u["text"], render=lambda u: u["text"] + u["context"])
+print(p.report())          # units / distinct / payload / how many agents / why
+for shard in p.shards:     # len(p.shards) == 1 unless the payload really exceeds 100k tokens
+    ...
+labels = {...}             # one decision per DISTINCT key
+results = p.expand(labels) # back onto all 191 rows; raises on a partial answer
+```
+
+`expand()` refusing a partial answer matters: a judgement that silently covered only some keys
+would expand into a result full of `None` that reads exactly like a complete one.
+
+The gate is in two places so it is not another thing to remember: `shard-judge`'s description
+requires `plan.report()` as its fifth input, and the guard hook **asks** when one is spawned
+without it. Tests: `tests/unit/test_fanout.py` (14 cases, including the real 191-unit
+distribution) and the `Agent` cases in `.claude/hooks/test_guard.py`.
 
 ---
 

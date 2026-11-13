@@ -131,6 +131,27 @@ def check_write(path: str, text: str, is_edit: bool) -> None:
                        f"generic plan and the search shape arrives as a parameter.")
 
 
+# Fanning out costs ~71,600 tokens per extra agent and buys wall-clock time only (measured
+# 2026-11-12: R2 = 0.033 between an agent's cost and the number of units it judged). The real
+# 191-unit case spent 357,877 tokens across five agents to reach eight distinct answers. A
+# shard-judge spawned without having run scripts/fanout.py is worth one question.
+_PLAN_MARKERS = ("distinct", "payload")
+
+
+def check_agent(ti: dict) -> None:
+    if ti.get("subagent_type") != "shard-judge":
+        return
+    prompt = (ti.get("prompt") or "").lower()
+    if all(m in prompt for m in _PLAN_MARKERS):
+        return
+    out("ask", "A shard-judge is being spawned with no fan-out plan in its prompt. An agent "
+               "costs ~71,600 tokens to stand up whatever it judges (R2 = 0.033 over 3-92 "
+               "units), so every extra shard is that much for wall-clock time alone — the real "
+               "191-unit case spent 357,877 tokens across five agents to reach eight distinct "
+               "answers. Run scripts/fanout.py plan() and pass its report, or confirm this "
+               "shard is needed anyway.")
+
+
 def main() -> int:
     try:
         payload = json.load(sys.stdin)
@@ -141,6 +162,8 @@ def main() -> int:
     try:
         if tool == "Bash":
             check_bash(ti.get("command", "") or "")
+        elif tool == "Agent":
+            check_agent(ti)
         elif tool in ("Write", "Edit"):
             path = ti.get("file_path", "") or ""
             text = (ti.get("content") or "") + (ti.get("new_string") or "")

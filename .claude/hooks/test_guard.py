@@ -33,6 +33,7 @@ def run(payload: dict, cwd: str | None = None):
 def bash(c):      return {"tool_name": "Bash", "tool_input": {"command": c}}
 def write(p, c):  return {"tool_name": "Write", "tool_input": {"file_path": p, "content": c}}
 def edit(p, s):   return {"tool_name": "Edit", "tool_input": {"file_path": p, "new_string": s}}
+def agent(t, pr): return {"tool_name": "Agent", "tool_input": {"subagent_type": t, "prompt": pr}}
 
 
 # The literal is assembled so that this test file can itself be written and committed through
@@ -58,6 +59,9 @@ MUST_FIRE = [
     ("httpx in a domain",          write("api/main/domains/geo/service.py", "httpx.AsyncClient()"), "deny"),
     ("absolute path, same rule",   write(os.path.join(ROOT, "api/main/routers/x.py"),
                                          "httpx.AsyncClient()"), "deny"),
+    # A shard-judge with no fan-out plan: every extra agent is ~71,600 tokens of fixed cost.
+    ("shard-judge, no plan",       agent("shard-judge", "judge the headings in shard 3"), "ask"),
+    ("shard-judge, half a plan",   agent("shard-judge", "units: 191 distinct: 8"), "ask"),
     # A heredoc whose body IS executed stays under the rules.
     ("bash <<EOF runs its stdin",  bash("bash <<'EOF'\n" + FORCE + "\nEOF"), "deny"),
     ("sh <<EOF runs its stdin",    bash("sh <<'EOF'\n" + FORCE + "\nEOF"), "deny"),
@@ -73,6 +77,11 @@ MUST_NOT_FIRE = [
     ("a script, not api/",         write("scripts/x.py", "httpx.AsyncClient()")),
     ("ordinary bash",              bash("ls -la")),
     ("ordinary edit",              edit("README.md", "hi")),
+    ("shard-judge with a plan",    agent("shard-judge",
+                                         "units 191 / distinct 8 / payload ~1,498 tokens / "
+                                         "2 shards. judge your shard.")),
+    ("a falsifier, not a shard",   agent("falsifier", "conclusion: X. commands: Y.")),
+    ("a general-purpose agent",    agent("general-purpose", "go look something up")),
     # Regression 1: a command that MENTIONS a blocked command is not running it.
     ("grep for the words",         bash("grep -rn '" + FORCE + "' docs/")),
     ("echo the words",             bash("echo 'never run " + FORCE + "'")),

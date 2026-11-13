@@ -305,7 +305,7 @@ as `cache.py` degrades when Upstash is unconfigured. The reason used to be that 
 no Postgres; the deploy stack ships one, so the guard is now about running the API against a
 partial environment rather than about a deployment that cannot have a database. Current tables: `municipality` (stage 0); `etl_run`,
 `poi_category`, `poi_category_rule`, `poi`, `poi_import` (stage 1); `bekendmaking`,
-`bekendmaking_locatie` (official announcements, loaded by `scripts/import_bekendmaking.py`); `claim`, `evidence`, `verdict` (0021-0022 — the measurement ledger, see below; nothing in `api/` reads them). `geocode_cache` is also
+`bekendmaking_locatie` (official announcements, loaded by `scripts/import_bekendmaking.py`); `claim`, `evidence`, `verdict`, `world_facet`, `world_snapshot`, `verdict_world`, `topic` (0021-0024 — the measurement ledger, see below; nothing in `api/` reads them). `geocode_cache` is also
 still there but no longer read or written — its only caller was the housing geocoder.
 
 A refactor is in progress — see `docs/architecture-refactor-plan.md` (structure) and
@@ -535,6 +535,14 @@ console.log('[api] fetchIsochrone response', { featureCount: data.features?.leng
 
 ## Measurement discipline (how a number becomes durable here)
 
+> The design of all of this — why three layers, what each enforces, what is still missing, and
+> the principles with the evidence behind them — is in **`docs/ai-dev-framework.md`**. Read it
+> before extending any of the mechanisms below. It is also the honest list of gaps. Two it used
+> to name are closed: the ledger has a write path (`scripts/claims.py`, §1b) and `status` is
+> derived rather than hand-written, so the two rows that contradicted their own verdicts cannot
+> recur. What remains open is that nothing *forces* you through that write path — see the last
+> paragraph of §1b.
+
 This project's expensive failures were never missing features. They were conclusions that were
 wrong while looking right: an HTTP 200 from a stranded graph fragment, a load generator that was
 itself the bottleneck, a row count that could not see the field it never parsed, a mechanism
@@ -567,32 +575,79 @@ feature — not being able to state what you measured means there is nothing to 
 ### 1b. Record the claim, its evidence and its verdict
 
 `docs/pg-notes/` is for a human reader and cannot answer "which of these numbers is still
-true". The `claim` / `evidence` / `verdict` tables (migration 0021) can:
+true". The ledger can. **`scripts/claims.py` is the only way in**:
 
-- `claim.context` is **jsonb on purpose** — it holds the measurement's own dimensions
-  (`corpus_size`, `graph_date`, `coordinate`, `n_responses`, whatever was actually varied).
-  A generic schema would store only command, path and timestamp, and drop exactly the fields
-  that decide when a claim expires.
-- `evidence` refuses a row that names a file without a `sha256`. Scratch files get overwritten;
-  a path with no digest still points at something afterwards, so the record reads as supported
-  when the bytes are gone.
-- `verdict.scope` is the deliverable — the narrowest surviving form, the line that gets pasted
-  into the notes instead of the original wording. `DESTROYED`/`SURVIVED` must carry one.
-
-The query worth running:
-
-```sql
-SELECT * FROM claim_stale(jsonb_build_object(
-    'corpus_size', (SELECT count(*) FROM bekendmaking),
-    'graph_date',  '<from /ors/v2/status>'));
+```bash
+.venv/bin/python scripts/claims.py snapshot                 # probe the world, record it
+.venv/bin/python scripts/claims.py new --topic search --text "..." [--ack 7,9]
+.venv/bin/python scripts/claims.py evidence 4 --command "..." --output path/to/raw.json
+.venv/bin/python scripts/claims.py verdict 4 --verdict SURVIVED --scope "..." --facets code
+.venv/bin/python scripts/claims.py stale                    # THE query worth running
+.venv/bin/python scripts/claims.py show [4]
 ```
 
-It knows nothing about what the keys mean — any recorded dimension whose value has since
-changed is reported, so it catches the next stale number and not only the two already known.
-Verified on this session's own claims: it flags `2.5 geometries per publication` (measured at
-10,342 rows, now 94,183) and leaves the two that are still current alone. A JSON `null` on
-either side means "not measured" and never expires a claim (0022, after the first run produced
-one false positive out of three rows).
+The falsifier writes **its own** verdict — pass it the `claim_id` and the three commands.
+That is not a convenience: the `SCOPE` line is the deliverable, and routing it through a
+paraphrase is the failure this repo already records a rule against.
+
+**The world is a content-addressed snapshot, not a set of keys** (0023). A facet is probed,
+the whole probe output is hashed, and a verdict is anchored to the digests it was reached
+under (`verdict_world`). Different digest ⇒ untested, and nothing has to know why. This
+replaced `claim_stale(jsonb)`, which 0024 drops, for three measured reasons:
+
+- It needed its caller to assemble the current world. Nothing did: **0 callers in 12 days**,
+  and the one stale number it existed to catch was found by hand anyway. `verdict_stale()`
+  takes no arguments.
+- A key can be under-specified and still look fine. Claim #3 recorded
+  `graph_date: 2026-10-28T16:45:20Z` — which is **cycling-regular's** build date. The three
+  profiles carry three (16:43:51 / 16:44:44 / 16:45:20), so rebuilding only `driving-car`
+  left that key matching: "not stale", wrongly. A digest over all three cannot do that.
+- "Could not be read" had to be told apart from "has not changed" — the whole of 0022. An
+  unreachable ORS made every graph claim read as current. Now unreachability is a payload,
+  so it hashes **differently** from an answer: incompleteness is a visible difference, not a
+  silent pass.
+
+The cost, stated: a digest is all-or-nothing where a key comparison was precise. One imported
+row moves the `corpus` digest and every verdict anchored to it is untested at once. Hence
+facets — currently `code` / `corpus` / `graph`, and adding one is an INSERT into
+`world_facet` plus a probe. **Anchoring defaults to every probed facet**; narrow it with
+`--facets` when a measurement genuinely does not depend on one (the judgeset scorer reads
+frozen files, so `--facets code`). `--facets none` is legal and makes a verdict that can
+never expire, which is why `verdict_unanchored` lists them.
+
+**`claim.status` is not a column** (0024). It was one, with a `DEFAULT 'open'` and a CHECK
+over four values, and nothing ever wrote it — the three rows backfilled by hand all said
+`survived` while two had a latest verdict of `DESTROYED`, and `claim_stale` filtered on
+`status IN ('open','survived')`, so **both refuted claims were still being checked as live**.
+A ledger built to stop a wrong conclusion from looking right was itself a wrong conclusion
+that looked right, in two rows out of three. It is now derived in `claim_current`; a trigger
+would have been weaker, because the column would still be there to read. `REFUSED` maps to
+`open`: the falsifier refuses when its inputs are missing, so nothing was tested.
+
+Three more constraints exist because the alternative lies: `evidence` refuses a path without
+a `sha256` (scratch files get overwritten; a path with no digest still points at something
+afterwards, so the record reads as supported when the bytes are gone — and `claims.py`
+hashes the file rather than taking your word for the digest); `verdict.scope` is required
+unless `REFUSED`; `topic` and `world_facet` are **closed sets with FKs**, because free text
+lets `search` and `Search` diverge and then a per-topic staleness check returns zero rows,
+which reads exactly like "nothing is stale".
+
+`claim.context` stays jsonb and keeps its gin index, but it now holds the **experiment's**
+parameters only (`queries`, `bootstrap_resamples`, `method`). The world's dimensions moved
+to facets. Claim #2 had `corpus_size` (world) sitting next to `method` (experiment); that
+conflation is why `claim_stale` had to guess with `now_ctx ? k`.
+
+Verify the schema against a live database with
+`.venv/bin/python -I scripts/verify_ledger.py` — 14 checks, every one in a rolled-back
+transaction, and it reads **both** streams because psql reports a constraint rejection on
+stderr and reading only stdout once made a correct rejection look like a failed test.
+
+**What is still advisory.** Nothing forces you through `claims.py`. The hook that would
+(`INSERT INTO claim|verdict` outside it → deny) is not written, nor is the `Stop` gate that
+would refuse to let a session end with an open claim — by decision, not oversight: `Stop`
+fires at the end of **every turn**, not of the session, so that gate as first designed would
+have held every later turn hostage, and a block an agent cannot satisfy (Postgres down) is a
+hang. Build those against evidence from walking the loop, not ahead of it.
 
 ### 2. Every issue found while working gets an explicit disposition
 

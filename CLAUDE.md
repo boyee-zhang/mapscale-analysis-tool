@@ -305,7 +305,7 @@ as `cache.py` degrades when Upstash is unconfigured. The reason used to be that 
 no Postgres; the deploy stack ships one, so the guard is now about running the API against a
 partial environment rather than about a deployment that cannot have a database. Current tables: `municipality` (stage 0); `etl_run`,
 `poi_category`, `poi_category_rule`, `poi`, `poi_import` (stage 1); `bekendmaking`,
-`bekendmaking_locatie` (official announcements, loaded by `scripts/import_bekendmaking.py`). `geocode_cache` is also
+`bekendmaking_locatie` (official announcements, loaded by `scripts/import_bekendmaking.py`); `claim`, `evidence`, `verdict` (0021-0022 — the measurement ledger, see below; nothing in `api/` reads them). `geocode_cache` is also
 still there but no longer read or written — its only caller was the housing geocoder.
 
 A refactor is in progress — see `docs/architecture-refactor-plan.md` (structure) and
@@ -564,12 +564,150 @@ each one, and a `SCOPE` line: the narrowest form of the claim its evidence does 
 It refuses rather than guesses when any of the four inputs is missing, and that refusal is the
 feature — not being able to state what you measured means there is nothing to record yet.
 
+### 1b. Record the claim, its evidence and its verdict
+
+`docs/pg-notes/` is for a human reader and cannot answer "which of these numbers is still
+true". The `claim` / `evidence` / `verdict` tables (migration 0021) can:
+
+- `claim.context` is **jsonb on purpose** — it holds the measurement's own dimensions
+  (`corpus_size`, `graph_date`, `coordinate`, `n_responses`, whatever was actually varied).
+  A generic schema would store only command, path and timestamp, and drop exactly the fields
+  that decide when a claim expires.
+- `evidence` refuses a row that names a file without a `sha256`. Scratch files get overwritten;
+  a path with no digest still points at something afterwards, so the record reads as supported
+  when the bytes are gone.
+- `verdict.scope` is the deliverable — the narrowest surviving form, the line that gets pasted
+  into the notes instead of the original wording. `DESTROYED`/`SURVIVED` must carry one.
+
+The query worth running:
+
+```sql
+SELECT * FROM claim_stale(jsonb_build_object(
+    'corpus_size', (SELECT count(*) FROM bekendmaking),
+    'graph_date',  '<from /ors/v2/status>'));
+```
+
+It knows nothing about what the keys mean — any recorded dimension whose value has since
+changed is reported, so it catches the next stale number and not only the two already known.
+Verified on this session's own claims: it flags `2.5 geometries per publication` (measured at
+10,342 rows, now 94,183) and leaves the two that are still current alone. A JSON `null` on
+either side means "not measured" and never expires a claim (0022, after the first run produced
+one false positive out of three rows).
+
 ### 2. Every issue found while working gets an explicit disposition
 
 Noticing something broken and quietly moving on is not allowed. Surface it and decide out loud:
 fix now / fix in the next commit / defer to phase N. Deferring is a fine answer; silence is not.
 Anything deferred goes into `## Known Issues` below **with an owner phase**, so that section
 stays the single place that knows what is outstanding.
+
+---
+
+## Enforced rules: the guard hook
+
+Everything in this file is advice. Claude reads it and mostly complies — but "mostly" is what
+let `git push origin --delete` remove 13 remote branches in one call with nothing asking, and
+what lets a `httpx.AsyncClient(...)` reappear in a request path after the comment saying not to.
+
+`.claude/hooks/guard.py` is a `PreToolUse` hook, wired up in `.claude/settings.json` on the
+`Bash|Write|Edit` matcher. The harness runs it, not Claude, so it is the only part of this file
+that is **deterministic** rather than probabilistic. What it decides:
+
+| call | decision | why |
+|---|---|---|
+| `git push … --delete` / `… :branch` | **ask** | irreversible for anyone who has not fetched, and it closes the PR whose head it is |
+| `git push --force` (not `--force-with-lease`) | **deny** | rewrites published history |
+| `docker compose … down -v` / `--volumes` | **ask** | the one command that really costs 40 minutes of ORS graph rebuilding |
+| `git reset --hard` / `git clean -f…` | **ask** | discards uncommitted work |
+| Write/Edit an existing `migrations/NNNN_*.sql` | **deny** | forward-only, no `down` — editing an applied file leaves databases in a state no file describes |
+| `httpx.AsyncClient(` under `api/main/` (except `http_client.py`) | **deny** | measured 22.3 → 7.5 ms CPU/request, 40.9 → 119.4 req/s |
+| an Edit to `db.py` that drops `plan_cache_mode` | **ask** | without it the same query took 2.4–3.1 s five times and 104 s on the sixth |
+| a `shard-judge` spawned with no fan-out plan in its prompt | **ask** | every extra agent is ~71,600 tokens for wall-clock time alone — see below |
+
+Three properties it is built to have, each because the alternative failed in testing:
+
+- **Silence means "not my business".** When no rule matches it prints nothing. Emitting
+  `permissionDecision: "allow"` would bypass the normal permission flow and make the guard a
+  back door.
+- **A command that only MENTIONS a blocked command is not blocked.** The first version denied
+  `grep -rn 'git push --force' docs/`. Patterns now require command position — line start, or
+  after `;` `&&` `||` `|`, with `sudo`/`env`/`time` prefixes allowed.
+- **It fails open, but never silently.** A bug inside the guard prints a `systemMessage` saying
+  the checks were skipped, and lets the call through. A guard that quietly stops enforcing is
+  worse than no guard, because the rules still look live — the same shape as the empty-200
+  problem recorded above. (This was not hypothetical: an undefined name made every path rule
+  silently pass, and only a cwd-independence test caught it.)
+
+- **A heredoc body is data, not commands.** The guard blocked its own commit: the message,
+  delivered through `git commit -F - <<'MSG' … MSG`, quoted a blocked command as an example,
+  and the body is part of the Bash tool's `command` string. Bodies are now stripped before
+  matching — except where the command executes its stdin (`bash`, `sh`, `zsh`, `eval`), where
+  the body really is commands.
+
+Both of those false positives were found by the guard stopping work that was legitimate, not
+by a test written in advance. The second one took a third fix with it: `_POS` anchored on `^`
+with no `re.MULTILINE`, so in a multi-line command **every line after the first was invisible**
+— which silently made the `bash <<EOF` exception do nothing. A newline now counts as a command
+separator. Tests: `python3 .claude/hooks/test_guard.py`, 37 cases, and the must-NOT-fire half
+is the half that matters — a guard with false positives gets switched off, and then it protects
+nothing.
+
+Adding a rule means adding a pattern plus both tests — one that must fire and one that must not.
+To turn the whole thing off, delete the `hooks` block from `.claude/settings.json`.
+
+---
+
+## Fanning out: the measured economics
+
+`scripts/fanout.py` decides how many agents a judgement needs. The answer is almost always one,
+and the reason is counter-intuitive enough to be worth the numbers.
+
+Judging 191 `tussenkop` headings on 2026-11-12, five `shard-judge` agents were spawned, one per
+`doc_type`. Their measured costs:
+
+```
+shard                   units   tokens      ms          tokens ~ 70,609 + 25.3 * units
+omgevingsvergunning         3   66,898  14,908          R2 = 0.033
+evenementenvergunning       3   68,844  15,461
+exploitatievergunning      52   74,975  17,663          An agent judging 3 units cost 66,898.
+andere vergunning          92   68,085  23,493          One judging 92 cost 68,085.
+verkeersbesluit            41   79,075  23,574          The cost is FIXED, ~71,600 per agent.
+                               -------
+                               357,877
+```
+
+So the waste has two parts, and the obvious one is the small one:
+
+```
+all 191 units inline, as payload      ~35,800 tokens
+the 8 distinct texts among them           ~30 tokens
+actually spent                        357,877 tokens
+```
+
+De-duplicating would have saved ~35,800. **Not fanning out would have saved ~286,000** — eight
+times more. Fanning out buys wall-clock time, not tokens: those five ran in ~24 s against ~95 s
+serial, so it was ~286,000 tokens for 71 seconds.
+
+Hence the order of questions in `plan()`: *can one agent hold this* first, *how much is
+repeated* second.
+
+```python
+from scripts.fanout import plan
+p = plan(units, key=lambda u: u["text"], render=lambda u: u["text"] + u["context"])
+print(p.report())          # units / distinct / payload / how many agents / why
+for shard in p.shards:     # len(p.shards) == 1 unless the payload really exceeds 100k tokens
+    ...
+labels = {...}             # one decision per DISTINCT key
+results = p.expand(labels) # back onto all 191 rows; raises on a partial answer
+```
+
+`expand()` refusing a partial answer matters: a judgement that silently covered only some keys
+would expand into a result full of `None` that reads exactly like a complete one.
+
+The gate is in two places so it is not another thing to remember: `shard-judge`'s description
+requires `plan.report()` as its fifth input, and the guard hook **asks** when one is spawned
+without it. Tests: `tests/unit/test_fanout.py` (14 cases, including the real 191-unit
+distribution) and the `Agent` cases in `.claude/hooks/test_guard.py`.
 
 ---
 

@@ -307,7 +307,10 @@ partial environment rather than about a deployment that cannot have a database. 
 `poi_category`, `poi_category_rule`, `poi`, `poi_import` (stage 1); `bekendmaking`,
 `bekendmaking_locatie` (official announcements, loaded by `scripts/import_bekendmaking.py`),
 `bekendmaking_activity_text` (0027 — `activity_text` derived once instead of per read, filled by
-`scripts/derive_activity.py`; `bekendmaking_activity_pending` is what has not been derived yet); `claim`, `evidence`, `verdict`, `world_facet`, `world_snapshot`, `verdict_world`, `topic` (0021-0026 — the measurement ledger, see below; nothing in `api/` reads them). `geocode_cache` is also
+`scripts/import_bekendmaking_body.py` in the body's own transaction and by
+`scripts/derive_activity.py` for re-derives; `bekendmaking_activity_pending` is what has not been
+derived yet), `activity_rule` (0030 — which extraction is current, read by both the pending view
+and `scripts/activity_rules.py`); `claim`, `evidence`, `verdict`, `world_facet`, `world_snapshot`, `verdict_world`, `topic` (0021-0026 — the measurement ledger, see below; nothing in `api/` reads them). `geocode_cache` is also
 still there but no longer read or written — its only caller was the housing geocoder.
 
 A refactor is in progress — see `docs/architecture-refactor-plan.md` (structure) and
@@ -931,6 +934,39 @@ distribution) and the `Agent` cases in `.claude/hooks/test_guard.py`.
   18, `falsified: false`.
 - `background_similarity` is now the largest SQL term in that endpoint at 29–38 ms. Not a
   problem; recorded so the next person does not re-measure the thing that was already fixed.
+- **0027 was incomplete, and 0029/0030 are the three fixes.** `falsifier` DESTROYED claim 18
+  (verdict 15) and found two real defects plus a wrong number:
+  - **Nothing called the derive step.** 0027 backfilled inside the migration to avoid a window
+    where search returns `''`; the window was not closed, it was moved to every future import.
+    `scripts/import_bekendmaking_body.py` now derives inside the same transaction as the body
+    upsert, so a committed body always has committed text, and it reports `derived=` and
+    `pending_after=` in the `etl_run` note — a run that stored bodies and derived nothing used
+    to read as a success.
+  - **`''` meant two things.** It is 0015's deliberate sentinel for "no body and no title" *and*
+    was "not derived yet". 0029 adds `activity_derived` to the read view; `embed_bekendmaking.py`
+    now tests it explicitly and warns rather than silently under-indexing.
+  - **The rule version was in two places** — `rule_version <> 1` in the pending view and
+    `RULE_VERSION = 1` in Python. The first bump would have made the view report every row
+    forever while the script reported none. 0030 adds `activity_rule` (one current row, enforced
+    by a partial unique index) plus `activity_rule_current()`; both sides read it. **It is not a
+    schema version** — `schema_migrations` says which DDL ran, `activity_rule` says which
+    transformation produced the data.
+  - **The number was corpus-branch-only.** 1.9–5.7 ms is the corpus-wide branch; the
+    **isochrone** branch — what a map click triggers — is **43.7–67.6 ms**, a median **41x**,
+    not 533x. The remainder is the spatial CTE (13 ms) and a seq scan hashing all 94,183 vectors
+    (22.6 ms), neither of them the view. Carry 41x.
+  - Verified by `.venv/bin/python -I scripts/verify_activity.py` — 15 cases, each in a
+    rolled-back transaction, including the controls that make the checks non-vacuous.
+- **`probe_corpus` now covers derived state, and widening it expired every `corpus`-anchored
+  verdict once.** It read only `bekendmaking` and `bekendmaking_locatie`, so emptying
+  `bekendmaking_activity_text` left its digest byte-identical while every publication's
+  `activity_text` became `''` — a measurement's premise destroyed with the verdict still reading
+  "current". It now carries `activity_count`, `activity_digest` (identifier + `rule_version` +
+  content, ordered by the primary key) and `activity_pending_count`. The one-time invalidation
+  that followed is the cost 0025 already records for widening a snapshot, and it is honest:
+  claim 17 says "the ~2.0 s is X" and there is no ~2.0 s any more, so stale is the correct
+  reading. **Owner: unassigned** — re-validating claim 17 means re-measuring something that no
+  longer exists, so the likelier disposition is to supersede it with claim 18's successor.
 - The blocking half of that endpoint is fixed: `encoder.encode()` is a torch forward pass and
   was called directly from `async def`, and the ~440 MB model was loaded inside the first
   request. Measured 2026-11-14: **9.76 s to load plus 925 ms for the first forward pass**, all

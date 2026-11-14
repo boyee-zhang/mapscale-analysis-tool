@@ -1,7 +1,7 @@
 # A judged relevance set for semantic search over `bekendmaking`
 
 Built 2026-11-05 against the live national table (94,183 publications, 294 municipalities, 2026).
-Harness `scripts/experiments/judgeset_pool.py` (pooling) and `judgeset_score.py` (metrics); data
+Harness `etl/experiments/judgeset_pool.py` (pooling) and `judgeset_score.py` (metrics); data
 in `judgeset-{raw,judge_sheet,judgments}.json` and `judgeset-vocab.txt`.
 
 ## Why this exists
@@ -155,7 +155,7 @@ Paired bootstrap on the 40 per-query nDCG@10 differences, 20,000 resamples:
 
 **`vec − fts_body = +0.194, significant` was destroyed** by `falsifier` (ledger claim 4,
 verdict 12, anchored to `corpus:35e0c80686` + `code:cb457d4dbf`). Probes and raw output:
-`scripts/judgeset_falsify.py` and `raw/judgeset-falsify-run1.txt`
+`docs/pg-notes/scripts/judgeset_falsify.py` and `raw/judgeset-falsify-run1.txt`
 (sha256 `e82663393afa0da7…`, re-runs bit-identical). Replace the wording above with this:
 
 > On this frozen set, `vec` outranks `fts_body` on 25 of 40 queries and loses on 13, and the

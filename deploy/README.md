@@ -195,12 +195,12 @@ The bundle's dump is a snapshot. To make a new one from a machine that has the l
 database running:
 
 ```bash
-./scripts/package.sh                 # source + fresh 35 MB dump
-./scripts/package.sh --with-extract  # also the 181 MB OSM extract
-./scripts/package.sh --no-dump       # source only; target starts empty
+./tools/package.sh                 # source + fresh 35 MB dump
+./tools/package.sh --with-extract  # also the 181 MB OSM extract
+./tools/package.sh --no-dump       # source only; target starts empty
 ```
 
 Re-importing from upstream instead of restoring a dump is possible but slow and needs the
-host toolchain: `scripts/import_poi.py` wants the 1.3 GB extract and ~3 minutes,
-`scripts/import_bekendmaking.py` runs per municipality against a government SRU endpoint
+host toolchain: `etl/ingest/poi.py` wants the 1.3 GB extract and ~3 minutes,
+`etl/ingest/bekendmaking.py` runs per municipality against a government SRU endpoint
 with no national mode. That is the whole reason the dump is in the bundle.

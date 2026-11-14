@@ -1,8 +1,8 @@
 """Fetch the publication DOCUMENT for rows already in `bekendmaking` and store its period.
 
-    .venv/bin/python scripts/import_bekendmaking_body.py --family apv --limit 200
-    .venv/bin/python scripts/import_bekendmaking_body.py --family all
-    .venv/bin/python scripts/import_bekendmaking_body.py --retry
+    .venv/bin/python -m etl.ingest.bekendmaking_body --family apv --limit 200
+    .venv/bin/python -m etl.ingest.bekendmaking_body --family all
+    .venv/bin/python -m etl.ingest.bekendmaking_body --retry
 
 The SRU index record keeps a publication's period START date and drops the END date, so a
 two-day skip container and 144 days of scaffolding are the same row in `bekendmaking`. That
@@ -33,13 +33,12 @@ import asyncpg
 import httpx
 from dotenv import load_dotenv
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
+ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT / ".env")
 
 # The derivation itself stays in SQL; this only says WHICH rows and WHEN. See
-# scripts/activity_rules.py for why there is no second copy of the patterns here.
-from scripts.activity_rules import current_rule, derive  # noqa: E402
+# etl/derive/activity_rules.py for why there is no second copy of the patterns here.
+from etl.derive.activity_rules import current_rule, derive  # noqa: E402
 
 DOC = "https://zoek.officielebekendmakingen.nl/{}.xml"
 CONCURRENCY = 4          # a public government endpoint, not ours; see --concurrency
@@ -367,7 +366,7 @@ async def main() -> int:
                   f"{left} still pending")
             if left:
                 print("WARNING: rows remain in bekendmaking_activity_pending. Run "
-                      "scripts/derive_activity.py -- an underived row reads activity_text='' "
+                      "etl/derive/activity.py -- an underived row reads activity_text='' "
                       "and is absent from the FTS index.", file=sys.stderr)
         except Exception as e:
             await conn.execute(

@@ -2,8 +2,8 @@
 Forward-only SQL migration runner.
 
 Usage:
-    python scripts/migrate.py            # apply all pending
-    python scripts/migrate.py --status   # list applied / pending, apply nothing
+    python tools/migrate.py            # apply all pending
+    python tools/migrate.py --status   # list applied / pending, apply nothing
 
 Conventions:
   - Files live in migrations/ and are named NNNN_description.sql

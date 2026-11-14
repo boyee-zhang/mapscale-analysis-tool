@@ -101,7 +101,7 @@ catalogue is cached.
 
 ## Migration runner
 
-`python scripts/migrate.py` twice → `applied 1 migration(s)` then `nothing to apply`.
+`python tools/migrate.py` twice → `applied 1 migration(s)` then `nothing to apply`.
 `--status` prints `0001  applied   0001_init.sql`.
 
 Caveat inherent to the `.noxact.sql` convention (unused so far): a file run outside a

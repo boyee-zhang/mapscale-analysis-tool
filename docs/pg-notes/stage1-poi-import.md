@@ -10,7 +10,7 @@ Validation is on one province before the full country, per the stage 1 acceptanc
 ## Import result
 
 ```
-$ time python scripts/import_poi.py data/noord-holland-latest.osm.pbf
+$ time python -m etl.ingest.poi data/noord-holland-latest.osm.pbf
 osm_poi:noord-holland: 47 tag rules
 etl_run 1 claimed
   staged 50000
@@ -265,7 +265,7 @@ both indexed, so every row needed new index entries.
 After:
 
 ```
-$ python scripts/import_poi.py data/noord-holland-latest.osm.pbf   # second run
+$ python -m etl.ingest.poi data/noord-holland-latest.osm.pbf   # second run
 merge INSERT 0 0, soft delete UPDATE 0
 
 n_tup_upd=0  n_tup_hot_upd=0  n_dead_tup=0
@@ -393,7 +393,7 @@ builds a prepared geometry once per shape rather than walking the ring per row.
 
 The Postgres answer is deliberately **not** written to Redis. It is one index scan on
 a local table (0.3–0.4 ms), and a cached copy would only go stale the next time
-`import_poi.py` runs. The `pois:` key now exists solely for the Overpass path.
+`etl/ingest/poi.py` runs. The `pois:` key now exists solely for the Overpass path.
 
 ## Open
 

@@ -2,7 +2,7 @@
 Import OSM POI from a Geofabrik `.osm.pbf` extract into the `poi` table.
 
 Usage:
-    python scripts/import_poi.py data/noord-holland-latest.osm.pbf
+    python -m etl.ingest.poi data/noord-holland-latest.osm.pbf
 
 Replaces the per-request Overpass call in `api/main/upstream/overpass.py`. See
 `docs/postgres-refactor-plan.md` "阶段 1 Spec" for why this moves in-house.
@@ -35,7 +35,7 @@ import osmium.filter
 import osmium.geom
 from dotenv import load_dotenv
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT / ".env")
 
 # Rows per COPY. Large enough that round-trips are irrelevant, small enough that the

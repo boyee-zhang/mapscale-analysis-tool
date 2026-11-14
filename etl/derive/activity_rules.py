@@ -1,7 +1,7 @@
 """The one place that knows how to derive `activity_text` for a set of identifiers.
 
-Imported by `scripts/derive_activity.py` (the batch CLI) and by
-`scripts/import_bekendmaking_body.py` (which derives in the same transaction as the body it
+Imported by `etl/derive/activity.py` (the batch CLI) and by
+`etl/ingest/bekendmaking_body.py` (which derives in the same transaction as the body it
 just stored). Neither contains a regex, and neither may: the extraction itself lives in the
 `bekendmaking_activity_derive` SQL view, which is 0015's expression text. 0015 declined to
 materialise this partly because a column "would need a second copy of these patterns inside
@@ -98,7 +98,7 @@ RETURNING identifier
 
 # Every identifier whose text is missing, was derived from inputs that have since changed, or
 # was derived under an older rule version. Must agree with `bekendmaking_activity_pending` row
-# for row -- `scripts/verify_activity.py` asserts that across a rule bump, because the two
+# for row -- `etl/verify/activity.py` asserts that across a rule bump, because the two
 # disagreeing is the bug verdict 15 found.
 #
 # `IS DISTINCT FROM` throughout: `source_fp` is nullable (0031's backfill leaves NULL on any row

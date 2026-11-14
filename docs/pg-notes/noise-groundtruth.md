@@ -198,7 +198,7 @@ truth fiction, and every later comparison would be measuring the guess rather th
 
 **So the binding constraint is not the retrieval method. It is a field our own importer
 drops.** No embedding, LLM or `ts_rank_cd` fix can recover information that was never
-ingested. The repair is a parsing change in `scripts/import_bekendmaking.py` plus a refetch
+ingested. The repair is a parsing change in `etl/ingest/bekendmaking.py` plus a refetch
 limited to the APV and evenement families (~24,000 documents): keep `Looptijd` *end* date,
 and `Tijd van` / `Tijd tot` / `Bezoekers drukste moment` for evenement.
 
@@ -233,7 +233,7 @@ Three repairs, in the order their results depend on each other.
 
 ## A. `bekendmaking_body` — what the document says
 
-Migration `0010`, importer `scripts/import_bekendmaking_body.py`. One row per publication whose
+Migration `0010`, importer `etl/ingest/bekendmaking_body.py`. One row per publication whose
 document was fetched, carrying `start_date` / `end_date` / `start_time` / `end_time` /
 `period_raw` / `visitors_peak` / `body_text` and a `status`.
 
@@ -511,7 +511,7 @@ labelling a small area completely instead of a large sample of likely hits.
 
 Membership is **materialised as rows** in `noise_frame_member`, not left as a `ST_DWithin`
 predicate. The claim the benchmark rests on is exhaustiveness: if the frame were a query, the
-next `import_bekendmaking.py` run would add publications inside that radius, the denominator
+next `etl/ingest/bekendmaking.py` run would add publications inside that radius, the denominator
 would shift under the labels, and the set would quietly stop being exhaustive with nothing in
 the schema noticing. `noise_frame_unlabelled` is the check, and it must return zero rows before
 any metric is computed. It does.
@@ -641,7 +641,7 @@ the `noise_frame_unlabelled` check. The data is **not** a seed migration, unlike
 foreign key to `bekendmaking`, migrations run on every api boot, and a seed holding 954
 identifiers would fail the boot on any database where the bekendmaking import has not run. It
 lives in `docs/pg-notes/noise-frame.csv`, `noise-frame-member.csv` and `noise-labels.csv`
-(diffable, 144 KB) and is loaded by `scripts/load_noise_groundtruth.py`, which refuses a partial
+(diffable, 144 KB) and is loaded by `etl/ingest/noise_groundtruth.py`, which refuses a partial
 load rather than coming up silently short. Re-running it is idempotent — verified, same
 distribution and zero unlabelled. The refusal path itself has not been exercised.
 

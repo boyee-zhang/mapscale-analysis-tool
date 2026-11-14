@@ -2,7 +2,7 @@
 
 WHY THE MODEL LIVES BESIDE THE API. Embedding a QUERY is one sequence; embedding the
 DOCUMENTS a query matches would be a few thousand, and that asymmetry is the entire reason
-document vectors are precomputed (`scripts/embed_bekendmaking.py`) while query vectors are
+document vectors are precomputed (`etl/derive/embeddings.py`) while query vectors are
 not. One forward pass is cheap enough to do in the request, and doing it in-process avoids a
 network hop and a second thing to deploy.
 
@@ -14,7 +14,7 @@ is nothing here" are different, and must not share a branch.
 
 THE PREFIXES ARE LOAD-BEARING. e5 is trained with asymmetric prefixes: documents are encoded
 as `passage: …` and queries as `query: …`. Mixing them produces no error at all and silently
-degrades every ranking, so the document side lives in `scripts/embed_bekendmaking.py` and the
+degrades every ranking, so the document side lives in `etl/derive/embeddings.py` and the
 query side here, with both named in the other's comments rather than retyped from memory.
 """
 from __future__ import annotations

@@ -1,9 +1,9 @@
 """Verify the activity-derivation pipeline against a live database.
 
-    .venv/bin/python -I scripts/verify_activity.py
+    .venv/bin/python -m etl.verify.activity
 
 Every case runs inside a transaction that is ROLLED BACK, so the real corpus is never touched.
-That is the same shape as scripts/verify_ledger.py, and for the same reason: these are
+That is the same shape as etl/verify/ledger.py, and for the same reason: these are
 properties of a schema plus a derivation, and asserting them needs a real Postgres.
 
 WHAT EACH CASE IS FOR. All of them come from falsifier verdict 15 on ledger claim 18, which
@@ -30,12 +30,11 @@ from pathlib import Path
 import asyncpg
 from dotenv import load_dotenv
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
+ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT / ".env")
 
-from scripts.activity_rules import PENDING, current_rule, derive  # noqa: E402
-from scripts.claims import digest_of, probe_corpus  # noqa: E402
+from etl.derive.activity_rules import PENDING, current_rule, derive  # noqa: E402
+from etl.ledger.claims import digest_of, probe_corpus  # noqa: E402
 
 PUB = "zz-verify-activity-0001"
 PUB_BARE = "zz-verify-activity-0002"

@@ -4,9 +4,9 @@
 # exporter. They are already defined in docker-compose.yml behind `profiles: ["monitoring"]`;
 # this script is only a safe front door to them.
 #
-#   ./scripts/monitoring.sh up       Prometheus :9090, Grafana :3000 (no login)
-#   ./scripts/monitoring.sh down     stops ONLY these three
-#   ./scripts/monitoring.sh status   container state + whether each target is really scraped
+#   ./tools/monitoring.sh up       Prometheus :9090, Grafana :3000 (no login)
+#   ./tools/monitoring.sh down     stops ONLY these three
+#   ./tools/monitoring.sh status   container state + whether each target is really scraped
 #
 # Three reasons this is a script and not a line in the README:
 #
@@ -79,7 +79,7 @@ case "${1:-}" in
         echo "  Prometheus http://localhost:9090"
         echo
         echo "  A DOWN mapscale-api means the backend is not running on the host."
-        echo "  Start it with ./scripts/dev.sh — nothing in this stack can do it for you."
+        echo "  Start it with ./tools/dev.sh — nothing in this stack can do it for you."
         ;;
     down)
         # Never a bare `docker compose down`. See reason 1 in the header.

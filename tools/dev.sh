@@ -3,7 +3,7 @@
 # One command to bring the whole app up locally: Postgres, the migrations, the FastAPI
 # backend and the Vite dev server. Ctrl-C stops all of it.
 #
-#   ./scripts/dev.sh
+#   ./tools/dev.sh
 #
 # Deliberately does NOT start two of the compose services:
 #
@@ -11,7 +11,7 @@
 #                   Run `docker compose up -d ors` by hand — see docs/ors-self-host.md.
 #   elasticsearch   /search already degrades to PDOK -> Nominatim, and this project's
 #                   esdata volume is empty, so an ES on the default path costs ~1 GB of RAM
-#                   and answers nothing until scripts/ingest_addresses.py has run. Add it
+#                   and answers nothing until etl/ingest/addresses.py has run. Add it
 #                   with `docker compose up -d elasticsearch`.
 #
 set -euo pipefail
@@ -40,7 +40,7 @@ docker compose up -d --wait postgres
 # Forward-only and idempotent, so this is safe on every start. It is not optional: the
 # pgdata volume can outlive a migration being added.
 echo "==> migrations"
-.venv/bin/python scripts/migrate.py
+.venv/bin/python tools/migrate.py
 
 echo "==> backend  http://localhost:8000/api/main/health"
 # --reload-dir api is not tidiness, it is the difference between starting and not starting.

@@ -13,8 +13,8 @@ its other seed data (0004 poi_category_seed, 0012 noise_impact_rule_seed):
   deliberately, and it REFUSES to load a partial frame unless told to.
 
 Usage:
-    scripts/load_noise_groundtruth.py            # all-or-nothing
-    scripts/load_noise_groundtruth.py --partial  # load what matches, print what is missing
+    etl/ingest/noise_groundtruth.py            # all-or-nothing
+    etl/ingest/noise_groundtruth.py --partial  # load what matches, print what is missing
 """
 import argparse
 import asyncio
@@ -24,14 +24,12 @@ import sys
 
 import asyncpg
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
-
 # Through api.main.db rather than os.getenv, so this script reads .env the way every other
 # script in the repo does. Reading the environment directly made it work only in a shell that
 # happened to export DATABASE_URL, which is not how the rest of the project is run.
-from api.main.db import DATABASE_URL  # noqa: E402
+from api.main.db import DATABASE_URL
 
-NOTES = pathlib.Path(__file__).resolve().parent.parent / "docs" / "pg-notes"
+NOTES = pathlib.Path(__file__).resolve().parents[2] / "docs" / "pg-notes"
 
 
 def _rows(name: str) -> list[dict]:

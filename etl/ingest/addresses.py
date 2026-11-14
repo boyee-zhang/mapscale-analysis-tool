@@ -2,9 +2,9 @@
 Seed the nl_addresses Elasticsearch index with Dutch address data from PDOK.
 
 Usage:
-    python scripts/ingest_addresses.py                    # default seed terms
-    python scripts/ingest_addresses.py --terms "Amsterdam" "Rotterdam"
-    python scripts/ingest_addresses.py --city Amsterdam --rows 100
+    python -m etl.ingest.addresses                    # default seed terms
+    python -m etl.ingest.addresses --terms "Amsterdam" "Rotterdam"
+    python -m etl.ingest.addresses --city Amsterdam --rows 100
 
 PDOK Locatieserver (free, no API key needed):
   https://api.pdok.nl/bzk/locatieserver/search/v3_1/suggest

@@ -1,8 +1,8 @@
 """Fill in event dates for publications whose template carries no labelled period field.
 
-    .venv/bin/python scripts/derive_event_dates.py            # rows still at no_period
-    .venv/bin/python scripts/derive_event_dates.py --refresh  # also re-derive ok_derived rows
-    .venv/bin/python scripts/derive_event_dates.py --dry-run
+    .venv/bin/python -m etl.derive.event_dates            # rows still at no_period
+    .venv/bin/python -m etl.derive.event_dates --refresh  # also re-derive ok_derived rows
+    .venv/bin/python -m etl.derive.event_dates --dry-run
 
 WHY THIS IS A SEPARATE SCRIPT AND NOT PART OF THE IMPORTER. The importer's job is to fetch a
 document once; this re-reads documents already stored. Those are different costs and different
@@ -28,15 +28,13 @@ from __future__ import annotations
 import argparse
 import asyncio
 import pathlib
-import sys
 
 import asyncpg
 from dotenv import dotenv_values
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from event_dates import extract  # noqa: E402
+from etl.derive.event_dates_rules import extract
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 DATABASE_URL = dotenv_values(ROOT / ".env").get("DATABASE_URL")
 
 # Scoped to event publications, and that is a correctness constraint rather than a speed one.

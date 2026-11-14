@@ -1,6 +1,6 @@
 """Assert the query plans this repo depends on, against a live database.
 
-    .venv/bin/python -I scripts/verify_plans.py
+    .venv/bin/python -m etl.verify.plans
 
 WHY THIS EXISTS. The /search/notices ranking query spent 1,778-2,040 ms projecting a view over
 all 94,183 rows to decorate 20, and the code already said it must not: a comment block in
@@ -24,11 +24,9 @@ import sys
 from datetime import date
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from dotenv import load_dotenv
 
-from dotenv import load_dotenv  # noqa: E402
-
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 from api.main import db  # noqa: E402
 from api.main.domains.search import encoder, service  # noqa: E402

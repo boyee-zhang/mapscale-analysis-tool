@@ -8,7 +8,7 @@ the error is kept rather than cleaned up.
 
 ## The entry this started from
 
-> **open, deferred 2026-11-10** `import_bekendmaking_body.py` is still regex (`_AL`, `_TAG`)
+> **open, deferred 2026-11-10** `etl/ingest/bekendmaking_body.py` is still regex (`_AL`, `_TAG`)
 > and drops `tussenkop` — 6.3% of body text. Switching costs 94,183 single-document fetches;
 > the 24-doc sample says those headings are appeal boilerplate. Widen the sample before paying.
 
@@ -91,14 +91,14 @@ Dutch-month date in those bodies says why:
 ```
 
 Those are publication, decision, receipt and objection-deadline dates. **Those documents do not
-state an event period at all** — which is exactly why `derive_event_dates.py` exists. An earlier
+state an event period at all** — which is exactly why `etl/derive/event_dates.py` exists. An earlier
 diagnostic put the fixable set at 5,318 rows by testing "the text contains a period keyword";
 the real patterns require the keyword to be *adjacent to* a date, and that predicate was looser
 than the code. A diagnostic must use the production pattern or it will invent a payoff.
 
 ## What the fix is, and what it is actually worth
 
-`scripts/import_bekendmaking_body.py`:
+`etl/ingest/bekendmaking_body.py`:
 
 - **Body text is read with ElementTree, and includes `<tussenkop>` interleaved with `<al>` in
   document order.** Same reason 156e8fe switched the SRU record parser. While measuring this
@@ -160,6 +160,6 @@ bodies that otherwise read `DIG0055475. / 21 november 2026. / 11:00 uur tot 12:0
   that mattered and did the opposite.
 - **A status written by another process is not evidence about this one.** The first before/after
   run reported 100 regressions; all 100 were `ok_derived` rows whose dates come from
-  `derive_event_dates.py` and never passed through `parse_body`.
+  `etl/derive/event_dates.py` and never passed through `parse_body`.
 - An empty stratum reads exactly like a finding: `$$ x $$` with padding selected 0 rows and
   printed a census of zeros. The sampler now raises instead.

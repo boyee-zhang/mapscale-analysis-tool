@@ -1,11 +1,11 @@
 """The one way in and out of the measurement ledger.
 
-    python scripts/claims.py snapshot                  # probe the world, record it
-    python scripts/claims.py new --topic search --text "..." [--ack 4,7]
-    python scripts/claims.py verdict 8 --verdict SURVIVED --scope "..." [--facets corpus]
-    python scripts/claims.py evidence 8 --command "..." --output path/to/raw.json
-    python scripts/claims.py stale [--topic search]
-    python scripts/claims.py show [8]
+    python -m etl.ledger.claims snapshot                  # probe the world, record it
+    python -m etl.ledger.claims new --topic search --text "..." [--ack 4,7]
+    python -m etl.ledger.claims verdict 8 --verdict SURVIVED --scope "..." [--facets corpus]
+    python -m etl.ledger.claims evidence 8 --command "..." --output path/to/raw.json
+    python -m etl.ledger.claims stale [--topic search]
+    python -m etl.ledger.claims show [8]
 
 Why a single entry point
 ------------------------
@@ -41,7 +41,7 @@ from pathlib import Path
 import asyncpg
 from dotenv import load_dotenv
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT / ".env")
 
 VERDICTS = ("DESTROYED", "SURVIVED", "REFUSED")

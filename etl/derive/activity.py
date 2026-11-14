@@ -1,7 +1,7 @@
 """Re-derive `activity_text` for the rows that need it, and nothing else.
 
-    .venv/bin/python scripts/derive_activity.py            # do the pending work
-    .venv/bin/python scripts/derive_activity.py --status    # say what is pending, change nothing
+    .venv/bin/python -m etl.derive.activity            # do the pending work
+    .venv/bin/python -m etl.derive.activity --status    # say what is pending, change nothing
 
 0027 moved this field from "recomputed on every read" to "derived once". The measurement that
 forced it: the /search/notices ranking query was 1,778-2,040 ms warm and essentially all of it
@@ -12,7 +12,7 @@ WHAT MAKES A ROW PENDING, and why neither test needs to read `body_text`:
 
   * `rule_version` is behind the current row in `activity_rule` -- a pattern in
     `bekendmaking_activity_derive` improved. Adding a rule is a row in that table plus an
-    entry in `scripts.activity_rules.EXTRACTORS`; `bekendmaking_activity_pending` reads the
+    entry in `etl.derive.activity_rules.EXTRACTORS`; `bekendmaking_activity_pending` reads the
     same row through `activity_rule_current()`, so the view and this script cannot disagree
     about what is current. 0027 had the number in both places and the first bump made them
     contradict each other permanently.
@@ -40,20 +40,16 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
-import sys
 import time
 from pathlib import Path
 
 import asyncpg
 from dotenv import load_dotenv
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
+ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT / ".env")
 
-# `scripts.`-qualified so the same import works when this file is run directly (ROOT is on
-# sys.path above) and when tests import the module.
-from scripts.activity_rules import PENDING, current_rule, derive  # noqa: E402
+from etl.derive.activity_rules import PENDING, current_rule, derive  # noqa: E402
 
 # Small enough that one batch is a handful of index lookups rather than a seq scan, large
 # enough that 94k rows is ~100 statements. The point of batching is that an interrupted run

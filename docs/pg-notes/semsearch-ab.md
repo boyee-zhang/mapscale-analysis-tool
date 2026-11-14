@@ -2,7 +2,7 @@
 
 Measured 2026-11-01 against the live table (61,853 rows: Amsterdam 53,712 + Utrecht 7,287 +
 Diemen 848, 2026 only). Raw data in `semsearch-ab-{raw,judge_sheet,judgments}.json`; harness in
-`scripts/experiments/semsearch_ab.py`, re-runnable.
+`etl/experiments/semsearch_ab.py`, re-runnable.
 
 ## Why we were here at all
 
@@ -118,7 +118,7 @@ rank for every other term in it.
 ## The fix, and what it did and did not fix
 
 Stripping facet words out of the term list (same LLM output, same engine, nothing else
-changed) — `scripts/experiments/semsearch_ab_facet_strip.py`:
+changed) — `etl/experiments/semsearch_ab_facet_strip.py`:
 
 - **充电桩: 0/10 → 10/10.** All ten are `aanleg twee elektrische oplaadvakken` /
   `opheffen elektrische oplaadvakken`. Completely fixed.
@@ -190,7 +190,7 @@ Open, in the order that matters:
 
 Not addressed here, and still true: the corpus is three municipalities and 2026 only, so any
 evaluation set built from it measures retrieval, not coverage. Widening it is
-`scripts/import_bekendmaking.py --gemeente X`, one municipality at a time; there is no national
+`etl/ingest/bekendmaking.py --gemeente X`, one municipality at a time; there is no national
 mode.
 
 ---
@@ -198,7 +198,7 @@ mode.
 # Follow-up: was it "did not find" or "found but ranked low"?
 
 Measured 2026-11-02, before touching any embedding API, on the advice that the question
-should be answered first. Harness: `scripts/experiments/semsearch_ab_diagnose.py`, output in
+should be answered first. Harness: `etl/experiments/semsearch_ab_diagnose.py`, output in
 `semsearch-ab-diag.json`. No new judging — it re-runs each arm's own tsquery with **no limit**
 and the same `ORDER BY`, then asks where the already-judged relevant documents actually land.
 
@@ -279,7 +279,7 @@ arm A: it was given the corpus vocabulary, it was told to expand, and its output
 `doc_type`/`activiteit` hard filters. This runs the missing cells of the factorial with the
 schema held at terms-only, and extends the judgment pool properly.
 
-Harness: `scripts/experiments/semsearch_factorial.py`, `_score2.py`, `_score3.py`.
+Harness: `etl/experiments/semsearch_factorial.py`, `_score2.py`, `_score3.py`.
 
 | | no vocabulary | vocabulary |
 |---|---|---|

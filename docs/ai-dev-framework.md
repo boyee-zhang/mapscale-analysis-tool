@@ -53,7 +53,7 @@ Only the third is deterministic. A rule that must hold belongs there. A rule tha
 *should* hold is fine in the first, as long as nobody believes it is the third.
 
 Crossing the layers is where the value is: the guard hook enforces things CLAUDE.md documents,
-and the `shard-judge` gate is a hook rule backing a number that `scripts/fanout.py` computes.
+and the `shard-judge` gate is a hook rule backing a number that `tools/fanout.py` computes.
 
 ---
 
@@ -120,7 +120,7 @@ correct numbers — it **inverted the character of the finding** (from "returns 
 to "returns a plausible wrong answer, sometimes larger than the correct one"), by closing an
 axis the caller had explicitly flagged as untested.
 
-### 3.3 The fan-out planner — `scripts/fanout.py`
+### 3.3 The fan-out planner — `tools/fanout.py`
 
 Decides how many agents a judgement needs. The answer is almost always one, and the reason is
 counter-intuitive enough that it has to be stated with the numbers:
@@ -152,10 +152,10 @@ The gate is in two places so it is not another thing to remember: `shard-judge`'
 requires `plan.report()` as a fifth input, and the guard **asks** when one is spawned without
 it.
 
-### 3.4 The ledger — `migrations/0021`–`0024`, `scripts/claims.py`
+### 3.4 The ledger — `migrations/0021`–`0024`, `etl/ledger/claims.py`
 
 `claim` / `evidence` / `verdict`, plus `world_facet` / `world_snapshot` / `verdict_world` /
-`topic`. **`scripts/claims.py` is the only way in**, and the falsifier writes its own verdict
+`topic`. **`etl/ledger/claims.py` is the only way in**, and the falsifier writes its own verdict
 through it so that the `SCOPE` line is not paraphrased on the way to the record.
 
 **The world is a content-addressed snapshot, not a set of keys.** A facet is probed, the whole
@@ -190,7 +190,7 @@ for the digest), `verdict_scope_unless_refused`, and `topic`/`world_facet` as cl
 FKs, because free text lets `search` and `Search` diverge and a per-topic staleness check then
 returns zero rows, which reads exactly like "nothing is stale".
 
-Verify the schema against a live database with `scripts/verify_ledger.py` — 14 checks, each in a
+Verify the schema against a live database with `etl/verify/ledger.py` — 14 checks, each in a
 rolled-back transaction, reading **both** streams because psql reports a constraint rejection on
 stderr and reading only stdout once made a correct rejection look like a failed test.
 
@@ -204,7 +204,7 @@ What this section used to say: nothing wrote to these tables; the three rows wer
 hand; `claim.status` said `survived` for all three while `verdict` said two were `DESTROYED`;
 `claim_stale()` filtered on status, so two refuted claims were still being checked as live.
 
-Closed by `scripts/claims.py` (the single entry point) and 0024 (status derived, not stored).
+Closed by `etl/ledger/claims.py` (the single entry point) and 0024 (status derived, not stored).
 The two contradictory rows cannot recur, because there is no column to write wrongly:
 `UPDATE claim SET status = …` now fails with *column "status" does not exist*.
 
@@ -268,7 +268,7 @@ array_length(paths,1) >= 1)` **did not reject an empty path set**, because
 `array_length(ARRAY[]::text[],1)` is `NULL`, `NULL >= 1` is `NULL`, and a CHECK passes on NULL.
 An empty path facet has a constant digest, so a verdict anchored to it never reports stale — a
 facet whose whole job is to expire claims, silently unable to. Caught by the must-reject half of
-`verify_ledger.py` on its first run after 0025. That is now two bugs in this repo from
+`etl/verify/ledger.py` on its first run after 0025. That is now two bugs in this repo from
 three-valued logic, so it is written down as a rule: **any sub-expression in a CHECK that can go
 NULL is a hole, not a rejection.**
 
@@ -298,7 +298,7 @@ quoting a dead number. If only one gets built, build the hook.
 
 - The `Agent` matcher rule in the guard is unit-tested but has never fired on a real
   `shard-judge` spawn.
-- `scripts/fanout.py` has never been used to plan a real fan-out. Its model comes from one
+- `tools/fanout.py` has never been used to plan a real fan-out. Its model comes from one
   five-agent run; `FIXED_COST_TOKENS` should be re-derived once there is a second data point,
   and it is almost certainly model- and prompt-dependent.
 - The falsifier has been run four times. "It does not produce filler" is a claim with n=4 — the
@@ -365,14 +365,14 @@ These transfer to other projects. The specifics above mostly do not.
 | `.claude/hooks/test_guard.py` | 42 cases; the must-NOT-fire half matters most |
 | `.claude/agents/falsifier.md` | the destroyer, with its own mistake catalogue inline |
 | `.claude/agents/shard-judge.md` | one shard of a fan-out, judgement only |
-| `scripts/fanout.py` | how many agents this needs (usually one) |
+| `tools/fanout.py` | how many agents this needs (usually one) |
 | `tests/unit/test_fanout.py` | 14 cases incl. the real 191-unit distribution |
 | `migrations/0021_claim_evidence.sql` | the ledger |
 | `migrations/0022_claim_stale_ignores_nulls.sql` | superseded by 0023; kept, forward-only |
 | `migrations/0023_world_snapshot.sql` | the world as content-addressed facets |
 | `migrations/0024_claim_status_derived.sql` | `status` stops being a column |
-| `scripts/claims.py` | the only way into the ledger |
-| `scripts/verify_ledger.py` | 14 schema checks, all rolled back |
+| `etl/ledger/claims.py` | the only way into the ledger |
+| `etl/verify/ledger.py` | 14 schema checks, all rolled back |
 | `tests/unit/test_claims.py` | 11 cases; the digest is the contract |
 | `CLAUDE.md` § Measurement discipline | when to run the falsifier, what to record |
 | `CLAUDE.md` § Enforced rules | what the guard decides and why |

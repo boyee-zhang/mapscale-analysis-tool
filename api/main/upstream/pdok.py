@@ -8,7 +8,7 @@ logger = get_logger("client.pdok")
 
 PDOK_URL = "https://api.pdok.nl/bzk/locatieserver/search/v3_1/reverse"
 
-# CBS gebiedsindelingen WFS — municipality polygons. Used by scripts/seed_municipalities.py.
+# CBS gebiedsindelingen WFS — municipality polygons. Used by etl/ingest/municipalities.py.
 # These lived in domains/housing/boundaries.py until that domain was removed (2026-10-28);
 # they are pure transport config, so upstream/ is where they belong.
 WFS_BASE = "https://service.pdok.nl/cbs/gebiedsindelingen/2024/wfs/v1_0"

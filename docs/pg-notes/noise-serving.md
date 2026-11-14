@@ -12,7 +12,7 @@ Run date 2026-11-04. Raw output: `raw/noise-serving-run1.txt`.
 - `migrations/0016_bekendmaking_noise_score.sql` — `noise_model` (one row per trained model,
   carrying the threshold and its measured metrics) + `bekendmaking_noise_score`
   (`identifier` → `score real`) + the `bekendmaking_noise_rank` view that applies the cutoff.
-- `scripts/score_noise_embedding.py` — offline: embed, train, leave-one-block-out evaluate,
+- `etl/derive/noise_score.py` — offline: embed, train, leave-one-block-out evaluate,
   score, upsert. Writes `models/noise_meta_emb_strict_v1.json` (coefficients, vocabulary,
   threshold, metrics) so a re-score needs no retrain and no GPU.
 - `/bekendmakingen` gains `noise` (`noisy` / `quiet` / `unscored`) and `noise_score` per item,

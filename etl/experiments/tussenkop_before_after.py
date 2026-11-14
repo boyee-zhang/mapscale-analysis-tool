@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 load_dotenv(ROOT / ".env")
 
-from scripts.import_bekendmaking_body import DOC, UA, parse_body  # noqa: E402
+from etl.ingest.bekendmaking_body import DOC, UA, parse_body  # noqa: E402
 
 STRATA = {
     "no_period / Amsterdam": "bb.status='no_period' AND b.gemeente='Amsterdam'",

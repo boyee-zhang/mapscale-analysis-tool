@@ -134,7 +134,7 @@ def check_write(path: str, text: str, is_edit: bool) -> None:
 # Fanning out costs ~71,600 tokens per extra agent and buys wall-clock time only (measured
 # 2026-11-12: R2 = 0.033 between an agent's cost and the number of units it judged). The real
 # 191-unit case spent 357,877 tokens across five agents to reach eight distinct answers. A
-# shard-judge spawned without having run scripts/fanout.py is worth one question.
+# shard-judge spawned without having run tools/fanout.py is worth one question.
 _PLAN_MARKERS = ("distinct", "payload")
 
 
@@ -148,7 +148,7 @@ def check_agent(ti: dict) -> None:
                "costs ~71,600 tokens to stand up whatever it judges (R2 = 0.033 over 3-92 "
                "units), so every extra shard is that much for wall-clock time alone — the real "
                "191-unit case spent 357,877 tokens across five agents to reach eight distinct "
-               "answers. Run scripts/fanout.py plan() and pass its report, or confirm this "
+               "answers. Run tools/fanout.py plan() and pass its report, or confirm this "
                "shard is needed anyway.")
 
 

@@ -1,7 +1,7 @@
 """Import official Dutch announcements (officiële bekendmakingen) from the KOOP SRU service.
 
-    .venv/bin/python scripts/import_bekendmaking.py --gemeente Amsterdam --from 2026-01-01
-    .venv/bin/python scripts/import_bekendmaking.py --rd "126082 483821 5" --from 2025-01-01
+    .venv/bin/python -m etl.ingest.bekendmaking --gemeente Amsterdam --from 2026-01-01
+    .venv/bin/python -m etl.ingest.bekendmaking --rd "126082 483821 5" --from 2025-01-01
 
 Scope is either a municipality name or an RD New circle "X Y radius_km", because those are
 the only two ways the service will narrow by place: `w.locatiepunt within/rijksdriehoek`
@@ -34,7 +34,7 @@ from dotenv import load_dotenv
 # already exported DATABASE_URL — which is how the first two imports happened to work and
 # why the third exited with "DATABASE_URL is not set". Scripts in the same directory must
 # bootstrap the same way or the one that works teaches the wrong habit.
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT / ".env")
 
 SRU = "https://repository.overheid.nl/sru"

@@ -8,7 +8,7 @@ events, and no source exists — in open data — for venue programming.**
 
 ## 1. The headline, and a correction to a documented project constraint
 
-`CLAUDE.md` and the memory index both say `import_bekendmaking.py` is scoped per municipality
+`CLAUDE.md` and the memory index both say `etl/ingest/bekendmaking.py` is scoped per municipality
 "because those are the only two ways KOOP's SRU service narrows by place — there is no national
 mode". The second half is wrong, and it was load-bearing: it made national coverage look like
 342 separate imports.
@@ -74,7 +74,7 @@ published), **concerts and theatre no** unless they are open-air.
 
 ## 5. What this implies for the three phases
 
-- **Phase 1 (events):** no new source. Add a national/type scope to `import_bekendmaking.py`.
+- **Phase 1 (events):** no new source. Add a national/type scope to `etl/ingest/bekendmaking.py`.
   34,481 event publications a year, CC0, with dates and crowd sizes.
 - **Phase 2 (construction semantic search):** 303,186 omgevingsvergunning + 23,036
   omgevingsmelding nationally. `bekendmaking_activity.activity_text` is already the field the
@@ -107,7 +107,7 @@ each stay under the ceiling, and the national windows fit:
 
 So phase 1 needs no new mechanism at all, and phase 2 uses the day cascade that already exists.
 
-### Two comments in `import_bekendmaking.py` are now wrong
+### Two comments in `etl/ingest/bekendmaking.py` are now wrong
 
 **`PAGE = 100  # the service's own maximum per request` — it is not.** `maximumRecords=1000` is
 honoured: the response grows from 455 KB to 4.7 MB, i.e. ten times the payload, so this is not a
@@ -167,7 +167,7 @@ answered.
 
 ## 7. The national import, run 2026-11-04 — and the limit it exposed
 
-`import_bekendmaking.py --doc-type evenementenvergunning --from 2026-01-01` imported
+`etl.ingest.bekendmaking --doc-type evenementenvergunning --from 2026-01-01` imported
 **34,481 of 34,481 publications, 0 unparseable**, in 11 monthly windows. `bekendmaking` went
 61,853 -> **94,183** rows, `bekendmaking_locatie` -> 160,477, and coverage went from **9
 municipalities to 294**. Event publications: 2,153 -> 34,481.
@@ -198,7 +198,7 @@ Everywhere else it is prose, and the date is inside a sentence:
     Op 02-03-2026 is de volgende aanvraag voor een vergunning/ontheffing binnengekomen:
     Singelland VO Surhuisterveen schooltriatlon
 
-`import_bekendmaking_body.py`'s extractors look for `Looptijd:`, `Datum van:`, `Tijd van:` —
+`etl/ingest/bekendmaking_body.py`'s extractors look for `Looptijd:`, `Datum van:`, `Tijd van:` —
 Amsterdam's labels. They are not wrong; they are **local**, and nobody had reason to know that
 until there was a second template to compare against.
 

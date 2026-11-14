@@ -100,7 +100,7 @@ MAX_LIMIT = 50
 # central Amsterdam sits at a margin of 0.038 with a correct Hofjesconcert on top. The weak tail
 # is what covers this, which is a large part of why nothing is dropped.
 #
-# Re-measure with scripts/experiments/judgeset_score.py if the model or the prefixes change.
+# Re-measure with etl/experiments/judgeset_score.py if the model or the prefixes change.
 RELEVANCE_MARGIN = 0.050
 
 # THE BASELINE IS THE POPULATION THAT WAS SEARCHED, and the two modes therefore need two
@@ -177,7 +177,7 @@ async def background_similarity(conn, sql: str, args) -> float | None:
 # evidence in docs/pg-notes/raw/notices-{ranking-explain,view-decomposition,ranking-falsify}.txt.
 #
 # The lesson is not about SQL. The intent above was correct and lived in a comment, so nothing
-# noticed when the planner stopped honouring it. `scripts/verify_plans.py` now asserts it:
+# noticed when the planner stopped honouring it. `etl/verify/plans.py` now asserts it:
 # the plan must not seq-scan `bekendmaking_body`, and 20 rows must not cost 50,000 buffers.
 _RANK_CORE = """
 ranked AS (

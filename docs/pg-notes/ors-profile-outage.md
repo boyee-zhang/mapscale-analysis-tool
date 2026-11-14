@@ -149,7 +149,7 @@ answered. It is now verified against a real ORS isochrone.
 # Re-measured against a self-hosted instance, 2026-10-28
 
 `docker compose up -d ors`, `openrouteservice/openrouteservice:v10.1.0`, graphs built from the
-same `data/noord-holland-latest.osm.pbf` that `scripts/import_poi.py` reads. Runbook and the
+same `data/noord-holland-latest.osm.pbf` that `etl/ingest/poi.py` reads. Runbook and the
 build figures: `docs/ors-self-host.md`.
 
 The prediction this note's own structure implied — *we build the graphs from our own extract, so

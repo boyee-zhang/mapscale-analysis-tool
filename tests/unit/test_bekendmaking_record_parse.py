@@ -13,7 +13,7 @@ namespace prefixes declared on the same envelope root, `itemUrl` six times with 
 import json
 import xml.etree.ElementTree as ET
 
-from scripts.import_bekendmaking import _collect, _page, _parse, _tag
+from etl.ingest.bekendmaking import _collect, _page, _parse, _tag
 
 ENVELOPE = """<sru:searchRetrieveResponse
     xmlns:sru="http://docs.oasis-open.org/ns/search-ws/sruResponse"

@@ -2,7 +2,7 @@
 
 源:KOOP SRU,`https://repository.overheid.nl/sru`,CC0,库 `cup` 共 **7,404,221** 条。
 迁移:`0005_bekendmaking.sql` + `0006`(几何类型)+ `0007`(唯一键)+ `0008`(有效性)。
-脚本:`scripts/import_bekendmaking.py`。
+脚本:`etl/ingest/bekendmaking.py`。
 
 这份笔记的重点不是"接上了",而是**四个只有真打才会暴露的约束**,其中两个是我自己写出来的 bug。
 
@@ -108,7 +108,7 @@ startRecord=10001  http=504
 stage 1 在 `poi` 上踩过同一个坑。
 
 没有做 sentinel 检查(housing 的硬性要求之一),理由写在脚本 docstring 里:
-`import_poi.py` 会软删除 extract 里不再出现的行,所以截断的下载会被记成大规模消失;
+`etl/ingest/poi.py` 会软删除 extract 里不再出现的行,所以截断的下载会被记成大规模消失;
 这个导入器**只 upsert,从不删**,所以短收只损失覆盖,不损害正确性。
 
 ## 核心查询跑通
@@ -225,7 +225,7 @@ bekendmaking_locatie 100,475   POINT 67,084 / POLYGON 18,653 / LINESTRING 14,671
 
 ### 顺带修掉的:这个脚本一直依赖外部导出的 DATABASE_URL
 
-`import_poi.py` 有 `load_dotenv(ROOT / ".env")`,`import_bekendmaking.py` 没有。前两次导入
+`etl/ingest/poi.py` 有 `load_dotenv(ROOT / ".env")`,`etl/ingest/bekendmaking.py` 没有。前两次导入
 碰巧是在已经 export 过的 shell 里跑的,所以从没暴露;这次换了 shell 就直接
 `DATABASE_URL is not set` 退出。已对齐。
 

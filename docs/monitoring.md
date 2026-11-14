@@ -6,9 +6,9 @@
 ## 起停
 
 ```bash
-./scripts/monitoring.sh up       # 起,然后打印每个 target 真实的抓取状态
-./scripts/monitoring.sh down     # 只停这三个
-./scripts/monitoring.sh status
+./tools/monitoring.sh up       # 起,然后打印每个 target 真实的抓取状态
+./tools/monitoring.sh down     # 只停这三个
+./tools/monitoring.sh status
 ```
 
 脚本包的就是下面这条,外加一个它学会的教训:
@@ -108,13 +108,13 @@ docker compose config --services     # 只应该列出 elasticsearch 和 postgre
 
 ---
 
-# 压测:`scripts/loadtest.py`
+# 压测:`tools/loadtest.py`
 
 ```bash
-.venv/bin/python scripts/loadtest.py --scenario health      # 框架天花板(无 DB 无上游)
-.venv/bin/python scripts/loadtest.py --scenario permits     # 最重的端点
-.venv/bin/python scripts/loadtest.py --scenario permits --vary   # 打穿 single-flight
-.venv/bin/python scripts/loadtest.py --url http://localhost:9090/-/healthy  # 对照
+.venv/bin/python tools/loadtest.py --scenario health      # 框架天花板(无 DB 无上游)
+.venv/bin/python tools/loadtest.py --scenario permits     # 最重的端点
+.venv/bin/python tools/loadtest.py --scenario permits --vary   # 打穿 single-flight
+.venv/bin/python tools/loadtest.py --url http://localhost:9090/-/healthy  # 对照
 ```
 
 三个刻意的选择:

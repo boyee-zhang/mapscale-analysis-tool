@@ -18,7 +18,7 @@ cheap and is a separate question; see the pgvector note in migration 0016.)
     python3 -m venv /tmp/embvenv
     /tmp/embvenv/bin/pip install sentence-transformers==3.4.1 scikit-learn==1.6.1 \
         asyncpg python-dotenv
-    /tmp/embvenv/bin/python scripts/score_noise_embedding.py --cache data/noise_emb_cache.npz
+    /tmp/embvenv/bin/python -m etl.derive.noise_score --cache data/noise_emb_cache.npz
 
 Re-running is idempotent: it upserts, and with `--cache` present it skips the embedding pass.
 A later `import_bekendmaking.py` run adds unscored rows; they surface through
@@ -71,7 +71,7 @@ from sklearn.metrics import average_precision_score, roc_auc_score
 # The separate venv is a tidiness choice, not a constraint: nothing stops torch being installed
 # beside the API here. Keep them apart while only this batch job needs it; merge them the day
 # the API itself embeds queries.
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 DATABASE_URL = dotenv_values(ROOT / ".env").get("DATABASE_URL")
 
 MODEL = "intfloat/multilingual-e5-base"
@@ -385,7 +385,7 @@ async def write(args, threshold, metrics, n_train, corpus, scores):
                 args.version, now, args.model, threshold, n_train, json.dumps(metrics),
                 "18 metadata features (10 doc_type one-hot + 8 activiteit multi-hot) "
                 "+ 768-d e5 embedding of activity_text, logistic regression. "
-                "Metrics are leave-one-block-out; see scripts/score_noise_embedding.py.",
+                "Metrics are leave-one-block-out; see etl/derive/noise_score.py.",
                 metrics["threshold_basis"],
             )
             # One statement, not 61,853 round trips. asyncpg's copy path needs the rows as

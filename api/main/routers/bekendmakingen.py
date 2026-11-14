@@ -44,7 +44,7 @@ async def get_bekendmakingen(
         description="Filter by the noise classifier: `noisy`, `quiet` or `unscored`; repeat "
         "the param. Omitting it means every bucket. `unscored` is its own bucket, not part "
         "of `quiet` — it means no score exists yet, e.g. a publication imported after the "
-        "last run of scripts/score_noise_embedding.py. The response's `noise_models` carries "
+        "last run of etl/derive/noise_score.py. The response's `noise_models` carries "
         "the threshold and its measured precision/recall, so a caller can weight the verdict.",
     ),
     sort: str = Query(

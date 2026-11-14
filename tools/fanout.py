@@ -1,6 +1,6 @@
 """Decide how to run a judgement over many units — and usually, decide not to fan out.
 
-    from scripts.fanout import plan
+    from tools.fanout import plan
     p = plan(units, key=lambda u: u["text"])
     print(p.why)
     for shard in p.shards:          # len(p.shards) == 1 most of the time

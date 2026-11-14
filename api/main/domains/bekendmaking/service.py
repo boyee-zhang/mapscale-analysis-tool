@@ -2,7 +2,7 @@
 Official Dutch government announcements, answered for a place and a time window.
 
 The data is the `bekendmaking` / `bekendmaking_locatie` pair loaded by
-`scripts/import_bekendmaking.py` from KOOP's SRU repository. This domain only
+`etl/ingest/bekendmaking.py` from KOOP's SRU repository. This domain only
 reads it; the ETL is a script, not a request path.
 
 Shape comes from `domains/geo`: the same isochrone `/pois` uses, so "what is
@@ -111,7 +111,7 @@ scored AS (
            bb.start_date AS event_start, bb.end_date AS event_end,
            -- How the date was obtained, carried all the way to the caller. 'ok' means the
            -- publisher wrote it into a labelled field; 'ok_derived' means it was read out of
-           -- a sentence by scripts/event_dates.py, measured at 100% precision / 65.5% recall
+           -- a sentence by etl/derive/event_dates_rules.py, measured at 100% precision / 65.5% recall
            -- on municipalities it was not built against. Those are different kinds of fact
            -- and the UI says so rather than presenting both as published data.
            bb.status AS date_status, bb.period_basis AS date_basis,

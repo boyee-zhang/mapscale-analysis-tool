@@ -8,7 +8,7 @@ import json
 
 import pytest
 
-from scripts.claims import digest_of, probe_code, probe_graph, probe_paths
+from etl.ledger.claims import digest_of, probe_code, probe_graph, probe_paths
 
 
 # ── the digest is the contract ───────────────────────────────────────────────
@@ -86,8 +86,8 @@ def test_branch_is_not_part_of_the_code_identity():
 # ── path facets: a facet defined by the bytes a measurement reads ────────────
 
 def test_a_path_facet_digests_the_files_it_declares():
-    out = probe_paths(["CLAUDE.md", "scripts/claims.py"])
-    assert set(out["files"]) == {"CLAUDE.md", "scripts/claims.py"}
+    out = probe_paths(["CLAUDE.md", "etl/ledger/claims.py"])
+    assert set(out["files"]) == {"CLAUDE.md", "etl/ledger/claims.py"}
     assert out["absent"] == []
     assert all(len(v) == 64 for v in out["files"].values())
 
@@ -105,9 +105,9 @@ def test_a_missing_declared_path_is_recorded_not_skipped():
 def test_a_path_facet_ignores_files_it_did_not_declare():
     # The whole point: this is why claim 4 should anchor to `judgeset` and not to `code`.
     # Editing a note must not expire a measurement that never read it.
-    before = digest_of(probe_paths(["scripts/claims.py"]))
-    assert before == digest_of(probe_paths(["scripts/claims.py"]))
-    assert before != digest_of(probe_paths(["scripts/claims.py", "CLAUDE.md"]))
+    before = digest_of(probe_paths(["etl/ledger/claims.py"]))
+    assert before == digest_of(probe_paths(["etl/ledger/claims.py"]))
+    assert before != digest_of(probe_paths(["etl/ledger/claims.py", "CLAUDE.md"]))
 
 
 def test_digest_satisfies_the_column_constraint():

@@ -2,7 +2,7 @@
 Seed the `municipality` table from the PDOK CBS WFS (~342 Dutch municipalities).
 
 Usage:
-    python scripts/seed_municipalities.py
+    python -m etl.ingest.municipalities
 
 Idempotent: re-running upserts on the CBS gemeentecode, so it is also how the
 table is refreshed after the yearly CBS municipal reorganisation.
@@ -12,15 +12,13 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import sys
 from pathlib import Path
 
 import asyncpg
 import httpx
 from dotenv import load_dotenv
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
+ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT / ".env")
 
 from api.main.upstream.pdok import WFS_BASE, WFS_PARAMS  # noqa: E402

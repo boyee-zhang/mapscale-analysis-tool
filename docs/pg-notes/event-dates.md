@@ -1,7 +1,7 @@
 # Extracting the event date from 294 municipal templates — measured 2026-11-04
 
 The national import gave 34,481 event publications but no event dates: the period extractor in
-`import_bekendmaking_body.py` reads Amsterdam's labelled APV template (`Datum van:`,
+`etl/ingest/bekendmaking_body.py` reads Amsterdam's labelled APV template (`Datum van:`,
 `Bezoekers drukste moment:`) and 50 of 50 national bodies returned `no_period`
 (`event-sources.md` §7). This is the attempt to recover the date everywhere else.
 

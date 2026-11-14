@@ -37,7 +37,7 @@
 Silicon 上走模拟,把每个 `EXPLAIN ANALYZE` 的计时都变成废数据。
 
 ### 一个 pbf,两个消费者
-`scripts/import_poi.py` 读 POI 标签的 node/way(`shop=`/`amenity=`);ORS 读 `highway=*`
+`etl/ingest/poi.py` 读 POI 标签的 node/way(`shop=`/`amenity=`);ORS 读 `highway=*`
 并按 profile 构建 contraction hierarchy。同一个文件,互不干扰,所以挂成 `:ro`。
 
 ## 代码改动面(已完成)

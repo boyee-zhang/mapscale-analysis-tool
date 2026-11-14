@@ -23,9 +23,45 @@ this repo holds no LLM client of its own.
 
 ## Development Commands
 
+### Where things live, and how they are run
+
+```
+api/            the HTTP service (see Backend layout below)
+etl/            everything that moves or derives data, by what it does:
+  ingest/         external source -> a store
+  derive/         a store -> the same store
+  verify/         asserts invariants, writes nothing durable
+  ledger/         the measurement ledger's write path
+  experiments/    frozen one-off measurements, kept for provenance
+tools/          not ETL: migrate.py, loadtest.py, fanout.py, and the three shell scripts
+```
+
+**`etl/` is a package and is run with `-m`, from the repo root**:
+`python -m etl.ingest.bekendmaking`, `python -m etl.derive.activity`,
+`python -m etl.verify.activity`, `python -m etl.ledger.claims show 27`. That is not cosmetic —
+it is what retired **ten `sys.path.insert` calls**, two of which put the *scripts directory
+itself* on the path so that a bare `from event_dates import extract` would resolve.
+
+**Naming convention: `<step>.py` is the runnable step, `<step>_rules.py` is the pure logic it
+applies.** `etl/derive/activity.py` + `activity_rules.py`, `etl/derive/event_dates.py` +
+`event_dates_rules.py`. A module with a CLI never holds an extraction pattern.
+
+**`-I` is deliberately gone from the verify commands.** It was there because running a file by
+path puts *that file's own directory* on `sys.path`, so a planted `json.py` beside the script
+would be imported. `-m` from the repo root puts the repo root there instead, which is trusted
+code. `-I` cannot be kept either way: it implies `-E -s` and refuses to prepend the working
+directory, so `python -I -m etl.verify.activity` cannot find `etl` at all.
+
+**`tools/` is not a package and imports nothing from `etl/`, on purpose.**
+`deploy/Dockerfile.api` copies exactly one file out of it (`COPY tools/migrate.py`), and
+`migrate.py` resolves `ROOT` as its own parent's parent — so `tools/` must stay one level below
+the repo root. `etl/experiments/` is likewise at depth 2 because its frozen scripts compute
+`ROOT` as `.parents[2]`; moving it to the top level would have silently pointed them outside the
+repository.
+
 ### Everything at once
 ```bash
-./scripts/dev.sh      # postgres (--wait) -> migrations -> uvicorn :8000 + vite :5173
+./tools/dev.sh      # postgres (--wait) -> migrations -> uvicorn :8000 + vite :5173
 ```
 Ctrl-C stops all of it. The two optional services are left out on purpose: `ors` because the
 first start builds routing graphs, and `elasticsearch` because `/search` already degrades to
@@ -50,14 +86,14 @@ Run from the repo root — `api/main/` is a package and imports are relative to 
 ### Postgres / PostGIS
 ```bash
 docker compose up -d postgres               # :5432, db/user/pass all "mapscale"
-python scripts/migrate.py                   # apply pending migrations (idempotent)
-python scripts/migrate.py --status          # list applied / pending
-python scripts/seed_municipalities.py       # seed municipality from PDOK CBS WFS (~342 rows)
-python scripts/import_poi.py data/noord-holland-latest.osm.pbf   # OSM POI import
-python scripts/import_bekendmaking.py --gemeente Utrecht --from 2026-01-01  # announcements
+python tools/migrate.py                   # apply pending migrations (idempotent)
+python tools/migrate.py --status          # list applied / pending
+python -m etl.ingest.municipalities       # seed municipality from PDOK CBS WFS (~342 rows)
+python -m etl.ingest.poi data/noord-holland-latest.osm.pbf   # OSM POI import
+python -m etl.ingest.bekendmaking --gemeente Utrecht --from 2026-01-01  # announcements
 ```
 
-`import_bekendmaking.py` is scoped **per municipality** (or an RD New circle), because those
+`etl/ingest/bekendmaking.py` is scoped **per municipality** (or an RD New circle), because those
 are the only two ways KOOP's SRU service narrows by place. Widening coverage is therefore
 re-running it, once per municipality. **Corrected 2026-11-04: "there is no national mode" was
 wrong, and it was load-bearing.** SRU needs no place scope at all — `dt.type == X and
@@ -68,7 +104,7 @@ upstream. It only ever upserts, so a
 re-run is idempotent and a short fetch costs coverage, never correctness. Both importers read
 `.env` via `load_dotenv`; neither requires `DATABASE_URL` to be exported by hand.
 
-`import_poi.py` needs `osmium` (pyosmium) from `requirements-local.txt` — a Python
+`etl/ingest/poi.py` needs `osmium` (pyosmium) from `requirements-local.txt` — a Python
 package, not `brew install osmium-tool`; nothing system-level is required. It takes a
 Geofabrik `.osm.pbf` extract, which is downloaded by hand into the gitignored `data/`
 (`https://download.geofabrik.de/europe/netherlands/`). The tag whitelist is read from
@@ -95,17 +131,17 @@ The service carries `profiles: ["ors"]`, which is what actually keeps it out of 
 `docker compose up -d` — an earlier comment claimed that without the profile, and
 `docker compose config --services` listed it. Naming the service activates its profile, so
 the command above is unaffected. Reads the same
-`data/*.osm.pbf` as `import_poi.py` (read-only), so coverage is Noord-Holland only. Point the
+`data/*.osm.pbf` as `etl/ingest/poi.py` (read-only), so coverage is Noord-Holland only. Point the
 backend at it with `ORS_BASE_URL=http://localhost:8080/ors/v2`. The why, the measured
 preconditions and the three things to measure after the build are in `docs/ors-self-host.md`.
 
 ### Monitoring (optional) — Prometheus + Grafana
 ```bash
-./scripts/monitoring.sh up       # :9090 Prometheus, :3000 Grafana, then prints target health
-./scripts/monitoring.sh down     # stops ONLY these three. A bare `docker compose down`
+./tools/monitoring.sh up       # :9090 Prometheus, :3000 Grafana, then prints target health
+./tools/monitoring.sh down     # stops ONLY these three. A bare `docker compose down`
                                  # removes mapscale-pg and leaves all four profiled
                                  # containers running — see below.
-./scripts/monitoring.sh status
+./tools/monitoring.sh status
 
 # Stopping EVERYTHING. The profiles are not optional here: a bare `docker compose down`
 # targets only the services WITHOUT a profile, so it removes mapscale-pg and then fails
@@ -118,8 +154,8 @@ preconditions and the three things to measure after the build are in `docs/ors-s
 docker compose --profile ors --profile monitoring down   # 5 containers + network
 # No -v, so all seven volumes survive (verified: identical `docker volume ls` before and
 # after). `-v` is the command that actually costs 40 minutes of graph rebuilding.
-.venv/bin/python scripts/loadtest.py --scenario all         # every LOCAL endpoint
-.venv/bin/python scripts/loadtest.py --scenario search --probe 5   # third-party: timed, not loaded
+.venv/bin/python tools/loadtest.py --scenario all         # every LOCAL endpoint
+.venv/bin/python tools/loadtest.py --scenario search --probe 5   # third-party: timed, not loaded
 ```
 `loadtest.py` **refuses to saturate** `region`, `search`, `traffic_flow` and
 `traffic_incidents`: each leaves the machine on every request, so hammering them measures
@@ -166,18 +202,18 @@ reads ~3x low** (268 req/s cold against 782/837/844 warm), so discard it.
 ### Elasticsearch (optional)
 ```bash
 docker compose up -d elasticsearch   # :9200, single-node, security disabled
-python scripts/ingest_addresses.py   # seed nl_addresses from PDOK
+python -m etl.ingest.addresses   # seed nl_addresses from PDOK
 ```
 
 ### Lint & Test
 ```bash
 pip install -r requirements-local.txt
-ruff check api/                          # line-length 120
+ruff check api/ etl/ tools/              # line-length 120; etl/experiments is excluded
 BASE_URL=http://localhost:8000 pytest    # integration tests hit a live server
 pytest tests/unit                        # unit tests, no server needed
 ```
 
-CI lives in two workflows: `ci.yml` runs `ruff check api/` + `npm run build`, and `test.yml`
+CI lives in two workflows: `ci.yml` runs `ruff check api/ etl/ tools/` + `npm run build`, and `test.yml`
 starts a uvicorn and runs unit + integration tests with the `ORS_API_KEY`/`TOMTOM_API_KEY`
 secrets. **Both trigger only on push/PR to `main`**, so pushing a feature branch runs nothing.
 Isochrone/directions tests are marked `requires_ors` and skip in CI — not because of an IP ban
@@ -212,14 +248,14 @@ of them things a per-invocation process can hold. `vercel.json` and the unused `
 gone with it.
 
 `docker-compose.yml` is the DEVELOPMENT stack: Postgres in a container, API and frontend
-on the host via `scripts/dev.sh`, Postgres parameters deliberately small so bloat and
+on the host via `tools/dev.sh`, Postgres parameters deliberately small so bloat and
 buffer reads show up at 10-20M rows. `docker-compose.deploy.yml` is the deployed one:
 API and frontend containerised too, its own project name (`mapscale-deploy`) and its own
 volumes, so both can run side by side.
 
 ```bash
-./scripts/package.sh                 # dist/mapscale-bundle-<date>.tar.gz: source + 35 MB dump
-./scripts/package.sh --with-extract  # also the 181 MB NH extract, for self-hosted ORS
+./tools/package.sh                 # dist/mapscale-bundle-<date>.tar.gz: source + 35 MB dump
+./tools/package.sh --with-extract  # also the 181 MB NH extract, for self-hosted ORS
 # on the target:
 cp deploy/env.example .env && docker compose -f docker-compose.deploy.yml up -d --build
 ```
@@ -305,12 +341,12 @@ as `cache.py` degrades when Upstash is unconfigured. The reason used to be that 
 no Postgres; the deploy stack ships one, so the guard is now about running the API against a
 partial environment rather than about a deployment that cannot have a database. Current tables: `municipality` (stage 0); `etl_run`,
 `poi_category`, `poi_category_rule`, `poi`, `poi_import` (stage 1); `bekendmaking`,
-`bekendmaking_locatie` (official announcements, loaded by `scripts/import_bekendmaking.py`),
+`bekendmaking_locatie` (official announcements, loaded by `etl/ingest/bekendmaking.py`),
 `bekendmaking_activity_text` (0027 — `activity_text` derived once instead of per read, filled by
-`scripts/import_bekendmaking_body.py` in the body's own transaction and by
-`scripts/derive_activity.py` for re-derives; `bekendmaking_activity_pending` is what has not been
+`etl/ingest/bekendmaking_body.py` in the body's own transaction and by
+`etl/derive/activity.py` for re-derives; `bekendmaking_activity_pending` is what has not been
 derived yet), `activity_rule` (0030 — which extraction is current, read by both the pending view
-and `scripts/activity_rules.py`; 0031 adds `source_view`, so one row names both the transformation and its input set), `bekendmaking_activity_source` (0031 — the declared input set of the derive, as one fingerprint per publication, over the STORED generated columns `bekendmaking.title_fp` and `bekendmaking_body.body_text_fp`); `claim`, `evidence`, `verdict`, `world_facet`, `world_snapshot`, `verdict_world`, `topic` (0021-0026 — the measurement ledger, see below; nothing in `api/` reads them). `geocode_cache` is also
+and `etl/derive/activity_rules.py`; 0031 adds `source_view`, so one row names both the transformation and its input set), `bekendmaking_activity_source` (0031 — the declared input set of the derive, as one fingerprint per publication, over the STORED generated columns `bekendmaking.title_fp` and `bekendmaking_body.body_text_fp`); `claim`, `evidence`, `verdict`, `world_facet`, `world_snapshot`, `verdict_world`, `topic` (0021-0026 — the measurement ledger, see below; nothing in `api/` reads them). `geocode_cache` is also
 still there but no longer read or written — its only caller was the housing geocoder.
 
 A refactor is in progress — see `docs/architecture-refactor-plan.md` (structure) and
@@ -543,7 +579,7 @@ console.log('[api] fetchIsochrone response', { featureCount: data.features?.leng
 > The design of all of this — why three layers, what each enforces, what is still missing, and
 > the principles with the evidence behind them — is in **`docs/ai-dev-framework.md`**. Read it
 > before extending any of the mechanisms below. It is also the honest list of gaps. Two it used
-> to name are closed: the ledger has a write path (`scripts/claims.py`, §1b) and `status` is
+> to name are closed: the ledger has a write path (`etl/ledger/claims.py`, §1b) and `status` is
 > derived rather than hand-written, so the two rows that contradicted their own verdicts cannot
 > recur. What remains open is that nothing *forces* you through that write path — see the last
 > paragraph of §1b.
@@ -580,16 +616,16 @@ feature — not being able to state what you measured means there is nothing to 
 ### 1b. Record the claim, its evidence and its verdict
 
 `docs/pg-notes/` is for a human reader and cannot answer "which of these numbers is still
-true". The ledger can. **`scripts/claims.py` is the only way in**:
+true". The ledger can. **`etl/ledger/claims.py` is the only way in**:
 
 ```bash
-.venv/bin/python scripts/claims.py facets                   # what the world is made of
-.venv/bin/python scripts/claims.py snapshot                 # probe the world, record it
-.venv/bin/python scripts/claims.py new --topic search --text "..." [--ack 7,9]
-.venv/bin/python scripts/claims.py evidence 4 --command "..." --output path/to/raw.json
-.venv/bin/python scripts/claims.py verdict 4 --verdict SURVIVED --scope "..." --facets judgeset
-.venv/bin/python scripts/claims.py stale                    # THE query worth running
-.venv/bin/python scripts/claims.py show [4]
+.venv/bin/python -m etl.ledger.claims facets                   # what the world is made of
+.venv/bin/python -m etl.ledger.claims snapshot                 # probe the world, record it
+.venv/bin/python -m etl.ledger.claims new --topic search --text "..." [--ack 7,9]
+.venv/bin/python -m etl.ledger.claims evidence 4 --command "..." --output path/to/raw.json
+.venv/bin/python -m etl.ledger.claims verdict 4 --verdict SURVIVED --scope "..." --facets judgeset
+.venv/bin/python -m etl.ledger.claims stale                    # THE query worth running
+.venv/bin/python -m etl.ledger.claims show [4]
 ```
 
 The falsifier writes **its own** verdict — pass it the `claim_id` and the three commands.
@@ -677,7 +713,7 @@ to facets. Claim #2 had `corpus_size` (world) sitting next to `method` (experime
 conflation is why `claim_stale` had to guess with `now_ctx ? k`.
 
 Verify the schema against a live database with
-`.venv/bin/python -I scripts/verify_ledger.py` — 17 checks, every one in a rolled-back
+`.venv/bin/python -m etl.verify.ledger` — 17 checks, every one in a rolled-back
 transaction, and it reads **both** streams because psql reports a constraint rejection on
 stderr and reading only stdout once made a correct rejection look like a failed test.
 
@@ -761,7 +797,7 @@ To turn the whole thing off, delete the `hooks` block from `.claude/settings.jso
 
 ## Fanning out: the measured economics
 
-`scripts/fanout.py` decides how many agents a judgement needs. The answer is almost always one,
+`tools/fanout.py` decides how many agents a judgement needs. The answer is almost always one,
 and the reason is counter-intuitive enough to be worth the numbers.
 
 Judging 191 `tussenkop` headings on 2026-11-12, five `shard-judge` agents were spawned, one per
@@ -794,7 +830,7 @@ Hence the order of questions in `plan()`: *can one agent hold this* first, *how 
 repeated* second.
 
 ```python
-from scripts.fanout import plan
+from tools.fanout import plan
 p = plan(units, key=lambda u: u["text"], render=lambda u: u["text"] + u["context"])
 print(p.report())          # units / distinct / payload / how many agents / why
 for shard in p.shards:     # len(p.shards) == 1 unless the payload really exceeds 100k tokens
@@ -873,11 +909,40 @@ distribution) and the `Agent` cases in `.claude/hooks/test_guard.py`.
   straight-line filter — is still worth having; it needs a cap and a caller, not a revert.
 - Traffic data in the AI service is a PV27 (North Holland) provincial proxy applied to **every**
   municipality; results for other provinces are not location-specific.
-- CI only lints `api/`, so violations elsewhere are invisible: `ruff check tests/` reports 3
-  (two unused `pytest` imports in `tests/integration/`, one `E741` in `test_search_logic.py`)
-  and **`ruff check scripts/` reports 31, all in `scripts/experiments/`** (measured
-  2026-11-12). `api/`, `scripts/import_bekendmaking_body.py` and every
-  `scripts/experiments/tussenkop_*.py` are clean.
+- **CI now lints `api/ etl/ tools/`** (2026-11-14, with the `scripts/` -> `etl/` move), which
+  closes the "CI only lints `api/`" entry this list used to carry. `ruff check api/ etl/ tools/`
+  is clean. Two gaps remain: `ruff check tests/` reports 3 (two unused `pytest` imports in
+  `tests/integration/`, one `E741` in `test_search_logic.py`) and is not in CI; and
+  `etl/experiments/` is excluded in `ruff.toml` — it is frozen, holds 31 pre-existing errors,
+  and `etl/experiments/judgeset_score.py` is inside the `judgeset` path facet, so editing it
+  would move a digest a recorded verdict is anchored to. **Owner: unassigned** for `tests/`.
+- **`docs/pg-notes/scripts/*.py` no longer run as-is** after the move. Five of the eight
+  hardcode an absolute repo path and import `from scripts.…`; they were left byte-identical on
+  purpose, because `judgeset_falsify.py` is itself inside the `judgeset` facet's path set and
+  the others are pinned by `sha256` in `evidence` rows — editing them to fix an import would
+  either move a digest or invalidate a record, in order to repair a script whose only product
+  is output that is already recorded. They are historical probes, not maintained code. Re-running
+  one means updating its two import lines first. **Owner: unassigned.**
+- **`/search/notices` returns a different `lat`/`lon` for the same request, run to run.**
+  Measured 2026-11-14 by the refactor's own equivalence harness, which is the only reason it
+  was noticed: two captures with **no code change in between** flip the same two bytes back
+  (`52.369521/4.8917505` vs `52.369530/4.8917798`, ~2 m apart). `gmb-2026-12784` carries **4
+  geometries**, and the `DISTINCT ON (l.identifier)` that picks one orders by
+  `(GeometryType(l.geom) <> 'POINT'), ST_Area(l.geom) DESC` — three of the four are POINTs, so
+  `GeometryType <> 'POINT'` is false for all three and `ST_Area` of a POINT is **0**: the
+  ordering is fully tied and whichever row the plan delivers first wins. Two things follow.
+  The instability needs a final tiebreaker (the row's own id, or the geometry text), which is a
+  behaviour change — a different coordinate becomes the answer — so it was deliberately not
+  done inside a refactor required to preserve behaviour. And the comment above that SQL says it
+  picks "the publication's largest geometry", which is **not what it does**: POINTs sort ahead
+  of polygons, so for this publication the only geometry with an area is the one it never picks.
+  **Owner: unassigned.**
+- **`/isochrone` takes `minutes` with no bounds**, so `minutes=0` returns HTTP 200 with a
+  degenerate polygon (measured 2026-11-14 while capturing the refactor baseline: 504 bytes,
+  a well-formed FeatureCollection). `/bekendmakingen` and `/search/notices` both declare
+  `Query(10, ge=1, le=MAX_MINUTES)`; `/isochrone` and `/pois` declare a bare `int = 10`. Adding
+  the constraint is a behaviour change (422 where there is now a 200), so it was deliberately
+  **not** done inside a refactor that had to preserve behaviour. **Owner: unassigned.**
 - No test coverage for any error path (502/504 handling). Removing the housing subsystem also
   removed `tests/unit/test_geocode_key.py`, which was 16 of the 25 unit tests — `pytest
   tests/unit` is now 9, all of them `test_search_logic.py`.
@@ -929,7 +994,7 @@ distribution) and the `Agent` cases in `.claude/hooks/test_guard.py`.
   filter, a one-week window, a Dutch query and the isochrone branch — a query returning 1 row
   cost what one returning 50 did. Fixed **upstream, not in the SQL**: 0027 stores the text.
   Same query now 1.9–5.7 ms, view output byte-identical (md5
-  `c221dcb413bbc2f90d601eefa53246be`). `scripts/verify_plans.py` asserts the plan so the next
+  `c221dcb413bbc2f90d601eefa53246be`). `etl/verify/plans.py` asserts the plan so the next
   regression is loud. **The fix's own numbers have not been through `falsifier`** — ledger claim
   18, `falsified: false`.
 - `background_similarity` is now the largest SQL term in that endpoint at 29–38 ms. Not a
@@ -938,12 +1003,12 @@ distribution) and the `Agent` cases in `.claude/hooks/test_guard.py`.
   (verdict 15) and found two real defects plus a wrong number:
   - **Nothing called the derive step.** 0027 backfilled inside the migration to avoid a window
     where search returns `''`; the window was not closed, it was moved to every future import.
-    `scripts/import_bekendmaking_body.py` now derives inside the same transaction as the body
+    `etl/ingest/bekendmaking_body.py` now derives inside the same transaction as the body
     upsert, so a committed body always has committed text, and it reports `derived=` and
     `pending_after=` in the `etl_run` note — a run that stored bodies and derived nothing used
     to read as a success.
   - **`''` meant two things.** It is 0015's deliberate sentinel for "no body and no title" *and*
-    was "not derived yet". 0029 adds `activity_derived` to the read view; `embed_bekendmaking.py`
+    was "not derived yet". 0029 adds `activity_derived` to the read view; `etl/derive/embeddings.py`
     now tests it explicitly and warns rather than silently under-indexing.
   - **The rule version was in two places** — `rule_version <> 1` in the pending view and
     `RULE_VERSION = 1` in Python. The first bump would have made the view report every row
@@ -955,7 +1020,7 @@ distribution) and the `Agent` cases in `.claude/hooks/test_guard.py`.
     **isochrone** branch — what a map click triggers — is **43.7–67.6 ms**, a median **41x**,
     not 533x. The remainder is the spatial CTE (13 ms) and a seq scan hashing all 94,183 vectors
     (22.6 ms), neither of them the view. Carry 41x.
-  - Verified by `.venv/bin/python -I scripts/verify_activity.py` — 15 cases, each in a
+  - Verified by `.venv/bin/python -m etl.verify.activity` — 15 cases, each in a
     rolled-back transaction, including the controls that make the checks non-vacuous.
 - **`probe_corpus` now covers derived state, and widening it expired every `corpus`-anchored
   verdict once.** It read only `bekendmaking` and `bekendmaking_locatie`, so emptying
@@ -974,7 +1039,7 @@ distribution) and the `Agent` cases in `.claude/hooks/test_guard.py`.
   a list of watched fields.** `falsifier` DESTROYED claim 23 (verdict 16) because
   `bekendmaking_activity_derive` reads `bb.body_text` **and `b.title`** while only the body was
   watched — and **32,329 of 94,183 rows (34.3%) derive their `activity_text` from the title
-  alone**, with `scripts/import_bekendmaking.py` upserting `ON CONFLICT … SET title =
+  alone**, with `etl/ingest/bekendmaking.py` upserting `ON CONFLICT … SET title =
   EXCLUDED.title`, a branch **108 rows had already taken**. A title change left all three
   surfaces reporting clean at once: pending 0, the importer's `pending_after=0`, and the
   `corpus` digest byte-identical (`c9849a28c6e31295 -> c9849a28c6e31295`).
@@ -989,7 +1054,7 @@ distribution) and the `Agent` cases in `.claude/hooks/test_guard.py`.
     (`md5(text)` is IMMUTABLE), so no writer can forget to maintain them, and the pending check
     compares two 32-byte strings instead of detoasting `body_text` — which would have
     reintroduced 29% of the cost 0027 removed.
-  - **`scripts/verify_activity.py` asserts the input set from the catalog**, not from a list in
+  - **`etl/verify/activity.py` asserts the input set from the catalog**, not from a list in
     the file: `pg_depend` gives the columns the derive view actually reads, the generation
     expressions give the `title → title_fp` correspondence, and the case fails if the derive
     grows an input the fingerprint does not hash. Its must-fail control injects
@@ -1000,8 +1065,8 @@ distribution) and the `Agent` cases in `.claude/hooks/test_guard.py`.
     and stays pending. Backfilling unconditionally would have declared every already-stale row
     fresh, in the migration that exists to fix that. Measured: all 94,183 rows matched, 0 left
     NULL.
-  Verified: 24 cases in `scripts/verify_activity.py`, an empty-database apply of 0001..0032,
-  and a real `import_bekendmaking.py` + `import_bekendmaking_body.py` run on a fresh database
+  Verified: 24 cases in `etl/verify/activity.py`, an empty-database apply of 0001..0032,
+  and a real `etl/ingest/bekendmaking.py` + `etl/ingest/bekendmaking_body.py` run on a fresh database
   where a title change on an imported row reports `why=source_changed`. The read view's output
   is unchanged (md5 `c221dcb413bbc2f90d601eefa53246be`).
   **Two costs, stated.** A fingerprint over inputs over-reports: a title change on a row whose
@@ -1014,7 +1079,7 @@ distribution) and the `Agent` cases in `.claude/hooks/test_guard.py`.
   change, a NULL `source_fp` and a rule bump each report pending, an identical-byte refetch
   does not, the view and `activity_rules.PENDING` agree row-for-row (0/0 clean, 94,184/94,184
   after a bump), and the three body states give three distinct fingerprints. What died: "an
-  input added without being fingerprinted fails `verify_activity.py`". The structural check's
+  input added without being fingerprinted fails `etl/verify/activity.py`". The structural check's
   catalog query filters `d.refobjsubid > 0` and hardcodes `relname IN ('bekendmaking',
   'bekendmaking_body')`, so an input read through a whole-row reference
   (`row_to_json(b.*)->>'abstract'`, 15,843 rows stale) or from a third table
@@ -1033,23 +1098,23 @@ distribution) and the `Agent` cases in `.claude/hooks/test_guard.py`.
   `docs/pg-notes/raw/activity-fingerprint-falsify.txt`. **The dispositions are not written yet
   — owner: unassigned.**
 - **The in-transaction derive is true but asserted by nothing.** Moving the `derive()` call one
-  dedent **outside** `async with conn.transaction():` in `scripts/import_bekendmaking_body.py`
+  dedent **outside** `async with conn.transaction():` in `etl/ingest/bekendmaking_body.py`
   reintroduces exactly the defect verdict 15 named, and **all six cited commands stay green** —
-  ruff, `verify_activity.py`, `verify_ledger.py`, `pytest tests/unit`, `test_guard.py`. The 15 cases
-  call `scripts.activity_rules.derive` directly, so they test `derive`, not the call site; *deleting*
+  ruff, `etl/verify/activity.py`, `etl/verify/ledger.py`, `pytest tests/unit`, `test_guard.py`. The 15 cases
+  call `etl.derive.activity_rules.derive` directly, so they test `derive`, not the call site; *deleting*
   the call is caught only by ruff F401/F841 on that file, and `ci.yml` runs `ruff check api/` only.
-  The property does hold today — a real `import_bekendmaking_body.main()` against a fresh 0001..0030
+  The property does hold today — a real `etl.ingest.bekendmaking_body.main()` against a fresh 0001..0030
   database gives `pubs=3 bodies=3 act=3 pending=0`, and with the derive view renamed away the two
   fetched bodies are **not** committed and the `etl_run` reads `failed`. **Owner: unassigned.**
 - **The importer never `REFRESH`es `bekendmaking_search_text`**, so a committed derived row is absent
   from the FTS index (`fts_rows=0` after a 3-body import on a fresh database) while
   `pending_after=0` reports success. 0027 backfilled in-migration precisely to avoid that window;
   its second half is still open for every row the importer stores. Bounded: no request path reads
-  that matview — the only readers are `scripts/experiments/judgeset_pool.py` and the two refreshers —
+  that matview — the only readers are `etl/experiments/judgeset_pool.py` and the two refreshers —
   so this hits the FTS/judgeset experiments, not `/search/notices`. **Owner: unassigned.**
 - **The `activity_derive` path facet (0028) does not digest the derivation.** It lists 0015, 0027,
-  `service.py` and `derive_activity.py`, and omits `scripts/activity_rules.py` — which now holds the
-  derive SQL, the `PENDING` SQL and `EXTRACTORS` — plus `import_bekendmaking_body.py`, 0029 and 0030.
+  `service.py` and `etl/derive/activity.py`, and omits `etl/derive/activity_rules.py` — which now holds the
+  derive SQL, the `PENDING` SQL and `EXTRACTORS` — plus `etl/ingest/bekendmaking_body.py`, 0029 and 0030.
   Appending a line to `activity_rules.py` leaves the digest at `4a3f89c3a2e9d421`, unchanged. Two of
   its four paths are applied migrations, which are forward-only and guard-denied, so those digests
   can **never** move; and 0027 dropped 0015's view, so that entry anchors a file describing an object
@@ -1057,12 +1122,12 @@ distribution) and the `Agent` cases in `.claude/hooks/test_guard.py`.
   can see. **`falsifier` reported "no verdict references it, so the cost is prospective" and that is
   wrong** — verdict 15 is anchored to it (`98c3b8c57f01`, now reading
   `98c3b8c57f01 -> 4a3f89c3a2e9`), so one verdict already rests on a path set that cannot see the
-  derivation. It expired here only because `derive_activity.py`, which *is* in the set, happened to
+  derivation. It expired here only because `etl/derive/activity.py`, which *is* in the set, happened to
   change too. Fixing it is an INSERT into `world_facet`, not an edit to 0028. **Owner: unassigned.**
 - **`''` still means two things to three of the four readers of `bekendmaking_activity`.** 0029 added
-  `activity_derived` and only `scripts/embed_bekendmaking.py` tests it;
-  `api/main/domains/search/service.py`, `scripts/score_noise_embedding.py` and
-  `scripts/experiments/noise_{embedding,retrieval}_bench.py` join the view with no such test.
+  `activity_derived` and only `etl/derive/embeddings.py` tests it;
+  `api/main/domains/search/service.py`, `etl/derive/noise_score.py` and
+  `etl/experiments/noise_{embedding,retrieval}_bench.py` join the view with no such test.
   **Owner: unassigned.**
 - **Bumping `activity_rule` with zero data change moves the `corpus` digest**
   (`c9849a28c6e31295 -> 75b77d69d400b8f6`, via `activity_pending_count 0 -> 94,183`;
@@ -1098,8 +1163,8 @@ What that took with it, so the absences are not mistaken for gaps:
 - **`geocode_cache`** is an orphan table by decision: `0001_init.sql` is left untouched so the
   Postgres stage 0 narrative stays intact, and no migration drops it. Nothing reads or writes it.
 - **`municipality` was kept** — it is not housing-specific. `routers/search.py`,
-  `upstream/pdok.py`, `upstream/es_client.py`, `scripts/seed_municipalities.py` and
-  `scripts/ingest_addresses.py` all use it.
+  `upstream/pdok.py`, `upstream/es_client.py`, `etl/ingest/municipalities.py` and
+  `etl/ingest/addresses.py` all use it.
 - **`cache.py` was kept** (`/region`, `/traffic`, `domains/geo`); only the housing-specific
   `domains/housing/upstash.py` went. Note the configured Upstash instance no longer resolves
   (NXDOMAIN as of 2026-10-28), so caching is silently degraded — `cache.py` handles that by

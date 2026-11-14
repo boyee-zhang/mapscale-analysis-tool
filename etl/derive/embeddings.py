@@ -2,8 +2,8 @@
 
     python3 -m venv /tmp/embvenv
     /tmp/embvenv/bin/pip install sentence-transformers==3.4.1 asyncpg python-dotenv
-    /tmp/embvenv/bin/python scripts/embed_bekendmaking.py            # only what is missing/stale
-    /tmp/embvenv/bin/python scripts/embed_bekendmaking.py --all      # re-embed everything
+    /tmp/embvenv/bin/python -m etl.derive.embeddings            # only what is missing/stale
+    /tmp/embvenv/bin/python -m etl.derive.embeddings --all      # re-embed everything
 
 INCREMENTAL BY TEXT HASH, and that is the point of the design. `bekendmaking_activity` is a
 VIEW: `activity_text` is reassembled from body fields every time it is read, so it CHANGES
@@ -12,7 +12,7 @@ text is stale in a way nothing downstream would reveal -- the arithmetic still w
 neighbours are quietly wrong. Storing the sha1 of the exact text encoded makes that
 detectable, so a re-run embeds precisely the rows whose source moved.
 
-This is not hypothetical: `scripts/score_noise_embedding.py` caches vectors to
+This is not hypothetical: `etl/derive/noise_score.py` caches vectors to
 `data/noise_emb_cache.npz` keyed on identifier ALONE. Those were computed before the national
 body fetch, which turned `activity_text` for 34,481 event publications from a title fallback
 into the real description. The cache cannot say which of its rows are still valid, so it is
@@ -38,7 +38,7 @@ import asyncpg
 from dotenv import dotenv_values
 from sentence_transformers import SentenceTransformer
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 DATABASE_URL = dotenv_values(ROOT / ".env").get("DATABASE_URL")
 
 MODEL = "intfloat/multilingual-e5-base"
@@ -118,7 +118,7 @@ async def main() -> int:
         underived = await conn.fetchval(COUNT_UNDERIVED)
         if underived:
             print(f"WARNING: {underived} publication(s) have no derived activity_text and are "
-                  f"NOT being embedded. Run scripts/derive_activity.py first; embedding a "
+                  f"NOT being embedded. Run etl/derive/activity.py first; embedding a "
                   f"partially derived corpus silently under-indexes it.", file=sys.stderr)
         have = {r["identifier"]: (r["model"], r["text_sha1"]) for r in await conn.fetch(
             "SELECT identifier, model, text_sha1 FROM bekendmaking_embedding")}

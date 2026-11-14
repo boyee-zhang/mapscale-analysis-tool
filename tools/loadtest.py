@@ -1,7 +1,7 @@
 """Find where this backend stops, and which resource stops it.
 
-    .venv/bin/python scripts/loadtest.py --scenario health
-    .venv/bin/python scripts/loadtest.py --scenario permits --vary
+    .venv/bin/python tools/loadtest.py --scenario health
+    .venv/bin/python tools/loadtest.py --scenario permits --vary
 
 Ramps concurrency through a series of steps and reports what each step actually achieved.
 Watch http://localhost:3000/d/mapscale-backend while it runs — the point is to read the

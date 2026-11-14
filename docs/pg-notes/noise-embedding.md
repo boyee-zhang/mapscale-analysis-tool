@@ -1,6 +1,6 @@
 # Does an embedding beat keyword search here, and does it add to the metadata classifier?
 
-Run 1, 2026-11-03. Harness `scripts/experiments/noise_embedding_bench.py`, raw output in
+Run 1, 2026-11-03. Harness `etl/experiments/noise_embedding_bench.py`, raw output in
 `raw/noise-embedding-run1.txt`. Model `intfloat/multilingual-e5-base`, 768-d, run locally on
 CPU. Answer key: the 1,316-row hand-labelled ground truth; strict universe = 695 rows over
 three blocks, 313 noisy, base rate 0.450.

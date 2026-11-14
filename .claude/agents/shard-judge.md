@@ -6,7 +6,7 @@ description: >
   this record match its source). Spawn one per shard, in parallel. Do NOT use it for work a
   script can do — fetching, counting, measuring, sorting, deduplicating — a script is faster,
   cheaper and reproducible; fan this out only for the judgement step. **Run
-  `scripts/fanout.py`'s `plan()` before spawning any of these**: measured 2026-11-12, an agent
+  `tools/fanout.py`'s `plan()` before spawning any of these**: measured 2026-11-12, an agent
   costs ~71,600 tokens to stand up regardless of how many units it judges (R2 = 0.033 over
   3-92 units), so a second agent is that much for wall-clock time and nothing else. You MUST
   pass: (1) the shard's input file path, (2) the output JSON path to write, (3) the label set

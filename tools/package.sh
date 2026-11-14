@@ -3,9 +3,9 @@
 # Builds one tarball that runs this whole project on another machine with nothing but
 # Docker installed.
 #
-#   ./scripts/package.sh                 # source + 35 MB database dump
-#   ./scripts/package.sh --with-extract  # also the 181 MB OSM extract, for self-hosted ORS
-#   ./scripts/package.sh --no-dump       # source only, target starts with an empty DB
+#   ./tools/package.sh                 # source + 35 MB database dump
+#   ./tools/package.sh --with-extract  # also the 181 MB OSM extract, for self-hosted ORS
+#   ./tools/package.sh --no-dump       # source only, target starts with an empty DB
 #
 # It ships SOURCE plus DATA, not images. Two reasons, both load-bearing:
 #

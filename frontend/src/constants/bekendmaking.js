@@ -238,7 +238,7 @@ export const NOISE_FILTERS = [
  *
  * `derived` says HOW the date was obtained, and the distinction is kept all the way to the
  * reader. `stated` means the publisher wrote it into a labelled field. `derived` means it was
- * read out of a sentence by scripts/event_dates.py — measured at precision 100.0%, recall
+ * read out of a sentence by etl/derive/event_dates_rules.py — measured at precision 100.0%, recall
  * 65.5%, zero hallucinations on 30 municipalities it was not built against, which is good and
  * is still a different kind of fact from a value someone typed into a form.
  *

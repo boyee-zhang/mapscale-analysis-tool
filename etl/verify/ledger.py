@@ -1,6 +1,6 @@
 """Verify the ledger schema's load-bearing properties against a live database.
 
-    .venv/bin/python -I scripts/verify_ledger.py
+    .venv/bin/python -m etl.verify.ledger
 
 Assumes this repo's development Postgres container (`mapscale-pg`) is up; it shells out to
 psql inside it, because psql is not installed on the host here.

@@ -1,0 +1,82 @@
+=== 2026-11-14T15:19:14Z  HEAD=a7c7b78  dirty=1 ===
+
+### .venv/bin/python -I scripts/verify_activity.py
+  ok   imported_row_is_derived_in_the_same_transaction            text='Objectvergunning | het plaatsen van een bouwkr' src=['apv_regel', 'omschrijving']
+  ok   a_body_without_a_derive_is_visible                         derived=False text='' and listed as pending (1 row(s) pending)
+  ok   the_empty_string_sentinel_still_means_what_0015_meant      derived=True text='' src={} -- degraded, not missing
+  ok   deriving_twice_changes_nothing                             first=1 row changed, second=0
+  ok   a_refetched_body_is_rederived                              pending after refetch, re-derived to 'iets anders'
+  ok   a_publication_with_no_body_row_at_all_is_still_derivable   body_etl_run=NULL, text='Alleen een titel', no longer pending
+  ok   the_embedding_etl_excludes_underived_rows                  selected by the ETL: before=0 after=1; underived counter saw 1
+  ok   the_view_and_the_script_agree_after_a_rule_bump            v1: view=0=py=0 | bumped: view=94,184=py=94,184 | one re-derived: 94,183, agreeing throughout
+  ok   two_current_rules_cannot_commit                            rejected: duplicate key value violates unique constraint "activity_rule_one_curr
+  ok   an_unregistered_extractor_refuses_rather_than_guessing     RuntimeError naming the registry, as intended
+  ok   no_current_rule_refuses_rather_than_deriving_nothing       view reports 94,183 pending; Python raises instead of deriving at NULL
+  ok   emptying_the_derived_table_moves_the_corpus_probe          facet digest c9849a28c6 -> 93313b8124; activity_count 94,183 -> 0; pending 0 -> 94,183; source digests unchanged
+  ok   the_correctness_assertion_fails_when_the_derivation_is_gone derived 94,183 -> 0, and all 94,183 rows read '' with activity_derived=false (restored by rollback)
+  ok   the_activity_digest_moves_with_the_rule_version            14c1a60b8566 -> c884b1f56add on a rule_version change alone
+  ok   the_activity_digest_does_not_collide_on_empty_vs_quoted_empty_src {} -> 9b1fb27e15b6, {""} -> fd06ae9810ee, distinct
+
+ALL PASS
+
+### .venv/bin/python -I scripts/verify_ledger.py
+=== must be rejected ===
+  ok   status column is gone                                ERROR:  column "status" of relation "claim" does not exist
+  ok   claim_stale(jsonb) is gone                           ERROR:  function claim_stale(jsonb) does not exist
+  ok   digest must look like a digest                       ERROR:  new row for relation "world_snapshot" violates check constraint "world_snapsho
+  ok   payload must be an object                            ERROR:  new row for relation "world_snapshot" violates check constraint "world_snapsho
+  ok   last_seen_at cannot precede first_seen_at            ERROR:  new row for relation "world_snapshot" violates check constraint "world_snapsho
+  ok   a facet must be registered                           ERROR:  insert or update on table "world_snapshot" violates foreign key constraint "wo
+  ok   a topic must be registered                           ERROR:  insert or update on table "claim" violates foreign key constraint "claim_topic
+  ok   a verdict cannot anchor to a snapshot that is not there ERROR:  insert or update on table "verdict_world" violates foreign key constraint "ver
+  ok   a path facet cannot declare an empty path set        ERROR:  new row for relation "world_facet" violates check constraint "world_facet_path
+
+=== must hold ===
+  ok   re-probing an unchanged facet does not create a row  BEGIN / INSERT 0 1 / INSERT 0 1 / INSERT 0 1 / rows=1 advanced=true / ROLLBACK
+  ok   a world that goes A -> B -> A has A as current, not B BEGIN / INSERT 0 1 / INSERT 0 2 / INSERT 0 1 / current=aaaaaaaaaaaa / ROLLBACK
+  ok   verdict_stale() fires when the anchored facet has moved BEGIN / INSERT 0 1 / INSERT 0 2 / INSERT 0 1 / stale=1 facet=t_facet / ROLLBACK
+  ok   and does NOT fire while it is unchanged              BEGIN / INSERT 0 1 / INSERT 0 1 / INSERT 0 1 / stale=0 / ROLLBACK
+  ok   deleting a verdict takes its anchors with it         BEGIN / INSERT 0 1 / INSERT 0 1 / INSERT 0 1 / before=1 / DELETE 1 / after=0 / ROLLBAC
+  ok   status is derived, and the two contradictory rows are gone BEGIN / 1=destroyed / 2=survived / 3=destroyed / ROLLBACK
+  ok   verdict_stale() ignores a verdict that is not the latest on its claim BEGIN / INSERT 0 1 / INSERT 0 2 / INSERT 0 1 / INSERT 0 2 / INSERT 0 1 / stale_from_ol
+  ok   verdict_unanchored is also latest-only               BEGIN / INSERT 0 1 / INSERT 0 2 / unanchored_rows_for_claim=1 / ROLLBACK
+  ok   the default anchor set is in the table, not in the script BEGIN / corpus,graph / ROLLBACK
+
+ALL PASS
+
+### .venv/bin/python -I scripts/verify_plans.py
+{"ts": "2026-11-14T16:19:26Z", "level": "INFO", "logger": "domain.search", "request_id": "-", "message": "loading query encoder", "model": "intfloat/multilingual-e5-base"}
+{"ts": "2026-11-14T16:19:30Z", "level": "INFO", "logger": "domain.search", "request_id": "-", "message": "query encoder ready", "model": "intfloat/multilingual-e5-base", "dim": 768}
+{"ts": "2026-11-14T16:19:31Z", "level": "INFO", "logger": "domain.search", "request_id": "-", "message": "\u2190 search", "shape": "corpus", "q": "\u9644\u8fd1\u6709\u4ec0\u4e48\u4f1a\u5435\u7684\u5de5\u7a0b", "scanned": 0, "returned": 0, "weaker": 0, "background": 0.7555688202492089, "top": null}
+=== /search/notices, corpus-wide === (1,792 buffers)
+  ok   never seq-scans bekendmaking_body
+  ok   ...nor bekendmaking
+  ok   buffers stay under 50,000 (was 661,886 before 0027)
+  ok   the HNSW index answers the ordering
+{"ts": "2026-11-14T16:19:32Z", "level": "INFO", "logger": "client.ors", "request_id": "-", "message": "\u2192 isochrone", "ors_profile": "foot-hiking", "lng": 4.9003, "lat": 52.3791, "minutes": 10}
+{"ts": "2026-11-14T16:19:32Z", "level": "INFO", "logger": "client.ors", "request_id": "-", "message": "\u2190 isochrone", "features": 1}
+{"ts": "2026-11-14T16:19:32Z", "level": "INFO", "logger": "domain.search", "request_id": "-", "message": "\u2190 search", "shape": "isochrone", "q": "\u9644\u8fd1\u6709\u4ec0\u4e48\u4f1a\u5435\u7684\u5de5\u7a0b", "scanned": 0, "returned": 0, "weaker": 0, "background": 0.7615251596999453, "top": null}
+=== /search/notices, isochrone === (15,739 buffers)
+  ok   never seq-scans bekendmaking_body
+  ok   ...nor bekendmaking
+  ok   buffers stay under 50,000 (was 661,886 before 0027)
+  ok   the spatial hit set is materialised before the vector work
+  ok   the vector sort is over the hit set, not the corpus
+{"ts": "2026-11-14T16:19:32Z", "level": "INFO", "logger": "db", "request_id": "-", "message": "db closed"}
+
+ALL PASS
+
+### .venv/bin/python -m pytest tests/unit -q
+  /Users/zby/dev/mapscale-analysis-tool/.venv/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+93 passed, 1 warning in 0.64s
+
+### python3 .claude/hooks/test_guard.py
+  ok   empty stdin                  -> exit 0, 0 bytes
+
+ALL PASS
+
+### ruff check api/ scripts/activity_rules.py scripts/verify_activity.py scripts/derive_activity.py scripts/import_bekendmaking_body.py scripts/embed_bekendmaking.py scripts/claims.py
+All checks passed!

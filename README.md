@@ -22,7 +22,7 @@ front end renders what the database returns. Raw measurements from each step are
 This matters before anything else, because the deployed app and a local checkout behave
 differently on purpose.
 
-| | Vercel (production) | Local (`./scripts/dev.sh`) |
+| | Vercel (production) | Local (`./tools/dev.sh`) |
 |---|---|---|
 | Code | `main` | `refactor/modular-architecture` (ahead of `main`) |
 | Backend | one Mangum-wrapped serverless function | `uvicorn --reload` on `:8000` |
@@ -51,7 +51,7 @@ per-process, so it does nothing across Vercel instances. See
 ## Stack
 
 - **Database** — PostgreSQL 16 + PostGIS 3.4, `asyncpg`, hand-written SQL, **no ORM**. Numbered
-  forward-only `.sql` migrations with a self-written runner (`scripts/migrate.py`).
+  forward-only `.sql` migrations with a self-written runner (`tools/migrate.py`).
 - **Backend** — FastAPI (Python 3.12), async HTTPX, JSON structured logging with a per-request
   `X-Request-ID`. Deployed to Vercel through Mangum.
 - **Frontend** — React 18 + Vite 6, MapLibre GL 5, Recharts, Axios. No spatial library: Turf.js
@@ -69,19 +69,23 @@ holds a Node serverless ETL over CBS OData and is proxied in as `/api/ai/*`.
 ## Layout
 
 ```
-api/main/
-  app.py            FastAPI instance, middleware, exception handlers
-  index.py          re-export for Vercel
-  db.py             asyncpg pool on the app lifespan; db.enabled() is the degradation guard
-  cache.py          Upstash KV, degrades silently
-  upstream/         transport only — ors, overpass, pdok, tomtom, es_client. No business rules.
-  domains/
-    geo/            spatial primitives: isochrone, POI-inside-a-shape
-  routers/          isochrone, pois, bekendmakingen, directions, region, traffic,
-                    search, health
-migrations/         0001_init … 0004_poi_category_seed  (+ .noxact.sql for CREATE INDEX CONCURRENTLY)
-scripts/            dev.sh, migrate.py, import_poi.py, seed_municipalities.py, ingest_addresses.py
-docs/pg-notes/      raw EXPLAIN / lock / vacuum output per stage
+api/main/            the HTTP service, and nothing else
+  app.py             FastAPI instance, lifespan, middleware, exception handlers
+  db.py              asyncpg pool on the app lifespan; db.enabled() is the degradation guard
+  cache.py           Upstash KV, degrades silently
+  config.py          env vars + MODE_MAPPING + SPEED_MAP
+  upstream/          transport only — ors, overpass, pdok, tomtom, nominatim, es_client
+  domains/           business rules: geo, bekendmaking, search, address, region, traffic
+  routers/           one module per endpoint, thin
+etl/                 everything that moves or derives data, grouped by what it does
+  ingest/            external source -> a store (bekendmaking, poi, addresses, …)
+  derive/            a store -> the same store (activity, event_dates, embeddings, …)
+  verify/            asserts invariants, writes nothing durable (activity, ledger, plans)
+  ledger/            claims.py — the measurement ledger's only write path
+  experiments/       frozen one-off measurements, kept for provenance, not maintained
+tools/               not ETL: migrate.py, loadtest.py, fanout.py, dev.sh, monitoring.sh
+migrations/          numbered .sql, forward-only (+ .noxact.sql for CREATE INDEX CONCURRENTLY)
+docs/pg-notes/       raw EXPLAIN / lock / vacuum output per stage
 ```
 
 The rule the refactor is built on: `upstream/` is transport, domain semantics live in
@@ -94,7 +98,7 @@ The rule the refactor is built on: `upstream/` is transport, domain semantics li
 
 ## Data pipeline
 
-**POI import** (`scripts/import_poi.py`, pyosmium) reads a Geofabrik `.osm.pbf` extract and
+**POI import** (`etl/ingest/poi.py`, pyosmium) reads a Geofabrik `.osm.pbf` extract and
 upserts into `poi`:
 
 - Full Netherlands: **512,844 POI in 2m53s**. A no-op re-run is `INSERT 0 0, UPDATE 0` in 1m58s.
@@ -107,7 +111,7 @@ upserts into `poi`:
 - `etl_run` is the state machine; its partial unique index is predicated on
   `finished_at IS NULL`.
 
-**Municipality polygons** (`scripts/seed_municipalities.py`, ~342 rows from the PDOK CBS WFS)
+**Municipality polygons** (`etl/ingest/municipalities.py`, ~342 rows from the PDOK CBS WFS)
 resolve city names for `/search` and the address ingest: **26 ms from Postgres against 534 ms
 through the WFS**. They used to back a housing choropleth, which has been removed; the table
 and the measurement stand on their own.
@@ -148,7 +152,7 @@ These are the reason the project exists in its current form. Each one is reprodu
 
 `docker compose up -d prometheus grafana postgres-exporter` brings up a local-only
 Prometheus + Grafana (profile-gated, so a bare `up -d` does not start them), and
-`scripts/loadtest.py` ramps concurrency against it.
+`tools/loadtest.py` ramps concurrency against it.
 
 The ceiling is endpoint-shaped, not one number: `/health` peaks near **3,000 req/s** and
 `/bekendmakingen` originally near **40 req/s**. Chasing that gap found a real defect —
@@ -181,13 +185,13 @@ All under `/api/main`.
 | `/pois` | `poi` table (Overpass fallback) | 6h on the Overpass path only |
 | `/bekendmakingen` | `bekendmaking` tables, clipped to the isochrone | — |
 | `/region` | PDOK reverse | 7d |
-| `/directions`, `/bulk_directions` | ORS | — |
+| `/directions` | ORS | — |
 | `/traffic/tile-url`, `/traffic/flow`, `/traffic/incidents` | TomTom | 5m |
 | `/search` | ES → PDOK → Nominatim | — |
 
 **Announcements on the map.** `/bekendmakingen` answers "what has been happening here,
 month by month" over the same isochrone `/pois` uses, from the KOOP publications loaded by
-`scripts/import_bekendmaking.py`. `building_permits=true` narrows it to
+`etl/ingest/bekendmaking.py`. `building_permits=true` narrows it to
 `omgevingsvergunning` + activity `bouwen`; `doc_type` on its own also covers tree felling,
 signage and zoning. `total` and the month histogram count every match while `items` is
 capped at 500, so the bars must not be re-derived from the list. `stage`
@@ -231,7 +235,7 @@ Then one command brings up the whole stack — port pre-check → Postgres (`--w
 → uvicorn `:8000` + Vite `:5173`, and Ctrl-C stops all of it:
 
 ```bash
-./scripts/dev.sh
+./tools/dev.sh
 ```
 
 It deliberately leaves out two compose services: `ors` (the first start builds three routing
@@ -243,14 +247,14 @@ this repo's `esdata` volume is empty). Start either by name when you want it.
 ```bash
 # download a Geofabrik extract by hand into the gitignored data/
 #   https://download.geofabrik.de/europe/netherlands/
-python scripts/import_poi.py data/netherlands-latest.osm.pbf
-python scripts/seed_municipalities.py
+python -m etl.ingest.poi data/netherlands-latest.osm.pbf
+python -m etl.ingest.municipalities
 ```
 
 ### Optional services
 
 ```bash
-docker compose up -d elasticsearch     # :9200, then: python scripts/ingest_addresses.py
+docker compose up -d elasticsearch     # :9200, then: python -m etl.ingest.addresses
 docker compose up -d ors               # :8080 — first start builds graphs. docs/ors-self-host.md
 ```
 

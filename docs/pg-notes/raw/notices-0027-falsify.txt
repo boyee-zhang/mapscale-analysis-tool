@@ -1,0 +1,124 @@
+Falsifier pass on migration 0027 (activity_text stored instead of recomputed per read).
+Ledger claim 18. Run 2026-11-14 on mapscale-pg, 94,183 rows, nothing else active
+(pg_stat_activity: 0 non-idle backends; docker stats: mapscale-pg 0.00% CPU before the run).
+
+================================================================================
+(1) CORRECTNESS, stronger than the md5 fingerprint: migration 0015's view body
+    reconstructed VERBATIM as a CTE and FULL JOINed against the post-0027 read view,
+    compared column by column with IS DISTINCT FROM.
+    command: docker exec -i mapscale-pg psql -U mapscale -d mapscale -x -f - < cmp0015.sql
+-[ RECORD 1 ]------
+joined_rows | 94183
+only_in_new | 0
+only_in_old | 0
+diff_text   | 0
+diff_src    | 0
+diff_gem    | 0
+diff_dt     | 0
+diff_pub    | 0
+diff_vp     | 0
+diff_bs     | 0
+
+
+================================================================================
+(2) The caller's own fingerprint command, re-run.
+rows=94183  fingerprint=c221dcb413bbc2f90d601eefa53246be  null_text=0  empty_text=0
+
+   The fingerprint's one demonstrated hole: a NULL activity_src and an empty one
+   collide, because array_to_string(ARRAY[]::text[], ',') = '' and
+   coalesce(array_to_string(NULL,','),'') = '' too.
+     empty_array | bbdef1c3802d6b87520f683f7e07ed35
+     null_array  | bbdef1c3802d6b87520f683f7e07ed35
+   Not reachable with today's data (0 rows have a NULL array), and (1) covers it anyway.
+   Separator safety checked: text_has_x01=0 text_has_x02=0 src_has_comma=0.
+
+================================================================================
+(3) BEFORE vs AFTER on the same machine in the same minute. The 0015 expression is
+    textually substituted into the SQL that api/main/domains/search/service.py builds,
+    in place of `JOIN bekendmaking_activity a USING (identifier)`.
+    command: .venv/bin/python -I scratchpad/fals/before_after.py
+spatial=False
+  BEFORE (0015 expr inlined) n=5: min=  1889.4 med=  1909.2 max=  2568.3 ms
+  AFTER  (0027 stored column) n=24: min=    2.69 med=    3.58 max=    4.50 ms
+  ratio(med) = 533x   rows identical: False  (20 vs 20)
+spatial=True
+  BEFORE (0015 expr inlined) n=5: min=  1904.3 med=  1929.0 max=  1972.7 ms
+  AFTER  (0027 stored column) n=24: min=   45.36 med=   47.58 max=   66.60 ms
+  ratio(med) = 41x   rows identical: False  (20 vs 20)
+
+    "rows identical: False" is NOT a 0027 regression: the sets are equal and every
+    activity_text is equal. _DECORATE's `ORDER BY r.distance` has no tiebreaker, so
+    changing the plan permutes tied rows (ranks 6/7, 12/13, 15/16 swapped here, all at
+    identical distances 0.182259 / 0.187813 / 0.188965).
+
+================================================================================
+(4) AFTER, 24 warm runs per cell, cold run reported separately and discarded.
+    command: .venv/bin/python -I scratchpad/fals/time_ranking.py
+corpus limit=20              rows= 20 cold=  173.02  warm n=24: min=   2.85 med=   3.64 p95=   6.32 max=   6.95
+corpus limit=5               rows=  5 cold=    4.06  warm n=24: min=   2.04 med=   2.44 p95=   3.50 max=   4.15
+corpus limit=50              rows= 50 cold=   38.35  warm n=24: min=   3.91 med=   4.82 p95=   5.89 max=   7.84
+corpus NL limit=20           rows= 20 cold=   79.17  warm n=24: min=   2.18 med=   2.74 p95=   5.58 max=  12.90
+isochrone limit=20           rows= 20 cold=   76.38  warm n=24: min=  43.71 med=  46.03 p95=  49.13 max=  55.88
+
+================================================================================
+(5) verify_plans.py re-run: ALL PASS, 9 assertions. Corpus 1,792 buffers,
+    isochrone 15,739. EXPLAIN (ANALYZE, BUFFERS): corpus Execution Time 2.258 ms /
+    1,758 buffers; isochrone 51.783 ms / 15,739 buffers, of which the activity_text
+    join is an Index Scan on bekendmaking_activity_text_pkey, 0.006 ms x 20 loops.
+    The assertions are not vacuous: the archived BEFORE plan
+    (docs/pg-notes/raw/notices-ranking-explain.txt) contains
+    "Parallel Seq Scan on bekendmaking_body bb_1" and 662,866 hit + 26,793 read.
+
+================================================================================
+(6) FROM-SCRATCH MIGRATION, in a throwaway database (createdb falsify_scratch):
+    DATABASE_URL=...falsify_scratch .venv/bin/python scripts/migrate.py
+    -> applied 28 migration(s), 0001..0028, no error. 0027's backfill over an empty
+    corpus and the matview rebuild both succeed.
+
+================================================================================
+(7) Two defects of the derived-table design, demonstrated in that throwaway database
+    (one bekendmaking row + one body carrying `Stadsdeel:` and `Omschrijving:`).
+DELETE 0
+=== (A) a freshly imported row, before scripts/derive_activity.py has run ===
+   ?column?   | activity_text | activity_src 
+--------------+---------------+--------------
+ read view    | ''            | {}
+(1 row)
+
+   ?column?   |                    quote_literal                    |       activity_src       
+--------------+-----------------------------------------------------+--------------------------
+ derive view  | 'Objectvergunning | het plaatsen van een bouwkraan' | {apv_regel,omschrijving}
+(1 row)
+
+     ?column?      
+-------------------
+ in FTS matview: 0
+(1 row)
+
+=== (B) after deriving at RULE_VERSION=2, the pending view never empties ===
+INSERT 0 1
+   identifier    |     why      | rule_version | body_etl_run | current_body_run 
+-----------------+--------------+--------------+--------------+------------------
+ gmb-9999-000001 | rule_changed |            2 |            1 |                1
+(1 row)
+
+               ?column?                
+---------------------------------------
+ script's own pending count at $1=2: 0
+(1 row)
+
+
+================================================================================
+(8) The anchor cannot see the derived table. probe_corpus reads only `bekendmaking`
+    and `bekendmaking_locatie`; the `activity_derive` facet is four file paths. With the
+    derived table emptied, the probe output is byte-identical while the view's answer
+    flips to '':
+      populated: n=1 md5=265f5ff9650e1f817c04a388f4921de6 locatie=0 view_text='Objectvergunning | het plaatsen van een bouwkraan'
+      emptied  : n=1 md5=265f5ff9650e1f817c04a388f4921de6 locatie=0 view_text=''
+
+================================================================================
+(9) Downstream compatibility: the exact SELECTs in scripts/embed_bekendmaking.py
+    (SELECT_ALL) and scripts/score_noise_embedding.py (CORPUS_SQL, TRAIN_SQL) all
+    EXPLAIN without error against the new view; none of them reference a dropped column.
+    The FTS matview and both its indexes match 0020's definitions by name and body
+    (pg_matviews / pg_indexes compared against migrations/0020_bekendmaking_fts.sql).

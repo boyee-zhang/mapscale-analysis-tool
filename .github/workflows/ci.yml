@@ -23,7 +23,7 @@ jobs:
         run: pip install ruff==0.9.10
 
       - name: Lint Python (ruff)
-        run: ruff check api/
+        run: ruff check api/ etl/ tools/
 
       - uses: actions/setup-node@v4
         with:

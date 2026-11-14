@@ -12,7 +12,7 @@ set -e
 
 if [ -n "${DATABASE_URL:-}" ]; then
     echo "==> migrations"
-    python scripts/migrate.py
+    python tools/migrate.py
 else
     # Not a failure: db.enabled() guards every DB path and the app degrades to Overpass
     # for POI and to no-op for /bekendmakingen. Say so loudly, because the symptom

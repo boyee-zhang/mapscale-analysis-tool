@@ -6,7 +6,7 @@ measured alternative cost 357,877 tokens to reach the same 8 answers.
 """
 import pytest
 
-from scripts.fanout import (DEFAULT_BUDGET_TOKENS, FIXED_COST_TOKENS, dedupe,
+from tools.fanout import (DEFAULT_BUDGET_TOKENS, FIXED_COST_TOKENS, dedupe,
                             estimate_tokens, plan)
 
 

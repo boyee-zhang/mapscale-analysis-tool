@@ -1,1 +1,7 @@
 line-length = 120
+
+# etl/experiments/ is frozen: one-off measurement scripts kept for provenance, not
+# maintained. It holds 31 pre-existing errors and etl/experiments/judgeset_score.py is
+# inside the ledger's `judgeset` path facet, so touching it would move a digest that a
+# recorded verdict is anchored to.
+exclude = ["etl/experiments"]

@@ -6,7 +6,7 @@
 #   open http://localhost:8088
 #
 # This is NOT docker-compose.yml. That file is the local development stack: Postgres runs
-# in a container while the API and the frontend run on the host (scripts/dev.sh), with
+# in a container while the API and the frontend run on the host (tools/dev.sh), with
 # deliberately small Postgres parameters so bloat and buffer reads show up at 10-20M rows.
 # This one containerises the API and the frontend too, and keeps its own volumes. Both can
 # run side by side — different project name, different volumes, different ports.

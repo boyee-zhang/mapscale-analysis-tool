@@ -2,7 +2,7 @@
 
 WHY THE MODEL LIVES BESIDE THE API. Embedding a QUERY is one sequence; embedding the
 DOCUMENTS a query matches would be a few thousand, and that asymmetry is the entire reason
-document vectors are precomputed (`scripts/embed_bekendmaking.py`) while query vectors are
+document vectors are precomputed (`etl/derive/embeddings.py`) while query vectors are
 not. One forward pass is cheap enough to do in the request, and doing it in-process avoids a
 network hop and a second thing to deploy.
 
@@ -14,7 +14,7 @@ is nothing here" are different, and must not share a branch.
 
 THE PREFIXES ARE LOAD-BEARING. e5 is trained with asymmetric prefixes: documents are encoded
 as `passage: …` and queries as `query: …`. Mixing them produces no error at all and silently
-degrades every ranking, so the document side lives in `scripts/embed_bekendmaking.py` and the
+degrades every ranking, so the document side lives in `etl/derive/embeddings.py` and the
 query side here, with both named in the other's comments rather than retyped from memory.
 """
 from __future__ import annotations
@@ -56,9 +56,12 @@ def reason() -> str:
 def _load():
     """Load once, under a lock.
 
-    The lock is not ceremony: two concurrent first requests would otherwise each build a
-    ~440 MB model, and the second would win while the first's memory stayed allocated for
-    the length of the process.
+    The lock only became load-bearing when `encode()` moved to a worker thread (2026-11-14).
+    Before that, every caller ran on the single event-loop thread, so two requests could
+    never be inside this function at the same time and the lock never contended -- it
+    described a race that could not happen. Now two concurrent first requests really can
+    arrive on different threads, and without it each would build a ~440 MB model, the second
+    winning while the first's memory stayed allocated for the life of the process.
     """
     global _model, _load_error
     with _lock:
@@ -74,8 +77,33 @@ def _load():
             logger.error("query encoder failed to load", extra={"error": _load_error})
 
 
+def warm() -> bool:
+    """Load the model now, off the request path. Returns True if it is ready.
+
+    Called from the app lifespan. Loading inside the first request froze the whole worker
+    for ~10 s (measured 2026-11-14: 9.76 s load + 925 ms for the first forward pass), and
+    with `--workers 1` that is every in-flight request, `/health` included. uvicorn does not
+    accept connections until the lifespan yields, so paying it here turns a 10 s stall in
+    production traffic into 10 s of startup -- inside the deploy healthcheck's
+    `start_period: 40s`.
+
+    Never raises: `_load` records the failure in `_load_error` and `/search/notices` then
+    answers 503 with the reason, which is the existing contract for "no source".
+    """
+    if not available():
+        logger.info("query encoder not installed, skipping warmup", extra={"reason": reason()})
+        return False
+    _load()
+    return _model is not None
+
+
 def encode(query: str) -> list[float] | None:
-    """The query as a unit vector, or None if the encoder is unavailable."""
+    """The query as a unit vector, or None if the encoder is unavailable.
+
+    BLOCKING, and deliberately left so: it is a torch forward pass, 34-74 ms steady state
+    on this machine. Call it with `asyncio.to_thread` from anything async -- never directly
+    on the event loop, where it stalls every other request for that long.
+    """
     if _model is None:
         _load()
     if _model is None:

@@ -1,5 +1,5 @@
 # FastAPI backend. Build context is the repository root, not deploy/ — the image needs
-# requirements.txt, api/, migrations/ and scripts/migrate.py, which live there.
+# requirements.txt, api/, migrations/ and tools/migrate.py, which live there.
 #
 #   docker compose -f docker-compose.deploy.yml build api
 FROM python:3.12-slim
@@ -20,11 +20,12 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# migrate.py resolves ROOT as its own parent's parent, so scripts/ and migrations/ must
-# keep this relative layout.
+# migrate.py resolves ROOT as its own parent's parent, so tools/ and migrations/ must
+# keep this relative layout. It is the one file under tools/ this image needs, and it
+# imports nothing from etl/ precisely so that staying a single COPY is possible.
 COPY api/ ./api/
 COPY migrations/ ./migrations/
-COPY scripts/migrate.py ./scripts/migrate.py
+COPY tools/migrate.py ./tools/migrate.py
 COPY deploy/api-entrypoint.sh /usr/local/bin/api-entrypoint.sh
 RUN chmod +x /usr/local/bin/api-entrypoint.sh
 

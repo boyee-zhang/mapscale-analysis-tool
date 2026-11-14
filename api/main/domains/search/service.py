@@ -21,6 +21,7 @@ downstream without erroring.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import date
 
@@ -50,7 +51,10 @@ MAX_LIMIT = 50
 #     音乐节                                     top 0.782    <- the right event still ranks FIRST
 #
 # The ranking is correct in all three (the judged set is entirely Chinese and the embedding still
-# wins there by +0.194 nDCG). What shifts is the absolute scale: multilingual-e5 places a
+# wins there -- 25 of 40 queries to 13, positive under every scoring convention tested; the
+# +0.194 nDCG this comment used to cite was destroyed 2026-11-13 and the surviving form is
+# direction plus "at least roughly +0.10, magnitude unresolved", see semsearch-judgeset.md).
+# What shifts is the absolute scale: multilingual-e5 places a
 # cross-language pair further apart than a same-language pair even when both are about the same
 # thing. So a single global number quietly makes the floor strictest for whoever is not writing
 # Dutch, and this project's user types Chinese.
@@ -96,7 +100,7 @@ MAX_LIMIT = 50
 # central Amsterdam sits at a margin of 0.038 with a correct Hofjesconcert on top. The weak tail
 # is what covers this, which is a large part of why nothing is dropped.
 #
-# Re-measure with scripts/experiments/judgeset_score.py if the model or the prefixes change.
+# Re-measure with etl/experiments/judgeset_score.py if the model or the prefixes change.
 RELEVANCE_MARGIN = 0.050
 
 # THE BASELINE IS THE POPULATION THAT WAS SEARCHED, and the two modes therefore need two
@@ -155,16 +159,26 @@ async def background_similarity(conn, sql: str, args) -> float | None:
 # The vector is passed as a parameter, never interpolated: it is 768 floats and the planner
 # caches one query text per shape. `plan_cache_mode=force_custom_plan` (set in db.py, and
 # load-bearing for the spatial parameter) keeps that from becoming a generic plan.
-# RANK FIRST, THEN DECORATE. The ordering of these two steps is worth a paragraph because
-# getting it wrong cost 4.5 s a query and the EXPLAIN named the culprit exactly.
+# RANK FIRST, THEN DECORATE. The ranking touches only `bekendmaking_embedding` and the cheap
+# filter columns and takes its LIMIT; the body/noise joins run against the rows left.
 #
-# `bekendmaking_activity` is a VIEW: `activity_text` is reassembled by six regexes over
-# `body_text` every time a row is read. Joining it alongside the ranking meant running those
-# regexes over every candidate — 45,000 bodies — to produce a snippet for the twenty rows that
-# survive. The vector sort itself measured 787 ms; the view was the rest.
+# CORRECTED 2026-11-14, AND THE CORRECTION IS THE USEFUL PART. This block used to say that the
+# shape below confined `bekendmaking_activity` to the surviving rows. It did not. The planner
+# put that view on the PROBE side of a hash built from the already-LIMITed ranked rows, so all
+# 94,183 view rows were projected to decorate 20, and the query took 1,778-2,040 ms warm while
+# the HNSW scan inside it was 0.76-1.13 ms. A CTE plus a LIMIT expresses an intention; it does
+# not constrain the planner. The numbers this block carried were stale too: "45,000 bodies" and
+# "the vector sort itself measured 787 ms".
 #
-# So the ranking touches only `bekendmaking_embedding` and the cheap filter columns, takes its
-# LIMIT, and the expensive view and the body/noise joins run against the handful of rows left.
+# Fixed upstream instead of here, in 0027: `activity_text` is now a stored column rather than
+# six regexes evaluated per read, so the join is a lookup and the plan no longer matters. Same
+# query: 1.9-5.7 ms, and the view's output is byte-identical over all 94,183 rows (md5
+# c221dcb413bbc2f90d601eefa53246be before and after). Ledger claim 17, falsifier verdict 14;
+# evidence in docs/pg-notes/raw/notices-{ranking-explain,view-decomposition,ranking-falsify}.txt.
+#
+# The lesson is not about SQL. The intent above was correct and lived in a comment, so nothing
+# noticed when the planner stopped honouring it. `etl/verify/plans.py` now asserts it:
+# the plan must not seq-scan `bekendmaking_body`, and 20 rows must not cost 50,000 buffers.
 _RANK_CORE = """
 ranked AS (
     SELECT e.identifier, e.embedding <=> $1::vector AS distance
@@ -312,7 +326,10 @@ async def search(
         # unavailable encoder and a query that matches nothing look identical otherwise.
         return {**empty, "shape": "unavailable", "reason": encoder.reason()}
 
-    vec = encoder.encode(q)
+    # to_thread, not a direct call: encode() is a torch forward pass, 34-74 ms steady
+    # state, and on the event loop that is 34-74 ms of head-of-line blocking for every
+    # other request in flight -- /health included, since the deploy runs --workers 1.
+    vec = await asyncio.to_thread(encoder.encode, q)
     if vec is None:
         return {**empty, "shape": "unavailable", "reason": encoder.reason()}
     qvec = "[" + ",".join(f"{x:.6f}" for x in vec) + "]"

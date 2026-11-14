@@ -12,7 +12,7 @@ from datetime import date, time
 
 import pytest
 
-from scripts.import_bekendmaking_body import parse_body
+from etl.ingest.bekendmaking_body import parse_body
 
 HEAD = "<officiele-publicatie><metadata><meta name='x' content='y'/></metadata>"
 

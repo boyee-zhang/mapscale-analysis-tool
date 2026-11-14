@@ -1,0 +1,175 @@
+Falsifier pass on ledger claim 23 (0029/0030 close the three defects verdict 15 found).
+Run 2026-11-14 on mapscale-pg, 94,183 publications, HEAD=a7c7b78, tree clean apart from
+docs/pg-notes/raw/. pg_stat_activity non-idle backends before the run:
+0
+
+================================================================================
+(0) RE-RUN of the caller's own commands. verify_activity.py, verbatim tail:
+  ok   the_activity_digest_moves_with_the_rule_version            14c1a60b8566 -> c884b1f56add on a rule_version change alone
+  ok   the_activity_digest_does_not_collide_on_empty_vs_quoted_empty_src {} -> 9b1fb27e15b6, {""} -> fd06ae9810ee, distinct
+
+ALL PASS
+
+ pubs  | bodies |  act  | pending |  fts  
+-------+--------+-------+---------+-------
+ 94183 |  94183 | 94183 |       0 | 94183
+(1 row)
+
+================================================================================
+(1) THE DERIVATION HAS TWO INPUTS AND ONLY ONE IS MONITORED.
+    bekendmaking_activity_derive reads bb.body_text AND b.title. The pending view
+    compares body_etl_run and rule_version; nothing compares the title.
+    command: .venv/bin/python -I scratchpad/falsify23.py   (every case rolled back)
+
+### title_change_stales_text_and_nothing_sees_it
+  identifier                 bgr-2026-1093
+  stored activity_text       'Toestemming voor het plaatsen van bouwhekken rondom de Dam t'
+  derive view now yields     'EEN HEEL ANDERE TITEL | Bij besluit van 15-5-2026, verzonden'
+  read view still serves     'Toestemming voor het plaatsen van bouwhekken rondom de Dam t'
+  bekendmaking_activity_pending rows: 0
+  corpus digest  c9849a28c6e31295 -> c9849a28c6e31295  (activity_digest c6f91bbd52d8 -> c6f91bbd52d8, ids_md5 eba7a62cee5d -> eba7a62cee5d)
+  -> hole reproduced: True
+
+### body_text_change_without_run_bump_is_invisible
+  identifier gmb-2026-104999
+  stored 'maatwerkvoorschrift voor het uitvoeren van de werk'  vs fresh 'iets totaal anders'
+  pending rows: 0;  corpus digest c9849a28c6e31295 -> c9849a28c6e31295
+  -> hole reproduced: True
+
+### a_derived_row_is_absent_from_the_fts_index
+  activity_derived=True text='Objectvergunning | het plaatsen van een bouwkraan'
+  pending rows: 0   rows in bekendmaking_search_text for it: 0   FTS hits: 0
+  -> hole reproduced: True
+
+### derive_zero_rows_vs_nothing_to_do
+  derive(new)=1  derive(again)=0  derive(identifier not in bekendmaking)=0
+  activity row exists afterwards: 1
+  -> hole reproduced: True
+
+    exposure, measured:
+ rows_derived_from_title_only | total 
+------------------------------+-------
+                        32329 | 94183
+(1 row)
+
+ rows_already_updated_by_a_later_sru_run 
+-----------------------------------------
+                                     108
+(1 row)
+
+    and scripts/import_bekendmaking.py's upsert is the writer that takes that branch:
+ON CONFLICT (identifier) DO UPDATE SET
+    title = EXCLUDED.title, doc_type = EXCLUDED.doc_type,
+    published_at = EXCLUDED.published_at, authority = EXCLUDED.authority,
+
+================================================================================
+(2) THE 'SAME TRANSACTION' CLAUSE IS ASSERTED BY PROXY ONLY. MUTATION TEST:
+    move the derive call OUT of the chunk transaction (one dedent, the exact defect
+    verdict 15 named) and re-run every command the claim cites.
+    --- the mutation ---
+index 414527b..a513c41 100644
+--- a/scripts/import_bekendmaking_body.py
++++ b/scripts/import_bekendmaking_body.py
+@@ -355,3 +355,3 @@ async def main() -> int:
+                                 upd += 1
+-                        derived += await derive(conn, chunk, rule)
++                    derived += await derive(conn, chunk, rule)   # MUTANT: outside the transaction
+                     print(f"  {min(i + 200, len(idents))}/{len(idents)}  {stats}", flush=True)
+    --- the suite, against the mutant ---
+All checks passed!
+
+ALL PASS
+
+ALL PASS
+93 passed, 1 warning in 0.59s
+
+ALL PASS
+    (deleting the call outright is caught only by ruff F401/F841 on a file CI does
+     not lint -- .github/workflows/ci.yml runs 'ruff check api/' only.)
+    restored:
+?? docs/pg-notes/raw/activity-fixes-falsify.txt
+?? docs/pg-notes/raw/activity-fixes-verify.txt
+
+================================================================================
+(3) THE PROPERTY ITSELF IS TRUE TODAY, measured at the REAL call site: the
+    importer's own main() run against a fresh database (0001..0030) with only the
+    network stubbed. commands:
+      docker exec mapscale-pg psql -U mapscale -d postgres -c 'CREATE DATABASE falsify23'
+      DATABASE_URL=...falsify23 .venv/bin/python scripts/migrate.py
+      DATABASE_URL=...falsify23 .venv/bin/python -I scratchpad/run_importer.py run --family corpus
+DROP DATABASE
+CREATE DATABASE
+applied 30 migration(s)
+[before] pubs=3 bodies=0 act=0 pending=3 fts_rows=0
+   etl_run 1 seed                         running   x
+3 publication(s) to fetch (family=corpus, retry=False, refresh=False)
+etl_run 2 claimed
+  3/3  {'ok': 3}
+3 inserted, 0 updated, 3 activity row(s) derived, 0 still pending
+
+INSERT 3, UPDATE 0, unchanged 0
+statuses: {'ok': 3}
+[after] pubs=3 bodies=3 act=3 pending=0 fts_rows=0
+   etl_run 1 seed                         running   x
+   etl_run 2 bekendmaking_body:corpus     succeeded {'ok': 3} derived=3 pending_after=0
+
+    and a failure inside the chunk rolls BOTH back. The derive view is renamed away,
+    two more publications are queued, the real importer runs:
+UPDATE 1
+ALTER VIEW
+UPDATE 1
+  File "asyncpg/protocol/protocol.pyx", line 165, in prepare
+asyncpg.exceptions.UndefinedTableError: relation "bekendmaking_activity_derive" does not exist
+[after-failure] pubs=5 bodies=3 act=3 pending=2 fts_rows=0
+   etl_run 1 seed                         succeeded x
+   etl_run 2 bekendmaking_body:corpus     succeeded {'ok': 3} derived=3 pending_after=0
+   etl_run 3 seed                         succeeded x
+   etl_run 4 bekendmaking_body:corpus     failed    UndefinedTableError: relation "bekendmaking_activity_derive" does not exist
+    bodies stayed at 3 -- the two fetched bodies were NOT committed, etl_run is 'failed',
+    and the two publications are listed as pending. But note fts_rows=0 throughout:
+    nothing in the importer REFRESHes bekendmaking_search_text, so a committed,
+    derived row is still absent from the FTS index 0027's comment was worried about.
+
+================================================================================
+(4) THE activity_derive FACET (0028) DOES NOT DIGEST THE DERIVATION'S CODE.
+    command: digest_of(probe_paths(the four declared paths)), before and after
+    appending one comment line to scripts/activity_rules.py
+  before: 4a3f89c3a2e9d421cca6e4ac8b04968d2b943982c2cee9c564c7347256a744a2
+    62acc2f91ef4220f migrations/0015_bekendmaking_activity.sql
+    babf92c3740fb749 migrations/0027_activity_text_derived.sql
+    0d66bb8960e2a72f api/main/domains/search/service.py
+    89820e5cec2c3f71 scripts/derive_activity.py
+  after : 4a3f89c3a2e9d421cca6e4ac8b04968d2b943982c2cee9c564c7347256a744a2
+  (scripts/activity_rules.py itself now hashes 20929eb258dab928 - it is not in the set)
+    Not in the path set: scripts/activity_rules.py (the derive SQL, the PENDING SQL and
+    the EXTRACTORS registry), scripts/import_bekendmaking_body.py (the primary derive
+    call site), migrations/0029, migrations/0030. Two of the four declared paths are
+    applied migration files, whose bytes are forward-only and which .claude/hooks/guard.py
+    DENIES editing -- their digests cannot move. 0027's bekendmaking_activity_derive is a
+    DATABASE object; a future 0031 CREATE OR REPLACE changes the derivation with this
+    facet byte-identical. 0027 also DROPped 0015's bekendmaking_activity view outright.
+
+================================================================================
+(5) COST, stated: a rule bump with no data change expires every corpus-anchored verdict.
+rule bump 1 -> 2, NOT ONE DATA ROW CHANGED:
+  corpus digest          c9849a28c6e31295 -> 75b77d69d400b8f6
+  activity_digest        c6f91bbd52d8 -> c6f91bbd52d8
+  activity_pending_count 0 -> 94,183
+  bekendmaking_ids_md5   eba7a62cee5d -> eba7a62cee5d
+
+keys probe_corpus reports: ['activity_count', 'activity_digest', 'activity_pending_count', 'bekendmaking_ids_md5', 'bekendmaking_locatie_rows', 'bekendmaking_rows']
+
+================================================================================
+(6) THE 41x IS RE-MEASURED AND HOLDS (not part of claim 23; the caller asked).
+    command: .venv/bin/python -I scratchpad/time_notices.py -- the SQL api/main/domains/
+    search/service.py actually builds, captured the way verify_plans.py captures it,
+    cold discarded, 24 warm runs. 0 non-idle backends before the run.
+corpus     rows= 20 cold=   99.42  warm n=24: min=   2.74 med=   3.75 p95=   6.16 max=   7.72
+isochrone  rows= 20 cold=   68.48  warm n=24: min=  42.84 med=  44.20 p95=  50.27 max=  71.54
+    verdict 15 recorded corpus 1.9-5.7 ms and isochrone 43.7-67.6 ms (med 46.0).
+    Reproduced. Carry 41x.
+
+cleanup: DROP DATABASE falsify23
+DROP DATABASE
+?? docs/pg-notes/raw/activity-fixes-falsify.txt
+?? docs/pg-notes/raw/activity-fixes-verify.txt

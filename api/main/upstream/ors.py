@@ -1,7 +1,7 @@
 import httpx
 
 from .. import http_client
-from ..config import ORS_API_KEY, ORS_BASE_URL, MODE_MAPPING
+from ..config import ORS_API_KEY, ORS_BASE_URL
 from ..errors import ExternalServiceError
 from ..logger import get_logger
 from ..metrics import track_upstream
@@ -9,12 +9,15 @@ from ..metrics import track_upstream
 logger = get_logger("client.ors")
 
 
-async def fetch_isochrone(lng: float, lat: float, minutes: int, profile: str) -> dict:
-    ors_profile = MODE_MAPPING.get(profile, "foot-walking")
-    url = f"{ORS_BASE_URL}/isochrones/{ors_profile}"
-    body = {"locations": [[lng, lat]], "range": [minutes * 60], "range_type": "time"}
+async def fetch_isochrone(lng: float, lat: float, range_seconds: int, ors_profile: str) -> dict:
+    """POST one isochrone request. The caller has already resolved `ors_profile` and the range.
 
-    logger.info("→ isochrone", extra={"ors_profile": ors_profile, "lng": lng, "lat": lat, "minutes": minutes})
+    Transport only: `minutes`, and which ORS profile a mode maps to, are domain facts and live
+    in domains/geo/service.py. This module may not know what a mode is.
+    """
+    url = f"{ORS_BASE_URL}/isochrones/{ors_profile}"
+    body = {"locations": [[lng, lat]], "range": [range_seconds], "range_type": "time"}
+
     try:
         async with track_upstream("ors"):
             resp = await http_client.get().post(
@@ -36,13 +39,12 @@ async def fetch_isochrone(lng: float, lat: float, minutes: int, profile: str) ->
 
 
 async def fetch_directions(
-    start_lng: float, start_lat: float, end_lng: float, end_lat: float, mode: str
+    start_lng: float, start_lat: float, end_lng: float, end_lat: float, ors_profile: str
 ) -> dict:
-    profile = MODE_MAPPING.get(mode, "foot-walking")
-    url = f"{ORS_BASE_URL}/directions/{profile}"
+    """One route request. `ors_profile` is already resolved by the caller -- see fetch_isochrone."""
+    url = f"{ORS_BASE_URL}/directions/{ors_profile}"
     params = {"api_key": ORS_API_KEY, "start": f"{start_lng},{start_lat}", "end": f"{end_lng},{end_lat}"}
 
-    logger.info("→ directions", extra={"profile": profile})
     try:
         async with track_upstream("ors"):
             resp = await http_client.get().get(url, params=params, timeout=15.0)

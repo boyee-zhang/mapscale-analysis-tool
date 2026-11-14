@@ -1,7 +1,7 @@
 # A judged relevance set for semantic search over `bekendmaking`
 
 Built 2026-11-05 against the live national table (94,183 publications, 294 municipalities, 2026).
-Harness `scripts/experiments/judgeset_pool.py` (pooling) and `judgeset_score.py` (metrics); data
+Harness `etl/experiments/judgeset_pool.py` (pooling) and `judgeset_score.py` (metrics); data
 in `judgeset-{raw,judge_sheet,judgments}.json` and `judgeset-vocab.txt`.
 
 ## Why this exists
@@ -145,11 +145,71 @@ Paired bootstrap on the 40 per-query nDCG@10 differences, 20,000 resamples:
 
 | comparison | mean | 95% CI | | per-query |
 |---|---|---|---|---|
-| `vec` − `fts_body` | **+0.194** | **[+0.024, +0.361]** | **significant** | 25 W / 13 L / 2 T |
+| `vec` − `fts_body` | +0.194 | [+0.024, +0.361] | **DESTROYED — see below** | 25 W / 13 L / 2 T |
 | `vec` − `fts_title` | **+0.232** | **[+0.057, +0.397]** | **significant** | 24 W / 10 L / 6 T |
 | `hybrid` − `fts_body` | +0.131 | [+0.041, +0.221] | significant | 25 W / 13 L / 2 T |
 | `hybrid` − `vec` | −0.063 | [−0.150, +0.025] | inside noise | 15 W / 20 L / 5 T |
 | `fts_body` − `fts_title` | +0.037 | [−0.044, +0.121] | inside noise | 18 W / 14 L / 8 T |
+
+### Corrected 2026-11-13: the headline number does not survive, the direction does
+
+**`vec − fts_body = +0.194, significant` was destroyed** by `falsifier` (ledger claim 4,
+verdict 12, anchored to `corpus:35e0c80686` + `code:cb457d4dbf`). Probes and raw output:
+`docs/pg-notes/scripts/judgeset_falsify.py` and `raw/judgeset-falsify-run1.txt`
+(sha256 `e82663393afa0da7…`, re-runs bit-identical). Replace the wording above with this:
+
+> On this frozen set, `vec` outranks `fts_body` on 25 of 40 queries and loses on 13, and the
+> mean nDCG@10 difference is positive under every scoring convention tested (+0.108 to +0.369),
+> robust to dropping any single query (0/40 jackknife flips). **`vec` beats `fts_body` in
+> direction, by at least roughly +0.10 nDCG@10, magnitude unresolved.** Do not quote +0.194 or
+> call the difference significant without naming the tie-resolution and duplicate-text
+> conventions.
+
+The +0.194 is not a property of the arms. It is the value of one convention that was never
+named — scoring document ids in whatever order the SQL returned exact-score ties — and the
+significance fails three independent checks:
+
+| check | effect | 95% CI | |
+|---|---|---|---|
+| as published | +0.194 | [+0.024, +0.361] | significant at nominal 0.05 |
+| Holm across the five comparisons **this script itself prints** | +0.194 | — | p=0.0295 vs threshold 0.0167 — **fails** |
+| byte-identical stored body text counted once | +0.108 | [−0.060, +0.278] | p=0.22, **inside noise** |
+| each arm's exact-score ties resolved in its own favour | +0.137 | [−0.033, +0.310] | **inside noise** |
+
+Two mechanisms, both on axes nobody controlled:
+
+- **`ts_rank_cd` barely ranks.** It emits a median of **2 distinct scores across `fts_body`'s
+  whole top 10** — 97% of its judged slots sit in an exact-score tie, and the largest tie group
+  *is* the entire top 10. 41% of the tie groups touching that top 10 mix grades (mean spread
+  1.59). `vec`'s tie groups mix grades **0%** of the time, because identical cosine means
+  identical text means identical grade. So `vec` is tie-insensitive and `fts_body` is not, and
+  nDCG@10 is reading an arbitrary SQL tie order as `fts_body`'s ranking skill. The quantity
+  spans +0.137 to +0.369 across equally faithful realisations: a nuisance source of width 0.232
+  against a reported CI width of 0.337, which the interval does not contain. The direction of
+  the shipped order is worth recording — it is *luckier* than all 200 random re-breaks
+  (+0.194 against +0.280), so the published figure is **conservative** against tie-break
+  randomness and **optimistic** against tie-break skill. It moves set membership too, not only
+  order: under random re-breaks `fts_body`'s P@10 is 0.393 [0.372, 0.415] against the 0.560 in
+  the table above.
+- **The vector arm repeats itself.** 108 of `vec`'s 400 top-10 slots repeat a stored body text
+  already on its own page, 51 of them graded `2`, against 24 (6 at grade `2`) for `fts_body` —
+  a 4.5x asymmetry. Counting a repeated text once, with the ideal DCG collapsed the same way
+  and **no unjudged document entering any list**, leaves +0.108 with the interval covering zero.
+  Stated against the objection: those are distinct publications at distinct addresses whose
+  descriptions happen to be byte-identical, so dedup is not self-evidently the *right* metric.
+  The point is that significance depends on a convention that was never named.
+
+What came up clean, so the next reader knows where it has already been looked: pool integrity
+(judge sheet, judgments and the depth-10 four-arm union are the same set for all 40 queries;
+0 unjudged documents in any top-10 — the scorer's own assert is real), blinding (candidate keys
+carry no arm, rank or score), no arm returning an id twice, and the drop-one-query jackknife.
+
+**Still untested, and it is the threat this note already names.** There is one grade per
+(query, document) and no second rater, so there is no inter-annotator agreement to compute and
+the "I built the systems and I am the judge" worry stays open. The specific untested worry is
+instrument self-calibration: the judge is grading cross-lingual semantic relatedness while the
+arm under test is `multilingual-e5-base`. Closing it needs a second blind pass over a
+stratified sample and a Cohen's kappa.
 
 ### Three readings, in order of how much they change
 
@@ -160,11 +220,25 @@ is not the source text and not the applicant's description — it is the ranking
 the hypothesis `semsearch-ab.md` left open ("embedding fixes ranking — substantially
 strengthened, not confirmed"), now measured on a pool that is not biased against it.
 
-**2. The significance is real and the +0.194 is probably too big.** Stated plainly because it is
-easy to quote the number and drop this: with the measured sd of paired differences (0.543), 40
+> **Corrected 2026-11-13.** The last step does not follow. `ts_rank_cd` gives `fts_body` a
+> median of 2 distinct scores across its top 10, so there is almost no ranking function there
+> to measure — "it is the ranking function" attributes to `fts_body`'s ranking a gap that is
+> substantially an arbitrary tie order. The elimination of the source text as the explanation
+> (+0.037, interval crossing zero) is unaffected and still holds.
+
+**2. ~~The significance is real~~ and the +0.194 is probably too big.** The second half of
+this reading survived and the first half did not; see the correction above. Stated plainly
+because it is easy to quote the number and drop this: with the measured sd of paired differences (0.543), 40
 queries have 80% power only for an effect of **0.241**, and the observed effect is smaller than
 that. A significant result from an underpowered test is one that had to land on the lucky side of
-its own noise, so the point estimate is inflated even where the sign is sound. What is well
+its own noise, so the point estimate is inflated even where the sign is sound. Quantified
+2026-11-13: the smallest effect this design could ever have declared significant is
+`t.975 * se = 0.174`, and the observed +0.194 is **112% of that floor** — a point estimate
+12% above the detectability floor. Carry the direction, not the magnitude. (The apparent
+tension between "significant" and an MDE of 0.241 is not a contradiction: the MDE is a
+design-time quantity, the effect this n would detect 80% of the time, while p=0.0295 is
+sample-specific. A true effect below the MDE is detected less than 80% of the time, and this
+was one of those times.) What is well
 supported is the **direction** (25 wins to 13) and that the true effect is above zero. Resolving
 the magnitude to ±0.05 would need about **930 queries** — the same wall the factorial experiment
 hit, one metric further along.

@@ -37,7 +37,7 @@ product shape that uses ranking directly.
    `vector(768)` column and an HNSW index in a numbered migration. 190 MB of vectors against a
    deliberately small `shared_buffers=128MB` is the regime where HNSW behaviour is *visible*
    rather than hidden by cache — that is a feature here, not a problem to tune away.
-2. **Backfill offline, reusing the cache.** `scripts/score_noise_embedding.py` already embeds
+2. **Backfill offline, reusing the cache.** `etl/derive/noise_score.py` already embeds
    the corpus into `data/noise_emb_cache.npz` (gitignored, 185 MB, `ids` + a `(61853, 768)`
    float32 array). Extend it for the rows the national import added; do not re-embed from
    scratch. Throwaway venv:

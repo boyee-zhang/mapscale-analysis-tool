@@ -1,6 +1,6 @@
 # FTS baseline against the noise ground truth
 
-Run 1, 2026-11-03. Harness `scripts/experiments/noise_retrieval_bench.py`, raw output in
+Run 1, 2026-11-03. Harness `etl/experiments/noise_retrieval_bench.py`, raw output in
 `raw/noise-retrieval-fts-run1.txt`. The answer key is the 954-row hand-labelled frame built in
 `noise-groundtruth.md`; nothing here was measured against rules or against pooled judgements.
 
@@ -331,7 +331,7 @@ is unaffected, and the Osdorp pair is labelled per identifier rather than per te
   finding: it filtered the plan text and never noticed the planner had answered `count(*)` from
   an **Index Only Scan**, so the "3.2x under-report" it appeared to show was a different node.
   Cause still unknown. No claim above depends on it; the latency figures are wall clock.
-- **Fixed while building the third block:** `scripts/load_noise_groundtruth.py` read
+- **Fixed while building the third block:** `etl/ingest/noise_groundtruth.py` read
   `os.getenv("DATABASE_URL")` directly and never loaded `.env`, so it ran only in a shell that
   happened to export it — unlike every other script here, which reaches the DSN through
   `api.main.db`. It now does the same. The CSVs round-trip: export, load, 0 unlabelled.

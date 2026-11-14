@@ -77,7 +77,7 @@ services:
     ports:
       - "8080:8082"
     volumes:
-      # The same Geofabrik extract scripts/import_poi.py reads. One download, two consumers:
+      # The same Geofabrik extract etl/ingest/poi.py reads. One download, two consumers:
       # import_poi.py takes the POI-tagged nodes/ways, ORS takes highway=* and builds the
       # contraction hierarchies. Read-only so a container cannot corrupt the POI source.
       - ./data:/home/ors/files:ro

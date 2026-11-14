@@ -168,7 +168,7 @@ amd64 → arm64 启动会直接报 collation 版本不匹配而拒绝启动。
 
 ### 0.2 Migration runner
 
-`scripts/migrate.py`,约 40 行。规则:
+`tools/migrate.py`,约 40 行。规则:
 
 - migration 文件放 `migrations/`,命名 `NNNN_description.sql`
 - 文件名含 `.noxact.sql` 的**不包在事务里**(给 `CREATE INDEX CONCURRENTLY` 用)
@@ -229,7 +229,7 @@ CREATE INDEX municipality_name_lower ON municipality (lower(name));
 标记,避免兜底值被当成精确坐标永久复用。
 
 **`api/main/housing/boundaries.py`**
-改为查 `municipality` 表。新增 `scripts/seed_municipalities.py`,从 PDOK CBS WFS 拉一次全量
+改为查 `municipality` 表。新增 `etl/ingest/municipalities.py`,从 PDOK CBS WFS 拉一次全量
 写入(约 340 个市)。choropleth 的计数逻辑**本阶段不动**,仍在 Python 里做——
 把它改成 SQL 空间 join 需要 listings 已在库中,属于阶段 1。
 
@@ -243,8 +243,8 @@ DATABASE_URL=postgresql://mapscale:mapscale@localhost:5432/mapscale
 
 ### 0.7 验收标准
 
-1. `docker-compose up -d` 后 `python scripts/migrate.py` 幂等——连跑两次第二次无操作。
-2. `python scripts/seed_municipalities.py` 后 `municipality` 表约 340 行,且
+1. `docker-compose up -d` 后 `python tools/migrate.py` 幂等——连跑两次第二次无操作。
+2. `python -m etl.ingest.municipalities` 后 `municipality` 表约 340 行,且
    `EXPLAIN` 一个 `ST_Contains` 查询能看到 `Index Scan using municipality_geom_gist`。
 3. 重启 uvicorn 后,之前地理编码过的地址**不再**产生 PDOK 请求(看结构化日志确认)。
 4. `/housing/choropleth` 的响应时间下降,且日志中不再出现 PDOK WFS 调用。
@@ -473,7 +473,7 @@ CREATE INDEX poi_tags_gin ON poi USING GIN (tags jsonb_path_ops);
 `jsonb_path_ops` 体积约为默认的一半,但只支持 `@>`,**不能**回答 `tags ? 'key'`
 ——存在性检查必须写成 `@> '{"key": ...}'`,否则要换 opclass。
 
-### 1.3 导入(`scripts/import_poi.py`)
+### 1.3 导入(`etl/ingest/poi.py`)
 
 不用 `osm2pgsql`——它为渲染设计,会建一堆本项目不需要的表。
 也不用 `osmium` 命令行(要 `brew install osmium-tool`,多一个系统级前置),
@@ -675,7 +675,7 @@ GiST 的 access method 没有声明 `amsearcharray`,所以多值谓词不可能�
 
 > 勾选状态更新至 2026-10-18。**8/9 达成**,唯一真缺的是第 2 条的后半(全国 import)。
 
-1. ✅ `python scripts/migrate.py` 从零应用 0001..0004 成功
+1. ✅ `python tools/migrate.py` 从零应用 0001..0004 成功
 2. 🟡 导入在**单个省**上验通(Noord-Holland,82259 行,20 s);**全国 import 仍未跑**
 3. ✅ 已做,但**结论与原稿预期相反,原稿的"超集"措辞是错的**:
    对旧代码能表达的那个查询(legacy 的 supermarket/convenience/gym,800 m 圆),

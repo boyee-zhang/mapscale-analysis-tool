@@ -1,4 +1,4 @@
-from api.main.routers.search import _build_es_query, _pdok_relevant
+from api.main.domains.address.service import _build_es_query, _pdok_relevant
 
 
 class TestBuildEsQuery:

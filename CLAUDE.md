@@ -967,6 +967,57 @@ distribution) and the `Agent` cases in `.claude/hooks/test_guard.py`.
   claim 17 says "the ~2.0 s is X" and there is no ~2.0 s any more, so stale is the correct
   reading. **Owner: unassigned** — re-validating claim 17 means re-measuring something that no
   longer exists, so the likelier disposition is to supersede it with claim 18's successor.
+- **The derive has two inputs and only one is monitored — `falsifier` DESTROYED claim 23 over it
+  (verdict 16).** `bekendmaking_activity_derive` reads `bb.body_text` **and `b.title`**, and
+  **32,329 of 94,183 rows (34.3%) derive their `activity_text` from the title alone**
+  (`activity_src = '{}'`). Only the body is watched: the pending view compares `body_etl_run` and
+  `rule_version` and never mentions `title`. `scripts/import_bekendmaking.py` upserts
+  `ON CONFLICT … SET title = EXCLUDED.title`, and **108 rows have already taken that branch**. So a
+  title change leaves all three new surfaces reporting clean at once: `bekendmaking_activity_pending`
+  = 0, the importer's `pending_after=0` success signal intact, and the `corpus` digest byte-identical
+  (`c9849a28c6e31295 -> c9849a28c6e31295`) — the same premise-destruction 0027's entry above
+  records, narrowed from "the whole table" to "one of two inputs", not closed. The fix is a signal
+  for `bekendmaking`'s own content (store and compare `last_changed_run` the way `body_etl_run` is
+  compared): a new migration plus `activity_rules.PENDING` and the pending view. **Owner:
+  unassigned.** Evidence: `docs/pg-notes/raw/activity-fixes-falsify.txt`,
+  `docs/pg-notes/scripts/activity_fixes_falsify.py`.
+- **The in-transaction derive is true but asserted by nothing.** Moving the `derive()` call one
+  dedent **outside** `async with conn.transaction():` in `scripts/import_bekendmaking_body.py`
+  reintroduces exactly the defect verdict 15 named, and **all six cited commands stay green** —
+  ruff, `verify_activity.py`, `verify_ledger.py`, `pytest tests/unit`, `test_guard.py`. The 15 cases
+  call `scripts.activity_rules.derive` directly, so they test `derive`, not the call site; *deleting*
+  the call is caught only by ruff F401/F841 on that file, and `ci.yml` runs `ruff check api/` only.
+  The property does hold today — a real `import_bekendmaking_body.main()` against a fresh 0001..0030
+  database gives `pubs=3 bodies=3 act=3 pending=0`, and with the derive view renamed away the two
+  fetched bodies are **not** committed and the `etl_run` reads `failed`. **Owner: unassigned.**
+- **The importer never `REFRESH`es `bekendmaking_search_text`**, so a committed derived row is absent
+  from the FTS index (`fts_rows=0` after a 3-body import on a fresh database) while
+  `pending_after=0` reports success. 0027 backfilled in-migration precisely to avoid that window;
+  its second half is still open for every row the importer stores. Bounded: no request path reads
+  that matview — the only readers are `scripts/experiments/judgeset_pool.py` and the two refreshers —
+  so this hits the FTS/judgeset experiments, not `/search/notices`. **Owner: unassigned.**
+- **The `activity_derive` path facet (0028) does not digest the derivation.** It lists 0015, 0027,
+  `service.py` and `derive_activity.py`, and omits `scripts/activity_rules.py` — which now holds the
+  derive SQL, the `PENDING` SQL and `EXTRACTORS` — plus `import_bekendmaking_body.py`, 0029 and 0030.
+  Appending a line to `activity_rules.py` leaves the digest at `4a3f89c3a2e9d421`, unchanged. Two of
+  its four paths are applied migrations, which are forward-only and guard-denied, so those digests
+  can **never** move; and 0027 dropped 0015's view, so that entry anchors a file describing an object
+  that no longer exists. The derivation's real definition is a database object, which no path facet
+  can see. **`falsifier` reported "no verdict references it, so the cost is prospective" and that is
+  wrong** — verdict 15 is anchored to it (`98c3b8c57f01`, now reading
+  `98c3b8c57f01 -> 4a3f89c3a2e9`), so one verdict already rests on a path set that cannot see the
+  derivation. It expired here only because `derive_activity.py`, which *is* in the set, happened to
+  change too. Fixing it is an INSERT into `world_facet`, not an edit to 0028. **Owner: unassigned.**
+- **`''` still means two things to three of the four readers of `bekendmaking_activity`.** 0029 added
+  `activity_derived` and only `scripts/embed_bekendmaking.py` tests it;
+  `api/main/domains/search/service.py`, `scripts/score_noise_embedding.py` and
+  `scripts/experiments/noise_{embedding,retrieval}_bench.py` join the view with no such test.
+  **Owner: unassigned.**
+- **Bumping `activity_rule` with zero data change moves the `corpus` digest**
+  (`c9849a28c6e31295 -> 75b77d69d400b8f6`, via `activity_pending_count 0 -> 94,183`;
+  `activity_digest` unchanged), so a rule bump expires every corpus-anchored verdict at once.
+  Defensible — derived state really is stale then — but `corpus` now conflates data with rule
+  configuration. Recorded, not a defect.
 - The blocking half of that endpoint is fixed: `encoder.encode()` is a torch forward pass and
   was called directly from `async def`, and the ~440 MB model was loaded inside the first
   request. Measured 2026-11-14: **9.76 s to load plus 925 ms for the first forward pass**, all

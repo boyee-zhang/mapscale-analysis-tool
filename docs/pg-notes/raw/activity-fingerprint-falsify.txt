@@ -1,0 +1,146 @@
+=== falsifier on ledger claim 27 (0031/0032) 2026-11-14T18:22:16Z  HEAD=0f77b8a  dirty=1 ===
+
+### machine state before measuring
+ other_active_backends 
+-----------------------
+                     0
+(1 row)
+
+          relname           | relpages | relallvisible |          last_vacuum          |         last_analyze          
+----------------------------+----------+---------------+-------------------------------+-------------------------------
+ bekendmaking_body          |    11776 |         11730 | 2026-11-14 16:56:03.524391+00 | 2026-11-14 16:56:20.399762+00
+ bekendmaking               |    14016 |         13980 | 2026-11-14 16:56:00.45382+00  | 2026-11-14 16:56:20.144689+00
+ bekendmaking_activity_text |     5649 |          5649 | 2026-11-14 16:56:03.855132+00 | 2026-11-14 16:56:04.127408+00
+(3 rows)
+
+bekendmaking=94183
+derive=94183
+source=94183
+pending=0
+text=94183
+source_fp_null=0
+
+### RE-RUN of their command: .venv/bin/python -I scripts/verify_activity.py
+  ok   imported_row_is_derived_in_the_same_transaction            text='Objectvergunning | het plaatsen van een bouwkr' src=['apv_regel', 'omschrijving']
+  ok   a_body_without_a_derive_is_visible                         derived=False text='' and listed as pending (1 row(s) pending)
+  ok   the_empty_string_sentinel_still_means_what_0015_meant      derived=True text='' src={} -- degraded, not missing
+  ok   deriving_twice_changes_nothing                             first=1 row changed, second=0
+  ok   a_refetched_body_is_rederived                              pending after refetch, re-derived to 'iets anders'
+  ok   a_publication_with_no_body_row_at_all_is_still_derivable   body_etl_run=NULL, text='Alleen een titel', no longer pending
+  ok   the_embedding_etl_excludes_underived_rows                  selected by the ETL: before=0 after=1; underived counter saw 1
+  ok   the_view_and_the_script_agree_after_a_rule_bump            v1: view=0=py=0 | bumped: view=94,184=py=94,184 | one re-derived: 94,183, agreeing throughout
+  ok   two_current_rules_cannot_commit                            rejected: duplicate key value violates unique constraint "activity_rule_one_curr
+  ok   an_unregistered_extractor_refuses_rather_than_guessing     RuntimeError naming the registry, as intended
+  ok   no_current_rule_refuses_rather_than_deriving_nothing       view reports 94,183 pending; Python raises instead of deriving at NULL
+  ok   emptying_the_derived_table_moves_the_corpus_probe          facet digest c9849a28c6 -> 93313b8124; activity_count 94,183 -> 0; pending 0 -> 94,183; source digests unchanged
+  ok   the_correctness_assertion_fails_when_the_derivation_is_gone derived 94,183 -> 0, and all 94,183 rows read '' with activity_derived=false (restored by rollback)
+  ok   the_activity_digest_moves_with_the_rule_version            14c1a60b8566 -> c884b1f56add on a rule_version change alone
+  ok   the_activity_digest_does_not_collide_on_empty_vs_quoted_empty_src {} -> 9b1fb27e15b6, {""} -> fd06ae9810ee, distinct
+  ok   every_input_the_derive_reads_is_in_the_source_fingerprint  derive reads 2 input(s) (bekendmaking.title, bekendmaking_body.body_text), all fingerprinted
+  ok   the_input_check_refuses_an_unhashed_input                  refused, naming the input: the derive reads bekendmaking.abstract but the source fingerprint does n…
+  ok   a_title_change_makes_the_row_pending                       why=source_changed, re-derived to 'EEN HEEL ANDERE TITEL', pending cleared
+  ok   the_pending_view_and_the_script_agree_on_a_title_change    both report 1 row(s), zz-verify-activity-0001 among them
+  ok   a_title_change_the_extraction_ignores_still_reports_pending pending, text unchanged ('Objectvergunning | het plaatsen van een bouwkraan'), fingerprint updated, converged
+  ok   a_refetch_with_identical_bytes_is_no_longer_pending        etl_run moved 272->273, bytes identical, not pending
+  ok   a_null_fingerprint_is_pending_not_fresh                    why=fingerprint_unknown, in both sets
+  ok   the_input_fingerprints_cannot_be_written_by_hand           both refused: generated always
+  ok   a_title_change_moves_the_corpus_probe                      pending 0 -> 1, digest d9eafe9dc922 -> 698f0d65b738
+
+ALL PASS
+
+### falsification attempts: .venv/bin/python -I falsify27.py (every case in a rolled-back transaction)
+A1  the extraction grows an input in a THIRD table (bekendmaking_locatie.straatnaam)
+    pg_depend column deps: [('bekendmaking', 'identifier'), ('bekendmaking', 'title'), ('bekendmaking_body', 'body_text'), ('bekendmaking_body', 'identifier'), ('bekendmaking_locatie', 'identifier'), ('bekendmaking_locatie', 'straatnaam')]
+    verify_activity structural check PASSED=True: derive reads 2 input(s) (bekendmaking.title, bekendmaking_body.body_text), all fingerprinted
+    rows whose stored text now disagrees with the extraction: 8,273
+    bekendmaking_activity_pending: 0
+    example gmb-2026-266335: stored='Lorem Ipsum' derive='Lorem Ipsum | Grote Oever'
+
+A2  the extraction grows an input via a WHOLE-ROW reference (row_to_json(b.*)->>'abstract')
+    dep bekendmaking.identifier refobjsubid=1
+    dep bekendmaking.title refobjsubid=2
+    verify_activity structural check PASSED=True: derive reads 2 input(s) (bekendmaking.title, bekendmaking_body.body_text), all fingerprinted
+    rows whose stored text now disagrees with the extraction: 15,843
+    bekendmaking_activity_pending: 0
+
+A3  the source view DEPENDS on title_fp but leaves it out of the fingerprint
+    verify_activity structural check PASSED=True: derive reads 2 input(s) (bekendmaking.title, bekendmaking_body.body_text), all fingerprinted
+    after a title change: pending view row=None, in activity_rules.PENDING=False
+    stored activity_text='De oorspronkelijke titel' while title='EEN HEEL ANDERE TITEL'  <- verdict 16's bug, reinstated
+
+A4  the EXTRACTION changes (upper()) with the inputs untouched and activity_rule not bumped
+    rows whose stored text no longer matches the extraction: 85,936
+    bekendmaking_activity_pending: 0   structural check PASSED=True
+    corpus digest c9849a28c6e31295 -> c9849a28c6e31295   activity_pending_count 0 -> 0
+
+A5  the pending view drives from the source view; nothing asserts the source view is TOTAL
+    bekendmaking=94,183  source view rows=40,456  publications now invisible=53,727
+    title changed on an excluded row (bgr-2026-1044): pending view=0, PENDING=0, probe activity_pending_count=0, structural check PASSED=True
+
+A6  NULL title (needs ALTER TABLE ... DROP NOT NULL; not reachable today)
+    stored source_fp=None current source_fp=None  (md5(NULL||...) is NULL)
+    after a BODY change: pending view row=None, PENDING=False
+    stored='Objectvergunning | het plaatsen van een bouwkraan' vs derive='iets totaal anders'
+
+A7  0031's view shape vs 0032's, as row sets, in four states
+    clean corpus                       0031=0 0032=0 0031-0032=0 0032-0031=0
+    one never_derived row              0031=1 0032=1 0031-0032=0 0032-0031=0
+    +5 fingerprint_unknown             0031=6 0032=6 0031-0032=0 0032-0031=0
+    after a rule bump                  0031=94,184 0032=94,184 0031-0032=0 0032-0031=0
+    activity_rules.PENDING vs the view after the bump: 94,184 vs 94,184
+
+A8  'nil' / 'nobody' / md5('') -- three input states
+    no body row      body_text_fp=None                               source_fp=d6e4ad50ad32eafeadfa2be45e4bfcaa
+    body NULL text   body_text_fp=nil                                source_fp=3d50e5f59af55ccf1da2152b2083fd9f
+    body empty text  body_text_fp=d41d8cd98f00b204e9800998ecf8427e   source_fp=79ebe643b6ae3ce0fd4d2076117a7974
+    distinct source_fp: 3 of 3
+
+A9  0031's backfill UPDATE replayed with one genuinely stale row present
+    UPDATE 1  -> [('zz-f27-fresh', 'set'), ('zz-f27-stale', 'NULL')]
+    stale row still pending=True  fresh row pending=False
+    live rows that would have taken the protective NULL branch at apply time: 0 of 94,183
+
+### 0032's plan claim, re-measured. A = 0031's view shape, B = 0032's.
+# 10 interleaved reps of EXPLAIN (ANALYZE, BUFFERS), first rep of each discarded
+A 827.868 ms
+B 476.289 ms
+A 536.594 ms
+B 442.902 ms
+A 579.640 ms
+B 444.000 ms
+A 503.716 ms
+B 439.581 ms
+A 482.681 ms
+B 500.978 ms
+A 550.677 ms
+B 600.357 ms
+A 626.536 ms
+B 423.458 ms
+A 502.325 ms
+B 441.704 ms
+A 488.241 ms
+B 490.483 ms
+A 486.786 ms
+B 428.515 ms
+# A: n=9 median=503.7 min=482.7 max=626.5   B: n=9 median=442.9 min=423.5 max=600.4   A faster in 3 of 9 paired reps
+
+# the 139,640-buffer figure 0032 quotes for the 0031 shape is only reachable with
+# index-only scans unavailable, i.e. relallvisible=0 right after 0031's table rewrite:
+A enable_indexonlyscan=on  total_buffers=126436  exec=543.686ms  seq-scan-driver=no
+A enable_indexonlyscan=off  total_buffers=139640  exec=512.883ms  seq-scan-driver=yes
+B                            total_buffers=125624  exec=448.269ms
+
+# A's plan in the vacuumed state: the 'redundant driver' is an Index Only Scan, 672 buffers
+                    ->  Seq Scan on bekendmaking b_1  (cost=0.00..14957.83 rows=94183 width=48) (actual time=0.008..46.565 rows=94183 loops=1)
+                          ->  Seq Scan on bekendmaking_body bb_1  (cost=0.00..12717.83 rows=94183 width=48) (actual time=0.067..27.550 rows=94183 loops=1)
+                    ->  Index Only Scan using bekendmaking_pkey on bekendmaking b  (cost=0.42..3320.75 rows=94183 width=15) (actual time=0.007..6.262 rows=94183 loops=1)
+                          Heap Fetches: 451
+              ->  Seq Scan on bekendmaking_activity_text t  (cost=0.00..6590.83 rows=94183 width=60) (actual time=0.008..19.383 rows=94183 loops=1)
+  ->  Hash  (cost=12717.83..12717.83 rows=94183 width=23) (never executed)
+        ->  Seq Scan on bekendmaking_body bb  (cost=0.00..12717.83 rows=94183 width=23) (never executed)
+Execution Time: 485.815 ms
+
+### nothing reads current_body_run (dropped by 0032)
+  python readers: 0
+### scripts/import_bekendmaking.py (the title writer) never reads the pending view
+  occurrences of "pending": 0

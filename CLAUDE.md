@@ -1008,8 +1008,30 @@ distribution) and the `Agent` cases in `.claude/hooks/test_guard.py`.
   output cannot depend on the title still goes pending, converging on the next derive — the
   visible direction, which this file requires. And `body_etl_run` leaves the staleness test, so
   a re-fetch returning byte-identical text no longer re-derives; that makes the owed full
-  `--refetch` much cheaper. **The 0031/0032 numbers have not been through `falsifier`** —
-  ledger claim 27, no verdict yet.
+  `--refetch` much cheaper.
+  **`falsifier` DESTROYED claim 27 (verdict 17) and the headline above is half false.** What
+  survived: the fingerprint is correct for the two columns it hashes — a title change, a body
+  change, a NULL `source_fp` and a rule bump each report pending, an identical-byte refetch
+  does not, the view and `activity_rules.PENDING` agree row-for-row (0/0 clean, 94,184/94,184
+  after a bump), and the three body states give three distinct fingerprints. What died: "an
+  input added without being fingerprinted fails `verify_activity.py`". The structural check's
+  catalog query filters `d.refobjsubid > 0` and hardcodes `relname IN ('bekendmaking',
+  'bekendmaking_body')`, so an input read through a whole-row reference
+  (`row_to_json(b.*)->>'abstract'`, 15,843 rows stale) or from a third table
+  (`bekendmaking_locatie.straatnaam`, 8,273 rows stale) goes unwatched with all 24 cases
+  green — the must-fail control uses the same column by a different syntax, so it tests the
+  syntax, not the property. Staleness also does not cover the *extraction* (replacing the
+  derive view with no `activity_rule` bump: 85,936 rows stale, corpus digest byte-identical),
+  nor the source view's totality (filtering out one gemeente hides 53,727 publications from
+  the view, from `PENDING` and from `probe_corpus` at once). **And 0032's plan numbers do not
+  reproduce**: the 139,640-buffer four-seq-scan plan appears only with
+  `enable_indexonlyscan=off`, i.e. the unvacuumed state 0032's own parenthesis documents for
+  the *rejected* indexes — vacuumed, the redundant driver is an Index Only Scan of 672 buffers
+  (0.5%), medians are 503.7 vs 442.9 ms with 0031 faster in 3 of 9 paired reps, and 407–413 ms
+  was never reached. Direction holds, mechanism and magnitude do not; there is also no raw
+  output for that measurement in `docs/pg-notes/raw/`. Full objections:
+  `docs/pg-notes/raw/activity-fingerprint-falsify.txt`. **The dispositions are not written yet
+  — owner: unassigned.**
 - **The in-transaction derive is true but asserted by nothing.** Moving the `derive()` call one
   dedent **outside** `async with conn.transaction():` in `scripts/import_bekendmaking_body.py`
   reintroduces exactly the defect verdict 15 named, and **all six cited commands stay green** —

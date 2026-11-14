@@ -21,6 +21,7 @@ downstream without erroring.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import date
 
@@ -315,7 +316,10 @@ async def search(
         # unavailable encoder and a query that matches nothing look identical otherwise.
         return {**empty, "shape": "unavailable", "reason": encoder.reason()}
 
-    vec = encoder.encode(q)
+    # to_thread, not a direct call: encode() is a torch forward pass, 34-74 ms steady
+    # state, and on the event loop that is 34-74 ms of head-of-line blocking for every
+    # other request in flight -- /health included, since the deploy runs --workers 1.
+    vec = await asyncio.to_thread(encoder.encode, q)
     if vec is None:
         return {**empty, "shape": "unavailable", "reason": encoder.reason()}
     qvec = "[" + ",".join(f"{x:.6f}" for x in vec) + "]"

@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -8,6 +9,7 @@ from . import db, http_client, metrics
 from .errors import ExternalServiceError, InternalError
 from .logger import RequestLoggingMiddleware
 from .logger import get_logger
+from .domains.search import encoder
 from .routers import (isochrone, pois, bekendmakingen, directions, region, traffic, search,
                       notice_search, health)
 
@@ -18,6 +20,13 @@ logger = get_logger("app")
 async def lifespan(_: FastAPI):
     await db.connect()
     metrics.start_sampler()
+    # Pay the model load here, not in the first request that needs it. Measured 2026-11-14:
+    # 9.76 s to load plus 925 ms for the first forward pass, all of it on the event loop with
+    # --workers 1, i.e. every in-flight request stalled including /health. uvicorn does not
+    # accept connections until this yields, so it becomes startup time instead -- inside the
+    # deploy healthcheck's start_period: 40s. Returns False and logs when the encoder is not
+    # installed (it lives in requirements-local.txt), which is the deploy image's normal state.
+    await asyncio.to_thread(encoder.warm)
     yield
     await metrics.stop_sampler()
     await http_client.aclose()

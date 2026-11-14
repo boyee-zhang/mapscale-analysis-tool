@@ -59,6 +59,11 @@ SCENARIOS = {
     ),
     # One ORS route. No frontend caller today, but it is exposed, so it is measured.
     "directions": lambda i, vary: (f"{BASE}/directions", _route(i, vary)),
+    # The semantic endpoint, and until 2026-11-14 the only one never measured here -- which
+    # is why a torch forward pass sat on the event loop and a ~2 s ranking query went
+    # unnoticed. Local: the encoder runs in-process and pgvector is our own Postgres, so
+    # this is NOT third party and may be saturated. It is slow; use a short --seconds.
+    "notices": lambda i, vary: (f"{BASE}/search/notices", _notices(i, vary)),
 
     # --- THIRD PARTY: every request leaves this machine for a service we do not own.
     # Saturating these measures THEIR rate limiter and burns quota or abuses a free
@@ -92,6 +97,14 @@ def _route(i: int, vary: bool) -> dict:
             "end_lng": round(lng + 0.004 + d, 6), "end_lat": round(lat + 0.003, 6),
             "mode": "walking"}
 
+
+
+def _notices(i: int, vary: bool) -> dict:
+    """Rotate real resident questions, so the encoder sees distinct text and the vector
+    sort cannot be answered from a repeated plan."""
+    qs = ["附近有什么会吵的工程", "我家附近有人要砍树吗", "附近最近要办什么活动吗",
+          "哪条路要封闭施工", "有人申请夜间施工许可吗"]
+    return {"q": qs[i % len(qs)] if vary else qs[0], "limit": 20}
 
 
 def _geo(i: int, vary: bool, extra: dict) -> dict:

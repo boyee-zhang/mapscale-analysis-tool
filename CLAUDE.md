@@ -910,6 +910,26 @@ distribution) and the `Agent` cases in `.claude/hooks/test_guard.py`.
   while the housing subsystem itself was removed 2026-10-28). Eight further remote branches are
   0 commits ahead of `main` and fully merged. None has been deleted — **owner: unassigned.**
 - No rate limiting; upstream quotas are the only backpressure.
+- **`/search/notices` spends ~2.0 s in one query, and that is 95% of the endpoint.** Measured
+  2026-11-14 by wrapping `_fetch` and `background_similarity` on the real call path: total
+  2,018–3,250 ms = encode 56–66 + **ranking 1,953–2,729** + baseline 44–494 + rest ~21. The
+  ranking query's own comment records the vector sort at **787 ms**, so it is ~2.5x that now
+  and nothing re-measured it. It is `await`ed, so it does **not** block the event loop — but at
+  2 s a query, `DB_POOL_MAX_SIZE=10` is ten concurrent searches from exhaustion. Wants an
+  `EXPLAIN (ANALYZE, BUFFERS)` and a falsifier pass before anyone concludes why. **Owner:
+  unassigned.**
+- The blocking half of that endpoint is fixed: `encoder.encode()` is a torch forward pass and
+  was called directly from `async def`, and the ~440 MB model was loaded inside the first
+  request. Measured 2026-11-14: **9.76 s to load plus 925 ms for the first forward pass**, all
+  on the event loop with `--workers 1`, i.e. every in-flight request stalled, `/health`
+  included. It now loads in the app lifespan (uvicorn does not accept connections until that
+  yields, and the deploy healthcheck allows `start_period: 40s`) and runs under
+  `asyncio.to_thread`. **The deploy image never hit this**: `sentence-transformers` is only in
+  `requirements-local.txt`, so there `available()` is False and the endpoint answers 503 with a
+  reason. Shipping the feature means adding the dependency, and then the fix is what makes it
+  safe. A sweep of `api/main/` found **no other blocking call on the loop** — no `time.sleep`,
+  no `requests`, no sync file I/O, no `subprocess`; `json.dumps` of an isochrone polygon is
+  0.020 ms at 33 vertices.
 
 ---
 

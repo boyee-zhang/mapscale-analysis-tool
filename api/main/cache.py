@@ -7,17 +7,6 @@ from .logger import get_logger
 logger = get_logger("cache")
 
 
-def geo_cache_key(prefix: str, lng: float, lat: float, minutes: int, profile: str) -> str:
-    """Cache key for the (lng, lat, minutes, profile) request shape.
-
-    One helper for every prefix that uses this shape, because /pois reads the
-    isochrone that /isochrone wrote and the two keys have to agree to the last
-    decimal. They did not: `iso:` was formatted with 5 decimals and `pois:` with 3,
-    so reading one from the other would have missed every single time.
-    """
-    return f"{prefix}:{lng:.5f}:{lat:.5f}:{minutes}:{profile}"
-
-
 async def kv_get(key: str):
     """Return parsed JSON value from KV, or None if missing / KV not configured."""
     if not UPSTASH_URL or not UPSTASH_TOKEN:

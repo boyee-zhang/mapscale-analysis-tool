@@ -74,8 +74,8 @@ api/main/            the HTTP service, and nothing else
   db.py              asyncpg pool on the app lifespan; db.enabled() is the degradation guard
   cache.py           Upstash KV, degrades silently
   config.py          env vars + MODE_MAPPING + SPEED_MAP
-  upstream/          transport only — ors, overpass, pdok, tomtom, es_client
-  domains/           business rules: geo, bekendmaking, search
+  upstream/          transport only — ors, overpass, pdok, tomtom, nominatim, es_client
+  domains/           business rules: geo, bekendmaking, search, address, region, traffic
   routers/           one module per endpoint, thin
 etl/                 everything that moves or derives data, grouped by what it does
   ingest/            external source -> a store (bekendmaking, poi, addresses, …)

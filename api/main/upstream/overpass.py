@@ -1,6 +1,5 @@
 import httpx
 from .. import http_client
-from ..config import SPEED_MAP
 from ..errors import ExternalServiceError
 from ..logger import get_logger
 
@@ -41,19 +40,13 @@ OVERPASS_ENDPOINTS = [
 _HEADERS = {"User-Agent": "mapscale/1.0 (https://github.com/mapscale)"}
 
 
-async def fetch_pois(lng: float, lat: float, minutes: int, profile: str) -> dict:
-    radius = minutes * SPEED_MAP.get(profile, 80)
-    query = f"""
-    [out:json];
-    (
-      node["shop"~"supermarket|convenience"](around:{radius}, {lat}, {lng});
-      node["leisure"="fitness_centre"](around:{radius}, {lat}, {lng});
-      node["amenity"="gym"](around:{radius}, {lat}, {lng});
-    );
-    out body;
-    """
-    logger.info("→ pois", extra={"radius_m": radius, "lng": lng, "lat": lat})
+async def run_query(query: str) -> dict:
+    """POST one Overpass QL query, failing over across the three mirrors.
 
+    Transport only. WHICH tags to ask for and how big the circle is are domain facts and live
+    in domains/geo/service.py -- a radius of `minutes * SPEED_MAP[profile]` is a statement about
+    how fast people walk, which is not something a transport module can know.
+    """
     last_error = None
     for url, timeout_s in OVERPASS_ENDPOINTS:
         try:

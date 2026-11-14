@@ -18,13 +18,40 @@ import asyncio
 import json
 
 from ... import db
-from ...cache import geo_cache_key, kv_get, kv_set
-from ...config import SPEED_MAP
+from ...cache import kv_get, kv_set
+from ...config import MODE_MAPPING, SPEED_MAP
 from ...logger import get_logger
-from ...upstream.ors import fetch_isochrone
-from ...upstream.overpass import fetch_pois
+from ...upstream import overpass
+from ...upstream.ors import fetch_directions, fetch_isochrone
 
 logger = get_logger("domain.geo")
+
+
+def geo_cache_key(prefix: str, lng: float, lat: float, minutes: int, profile: str) -> str:
+    """Cache key for the (lng, lat, minutes, profile) request shape.
+
+    One helper for every prefix that uses this shape, because /pois reads the
+    isochrone that /isochrone wrote and the two keys have to agree to the last
+    decimal. They did not: `iso:` was formatted with 5 decimals and `pois:` with 3,
+    so reading one from the other would have missed every single time.
+
+    Lived in cache.py until 2026-11-14. It is not a caching primitive -- it encodes this
+    domain's request shape, and this domain is its only caller.
+    """
+    return f"{prefix}:{lng:.5f}:{lat:.5f}:{minutes}:{profile}"
+
+
+def ors_profile(mode: str) -> str:
+    """Our mode name -> the ORS profile that serves it.
+
+    The default is foot-walking, which this project's own Known Issues record as black-holed
+    by the public ORS instance -- it is the upstream default, kept because changing a fallback
+    is a behaviour change and not a refactor. MODE_MAPPING itself stays in config.py, where
+    CLAUDE.md says mode constants live; what moved here is the ACT of applying it, which
+    upstream/ors.py was doing while claiming to be transport.
+    """
+    return MODE_MAPPING.get(mode, "foot-walking")
+
 
 ISO_TTL = 86400
 POIS_TTL = 21600
@@ -121,7 +148,10 @@ _iso_inflight: dict[str, asyncio.Task] = {}
 
 
 async def _fetch_isochrone_cached(key: str, lng: float, lat: float, minutes: int, profile: str) -> dict:
-    data = await fetch_isochrone(lng, lat, minutes, profile)
+    resolved = ors_profile(profile)
+    logger.info("→ isochrone",
+                extra={"ors_profile": resolved, "lng": lng, "lat": lat, "minutes": minutes})
+    data = await fetch_isochrone(lng, lat, minutes * 60, resolved)
     await kv_set(key, data, ttl_seconds=ISO_TTL)
     return data
 
@@ -142,6 +172,38 @@ async def get_isochrone(lng: float, lat: float, minutes: int, profile: str) -> d
         return await asyncio.shield(task)
     finally:
         _iso_inflight.pop(key, None)
+
+
+async def get_directions(
+    start_lng: float, start_lat: float, end_lng: float, end_lat: float, mode: str
+) -> dict:
+    """A route between two points. Here rather than in its own domain because `mode -> ORS
+    profile` is the one rule it has, and that rule is shared with the isochrone."""
+    resolved = ors_profile(mode)
+    logger.info("→ directions", extra={"profile": resolved})
+    return await fetch_directions(start_lng, start_lat, end_lng, end_lat, resolved)
+
+
+async def fetch_pois(lng: float, lat: float, minutes: int, profile: str) -> dict:
+    """The legacy Overpass circle: node-only, three hardcoded tags, radius from SPEED_MAP.
+
+    Only reachable when `db.enabled()` is false. Both domain facts it carries -- which tags
+    count as a POI, and how far someone travels in `minutes` -- were inside
+    upstream/overpass.py, which is transport. The query text and the radius are unchanged;
+    `upstream.overpass.run_query` now just posts whatever it is given to the three mirrors.
+    """
+    radius = minutes * SPEED_MAP.get(profile, 80)
+    query = f"""
+    [out:json];
+    (
+      node["shop"~"supermarket|convenience"](around:{radius}, {lat}, {lng});
+      node["leisure"="fitness_centre"](around:{radius}, {lat}, {lng});
+      node["amenity"="gym"](around:{radius}, {lat}, {lng});
+    );
+    out body;
+    """
+    logger.info("→ pois", extra={"radius_m": radius, "lng": lng, "lat": lat})
+    return await overpass.run_query(query)
 
 
 # poi.osm_type is char(1) to keep the table narrow; Overpass spells it out, and the

@@ -317,23 +317,53 @@ api/main/
   app.py          FastAPI instance, middleware, exception handlers, router registration
   config.py       env vars + MODE_MAPPING + SPEED_MAP
   errors.py       ExternalServiceError, InternalError
-  cache.py        Upstash KV get/set
+  cache.py        Upstash KV get/set — kv_get/kv_set only
   db.py           asyncpg pool (created in the app lifespan), acquire()/transaction()
   logger.py       JSON logging + request-ID middleware
-  upstream/       transport only: ors, overpass, pdok, tomtom, es_client
+  upstream/       transport only: ors, overpass, pdok, tomtom, nominatim, es_client
   domains/
-    geo/          spatial primitives: isochrone + POI-inside-a-shape (service.py)
-    bekendmaking/ official announcements for a place and a time window (service.py);
+    geo/          spatial primitives: isochrone, directions, POI-inside-a-shape;
+                  owns geo_cache_key and `mode -> ORS profile`
+    bekendmaking/ official announcements for a place and a time window;
                   composes domains/geo's isochrone, owns no shape of its own
-  routers/        isochrone, pois, bekendmakingen, directions, region, traffic,
-                  search, health — isochrone/pois/bekendmakingen are thin callers of
-                  domains/; the rest are not yet folded in (refactor phases B & C)
+    search/       SEMANTIC search over publications (/search/notices) + encoder.py
+    address/      the /search address waterfall (ES -> PDOK -> Nominatim) + index.py
+    region/       which municipality a coordinate is in
+    traffic/      congestion, incidents, the tile URL
+  routers/        one module per endpoint. ALL of them are now thin: parameter
+                  validation, one service call, error pass-through
 ```
+
+**Every router is thin as of 2026-11-14.** Before that, `routers/search.py` was 231 lines of
+which ~190 were domain logic, `routers/traffic.py` held the congestion formula and two cache
+keys, and four routers called `upstream/` with no domain in between. The logic moved; nothing
+was rewritten, and all 27 endpoint responses are byte-identical (see the commit).
 
 **`upstream/` is a transport layer only.** It may not contain business rules, caching
 decisions, or domain types. Judgement call: if a function in `upstream/` needs to know what an
 "isochrone" is, it belongs in a domain instead. Organising it per upstream API is correct
-*because* the business semantics now live in `domains/`.
+*because* the business semantics now live in `domains/`. Three violations were removed in the
+same change, and they are the examples worth knowing:
+- `upstream/ors.py` applied `MODE_MAPPING` and multiplied minutes by 60. It now takes an
+  already-resolved profile and a range in seconds. `MODE_MAPPING` itself **stays in
+  `config.py`** — what moved is the *act of applying* it, to `domains/geo/service.py`.
+- `upstream/overpass.py` hard-coded the supermarket/convenience/gym Overpass QL and a radius
+  of `minutes * SPEED_MAP[profile]`. A statement about how fast people walk is not transport.
+  It is now `run_query(query)`; the query is built in `domains/geo/service.py`.
+- `upstream/pdok.py` raised `HTTPException(404)` and prefixed a CBS code with `GM`. Now
+  `reverse_gemeente` returns PDOK's docs and returns `[]` rather than raising; the 404 and the
+  prefix are in `domains/region/service.py`.
+
+**`cache.geo_cache_key` moved to `domains/geo/service.py`.** It encodes one domain's request
+shape (and the comment on it is about `/pois` reading what `/isochrone` wrote), and that domain
+was its only caller. The format is unchanged and must stay unchanged — see the warning under
+Endpoints.
+
+**One observable thing did change: which logger emits a line.** The policy applied throughout
+was that the *outbound* log line moves to the layer that knows the domain parameters (so
+`→ isochrone` with `minutes` is now `domain.geo`, not `client.ors`) while inbound and failure
+lines stay in transport. No log line lost or gained a field. HTTP responses, status codes,
+cache keys, TTLs, SQL and upstream request bodies are all untouched.
 
 **Every Postgres-backed path must degrade, not fail, when `DATABASE_URL` is unset.**
 `db.enabled()` is the guard; the pre-Postgres code path stays in place behind it, exactly
@@ -373,7 +403,8 @@ All under the `/api/main` prefix.
 | `/search/notices` | GET | pgvector over `bekendmaking_embedding` + optional isochrone | — |
 
 Cache keys are `{feature}:{param}:{param}:…`, e.g. `iso:{lng}:{lat}:{minutes}:{profile}`.
-The `(lng, lat, minutes, profile)` shape goes through `cache.geo_cache_key()` — `/pois` reads
+The `(lng, lat, minutes, profile)` shape goes through `domains/geo/service.py`'s
+`geo_cache_key()` (in `cache.py` until 2026-11-14) — `/pois` reads
 the isochrone `/isochrone` wrote, so the two keys must agree to the last decimal, and they
 did not (`iso:` at `.5f`, `pois:` at `.3f`). Do not re-inline the format.
 
@@ -437,7 +468,7 @@ Mode constants live **only** in `config.py`:
 
 `upstream/overpass.py` fails over across three mirrors (kumi.systems → overpass-api.de → openstreetmap.fr).
 
-### Search waterfall (`routers/search.py`)
+### Search waterfall (`domains/address/service.py`)
 1. **Elasticsearch** `nl_addresses` — `multi_match` with per-field weights (overridable via
    `w_street`/`w_city`/`w_postcode`/`w_label` query params) + postcode `term` + `phrase_prefix`.
    Accepted only above `ES_MIN_SCORE` (15.0).
@@ -937,6 +968,12 @@ distribution) and the `Agent` cases in `.claude/hooks/test_guard.py`.
   picks "the publication's largest geometry", which is **not what it does**: POINTs sort ahead
   of polygons, so for this publication the only geometry with an area is the one it never picks.
   **Owner: unassigned.**
+- **`INDEX = "nl_addresses"` is defined twice**, in `api/main/domains/address/index.py` and in
+  `etl/ingest/addresses.py`, each with its own mapping (the ETL creates the index itself).
+  Made visible by moving the index schema out of `upstream/es_client.py` on 2026-11-14;
+  `ensure_index` there had, and still has, **no caller at all**. Unifying means either the ETL
+  importing from `api/` — which four scripts already do and arguably should not — or a shared
+  schema package. **Owner: unassigned.**
 - **`/isochrone` takes `minutes` with no bounds**, so `minutes=0` returns HTTP 200 with a
   degenerate polygon (measured 2026-11-14 while capturing the refactor baseline: 504 bytes,
   a well-formed FeatureCollection). `/bekendmakingen` and `/search/notices` both declare
@@ -1162,7 +1199,7 @@ What that took with it, so the absences are not mistaken for gaps:
 - **`ETL_CRON_TOKEN` and `DEEPSEEK_API_KEY`** left `config.py` and the `.env` block.
 - **`geocode_cache`** is an orphan table by decision: `0001_init.sql` is left untouched so the
   Postgres stage 0 narrative stays intact, and no migration drops it. Nothing reads or writes it.
-- **`municipality` was kept** — it is not housing-specific. `routers/search.py`,
+- **`municipality` was kept** — it is not housing-specific. `domains/address/service.py`,
   `upstream/pdok.py`, `upstream/es_client.py`, `etl/ingest/municipalities.py` and
   `etl/ingest/addresses.py` all use it.
 - **`cache.py` was kept** (`/region`, `/traffic`, `domains/geo`); only the housing-specific

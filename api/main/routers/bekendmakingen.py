@@ -9,16 +9,11 @@ from ..logger import get_logger
 router = APIRouter()
 logger = get_logger("router.bekendmakingen")
 
-# The window defaults to a year back from today rather than to the data's own extent:
-# a default that silently widens as the table grows would make two callers a month
-# apart get different answers from the same URL.
-DEFAULT_WINDOW_DAYS = 365
-
-# A 24 km shape over a year matches 54,498 publications (measured), so both axes are
-# bounded. 60 minutes driving already reaches well past the Noord-Holland extract the
-# self-hosted ORS was built from, so a larger value could not be answered honestly anyway.
-MAX_MINUTES = 60
-MAX_WINDOW_DAYS = 730
+# The window and shape limits are the domain's; this router only enforces them, via Query()
+# and the two 422s below. What each number means and why is in the service.
+DEFAULT_WINDOW_DAYS = service.DEFAULT_WINDOW_DAYS
+MAX_MINUTES = service.MAX_MINUTES
+MAX_WINDOW_DAYS = service.MAX_WINDOW_DAYS
 
 
 @router.get("/api/main/bekendmakingen")
@@ -68,9 +63,7 @@ async def get_bekendmakingen(
         raise HTTPException(
             status_code=422, detail=f"window must be at most {MAX_WINDOW_DAYS} days"
         )
-    if building_permits and doc_type is None and activiteit is None:
-        doc_type = service.BUILDING_PERMIT["doc_type"]
-        activiteit = service.BUILDING_PERMIT["activiteit"]
+    doc_type, activiteit = service.resolve_filters(building_permits, doc_type, activiteit)
 
     logger.info(
         "handler called",

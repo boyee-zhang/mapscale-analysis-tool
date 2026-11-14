@@ -36,6 +36,33 @@ MAX_ITEMS = 500
 # passed explicitly so the filter reads as what it means.
 BUILDING_PERMIT = {"doc_type": ["omgevingsvergunning"], "activiteit": ["bouwen"]}
 
+
+def resolve_filters(building_permits: bool, doc_type, activiteit):
+    """Expand the `building_permits` shorthand, unless a filter was given explicitly.
+
+    Moved out of routers/bekendmakingen.py (2026-11-14). "A building permit is
+    omgevingsvergunning AND bouwen" is a fact about this dataset, and the router was the one
+    place in the codebase that knew it. It stays a function the router CALLS rather than
+    something get_bekendmakingen does internally, because the precedence rule is observable
+    only in what gets passed on -- which is exactly how
+    tests/unit/test_bekendmaking_filters.py asserts it.
+    """
+    if building_permits and doc_type is None and activiteit is None:
+        return BUILDING_PERMIT["doc_type"], BUILDING_PERMIT["activiteit"]
+    return doc_type, activiteit
+
+
+# The window defaults to a year back from today rather than to the data's own extent:
+# a default that silently widens as the table grows would make two callers a month
+# apart get different answers from the same URL.
+DEFAULT_WINDOW_DAYS = 365
+
+# A 24 km shape over a year matches 54,498 publications (measured), so both axes are
+# bounded. 60 minutes driving already reaches well past the Noord-Holland extract the
+# self-hosted ORS was built from, so a larger value could not be answered honestly anyway.
+MAX_MINUTES = 60
+MAX_WINDOW_DAYS = 730
+
 # `stage` is DERIVED FROM THE TITLE, not a field the source provides. It is the one piece
 # of "what happened here" that matters most for a building permit — an application is a
 # plan, a decision is a thing that will be built — and the SRU record has no field for it:

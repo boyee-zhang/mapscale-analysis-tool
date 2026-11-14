@@ -1,0 +1,272 @@
+# falsifier evidence for claim 17, 2026-11-14
+# command: docker exec -i mapscale-pg psql -U mapscale -d mapscale -f - < evidence.sql  (SQL reproduced below)
+# pass 1 and pass 2 of the same script, both warm
+#---------------- SQL ----------------
+# \echo ==== 0 who else is on the machine
+# SELECT pid, state, left(query,50) FROM pg_stat_activity WHERE state <> 'idle';
+# \echo ==== 1 storage: bekendmaking_body is TOASTed
+# SELECT c.relname, pg_size_pretty(pg_relation_size(c.oid)) heap,
+#        pg_size_pretty(pg_relation_size(c.reltoastrelid)) toast
+# FROM pg_class c WHERE c.relname='bekendmaking_body';
+# SET max_parallel_workers_per_gather=0;
+# \echo ==== 2 CONTROL A: the view joined but NO view expression evaluated
+# EXPLAIN (ANALYZE, BUFFERS, TIMING OFF) SELECT count(*) FROM bekendmaking_activity a;
+# \echo ==== 3 V1: the view, activity_text only, serial
+# EXPLAIN (ANALYZE, BUFFERS, TIMING OFF) SELECT count(a.activity_text) FROM bekendmaking_activity a;
+# \echo ==== 4 V1b: the view, activity_text AND activity_src (what a second column costs)
+# EXPLAIN (ANALYZE, BUFFERS, TIMING OFF) SELECT count(a.activity_text), count(a.activity_src) FROM bekendmaking_activity a;
+# \echo ==== 5 detoast scaling: 1 / 2 / 4 references to body_text, no regex
+# EXPLAIN (ANALYZE, BUFFERS, TIMING OFF) SELECT sum(length(bb.body_text)) FROM bekendmaking_body bb;
+# EXPLAIN (ANALYZE, BUFFERS, TIMING OFF) SELECT sum(length(bb.body_text)), sum(octet_length(bb.body_text)), sum(bit_length(bb.body_text)), sum(ascii(bb.body_text)) FROM bekendmaking_body bb;
+# \echo ==== 6 4 references, each a regexp_match (4 detoasts + 4 regexes)
+# EXPLAIN (ANALYZE, BUFFERS, TIMING OFF) SELECT count((regexp_match(bb.body_text,'(?:^|\n)Omschrijving\s*:\s*([^\n]+)'))[1]), count((regexp_match(bb.body_text,'(?:^|\n)Toelichting\s*:\s*([^\n]+)'))[1]), count((regexp_match(bb.body_text,'(?:^|\n)Onderwerp\s*:\s*([^\n]+)'))[1]), count((regexp_match(bb.body_text,'(?:^|\n)Betreft\s*:\s*([^\n]+)'))[1]) FROM bekendmaking_body bb;
+#================ PASS 1
+==== 0 who else is on the machine
+  pid  | state  |                        left                        
+-------+--------+----------------------------------------------------
+ 22575 | active | SELECT pid, state, left(query,50) FROM pg_stat_act
+(1 row)
+
+==== 1 storage: bekendmaking_body is TOASTed
+      relname      |  heap  | toast 
+-------------------+--------+-------
+ bekendmaking_body | 105 MB | 72 MB
+(1 row)
+
+SET
+==== 2 CONTROL A: the view joined but NO view expression evaluated
+                                                               QUERY PLAN                                                               
+----------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=4854.45..4854.46 rows=1 width=8) (actual rows=1 loops=1)
+   Buffers: shared hit=1297 read=66
+   I/O Timings: shared read=0.343
+   ->  Index Only Scan using bekendmaking_pkey on bekendmaking b  (cost=0.42..3675.32 rows=94330 width=200) (actual rows=94183 loops=1)
+         Heap Fetches: 893
+         Buffers: shared hit=1297 read=66
+         I/O Timings: shared read=0.343
+ Planning:
+   Buffers: shared hit=298 read=10
+   I/O Timings: shared read=0.048
+ Planning Time: 0.563 ms
+ Execution Time: 12.237 ms
+(12 rows)
+
+==== 3 V1: the view, activity_text only, serial
+                                                      QUERY PLAN                                                      
+----------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=58284.30..58284.31 rows=1 width=8) (actual rows=1 loops=1)
+   Buffers: shared hit=661518 read=26302, temp read=5577 written=5577
+   I/O Timings: shared read=43.845, temp read=11.427 write=164.364
+   ->  Hash Right Join  (cost=17160.42..57105.17 rows=94330 width=200) (actual rows=94183 loops=1)
+         Hash Cond: (bb.identifier = b.identifier)
+         Buffers: shared hit=661518 read=26302, temp read=5577 written=5577
+         I/O Timings: shared read=43.845, temp read=11.427 write=164.364
+         ->  Seq Scan on bekendmaking_body bb  (cost=0.00..14333.83 rows=94183 width=811) (actual rows=94183 loops=1)
+               Buffers: shared hit=213 read=13179
+               I/O Timings: shared read=26.367
+         ->  Hash  (cost=14414.30..14414.30 rows=94330 width=112) (actual rows=94183 loops=1)
+               Buckets: 65536  Batches: 2  Memory Usage: 7227kB
+               Buffers: shared hit=348 read=13123, temp written=772
+               I/O Timings: shared read=17.478, temp write=17.450
+               ->  Seq Scan on bekendmaking b  (cost=0.00..14414.30 rows=94330 width=112) (actual rows=94183 loops=1)
+                     Buffers: shared hit=348 read=13123
+                     I/O Timings: shared read=17.478
+ Planning:
+   Buffers: shared hit=80 read=9
+   I/O Timings: shared read=0.065
+ Planning Time: 0.403 ms
+ Execution Time: 5198.369 ms
+(22 rows)
+
+==== 4 V1b: the view, activity_text AND activity_src (what a second column costs)
+                                                      QUERY PLAN                                                      
+----------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=61350.02..61350.03 rows=1 width=16) (actual rows=1 loops=1)
+   Buffers: shared hit=1314831 read=26238, temp read=5577 written=5577
+   I/O Timings: shared read=43.505, temp read=14.864 write=116.236
+   ->  Hash Right Join  (cost=17160.42..59935.07 rows=94330 width=200) (actual rows=94183 loops=1)
+         Hash Cond: (bb.identifier = b.identifier)
+         Buffers: shared hit=1314831 read=26238, temp read=5577 written=5577
+         I/O Timings: shared read=43.505, temp read=14.864 write=116.236
+         ->  Seq Scan on bekendmaking_body bb  (cost=0.00..14333.83 rows=94183 width=811) (actual rows=94183 loops=1)
+               Buffers: shared hit=245 read=13147
+               I/O Timings: shared read=26.801
+         ->  Hash  (cost=14414.30..14414.30 rows=94330 width=112) (actual rows=94183 loops=1)
+               Buckets: 65536  Batches: 2  Memory Usage: 7227kB
+               Buffers: shared hit=380 read=13091, temp written=772
+               I/O Timings: shared read=16.704, temp write=13.935
+               ->  Seq Scan on bekendmaking b  (cost=0.00..14414.30 rows=94330 width=112) (actual rows=94183 loops=1)
+                     Buffers: shared hit=380 read=13091
+                     I/O Timings: shared read=16.704
+ Planning:
+   Buffers: shared hit=18
+ Planning Time: 0.217 ms
+ Execution Time: 9749.503 ms
+(21 rows)
+
+==== 5 detoast scaling: 1 / 2 / 4 references to body_text, no regex
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=14804.75..14804.76 rows=1 width=8) (actual rows=1 loops=1)
+   Buffers: shared hit=83289 read=13115
+   I/O Timings: shared read=19.662
+   ->  Seq Scan on bekendmaking_body bb  (cost=0.00..14333.83 rows=94183 width=796) (actual rows=94183 loops=1)
+         Buffers: shared hit=277 read=13115
+         I/O Timings: shared read=19.662
+ Planning:
+   Buffers: shared hit=2 read=1
+   I/O Timings: shared read=0.007
+ Planning Time: 0.059 ms
+ Execution Time: 401.342 ms
+(11 rows)
+
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=16452.95..16452.96 rows=1 width=32) (actual rows=1 loops=1)
+   Buffers: shared hit=166333 read=13083
+   I/O Timings: shared read=20.439
+   ->  Seq Scan on bekendmaking_body bb  (cost=0.00..14333.83 rows=94183 width=796) (actual rows=94183 loops=1)
+         Buffers: shared hit=309 read=13083
+         I/O Timings: shared read=20.439
+ Planning:
+   Buffers: shared hit=2 read=1
+   I/O Timings: shared read=0.035
+ Planning Time: 0.098 ms
+ Execution Time: 559.035 ms
+(11 rows)
+
+==== 6 4 references, each a regexp_match (4 detoasts + 4 regexes)
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=16217.49..16217.50 rows=1 width=32) (actual rows=1 loops=1)
+   Buffers: shared hit=332389 read=13051
+   I/O Timings: shared read=28.706
+   ->  Seq Scan on bekendmaking_body bb  (cost=0.00..14333.83 rows=94183 width=796) (actual rows=94183 loops=1)
+         Buffers: shared hit=341 read=13051
+         I/O Timings: shared read=28.706
+ Planning Time: 0.049 ms
+ Execution Time: 2938.694 ms
+(8 rows)
+
+#================ PASS 2
+==== 0 who else is on the machine
+  pid  | state  |                        left                        
+-------+--------+----------------------------------------------------
+ 22607 | active | SELECT pid, state, left(query,50) FROM pg_stat_act
+(1 row)
+
+==== 1 storage: bekendmaking_body is TOASTed
+      relname      |  heap  | toast 
+-------------------+--------+-------
+ bekendmaking_body | 105 MB | 72 MB
+(1 row)
+
+SET
+==== 2 CONTROL A: the view joined but NO view expression evaluated
+                                                               QUERY PLAN                                                               
+----------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=4854.45..4854.46 rows=1 width=8) (actual rows=1 loops=1)
+   Buffers: shared hit=1363
+   ->  Index Only Scan using bekendmaking_pkey on bekendmaking b  (cost=0.42..3675.32 rows=94330 width=200) (actual rows=94183 loops=1)
+         Heap Fetches: 893
+         Buffers: shared hit=1363
+ Planning:
+   Buffers: shared hit=308
+ Planning Time: 0.415 ms
+ Execution Time: 9.211 ms
+(9 rows)
+
+==== 3 V1: the view, activity_text only, serial
+                                                      QUERY PLAN                                                      
+----------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=58284.30..58284.31 rows=1 width=8) (actual rows=1 loops=1)
+   Buffers: shared hit=661742 read=26078, temp read=5577 written=5577
+   I/O Timings: shared read=42.737, temp read=12.003 write=122.259
+   ->  Hash Right Join  (cost=17160.42..57105.17 rows=94330 width=200) (actual rows=94183 loops=1)
+         Hash Cond: (bb.identifier = b.identifier)
+         Buffers: shared hit=661742 read=26078, temp read=5577 written=5577
+         I/O Timings: shared read=42.737, temp read=12.003 write=122.259
+         ->  Seq Scan on bekendmaking_body bb  (cost=0.00..14333.83 rows=94183 width=811) (actual rows=94183 loops=1)
+               Buffers: shared hit=373 read=13019
+               I/O Timings: shared read=25.479
+         ->  Hash  (cost=14414.30..14414.30 rows=94330 width=112) (actual rows=94183 loops=1)
+               Buckets: 65536  Batches: 2  Memory Usage: 7227kB
+               Buffers: shared hit=412 read=13059, temp written=772
+               I/O Timings: shared read=17.258, temp write=15.746
+               ->  Seq Scan on bekendmaking b  (cost=0.00..14414.30 rows=94330 width=112) (actual rows=94183 loops=1)
+                     Buffers: shared hit=412 read=13059
+                     I/O Timings: shared read=17.258
+ Planning:
+   Buffers: shared hit=89
+ Planning Time: 0.320 ms
+ Execution Time: 5136.959 ms
+(21 rows)
+
+==== 4 V1b: the view, activity_text AND activity_src (what a second column costs)
+                                                      QUERY PLAN                                                      
+----------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=61350.02..61350.03 rows=1 width=16) (actual rows=1 loops=1)
+   Buffers: shared hit=1315055 read=26014, temp read=5577 written=5577
+   I/O Timings: shared read=46.135, temp read=15.687 write=81.662
+   ->  Hash Right Join  (cost=17160.42..59935.07 rows=94330 width=200) (actual rows=94183 loops=1)
+         Hash Cond: (bb.identifier = b.identifier)
+         Buffers: shared hit=1315055 read=26014, temp read=5577 written=5577
+         I/O Timings: shared read=46.135, temp read=15.687 write=81.662
+         ->  Seq Scan on bekendmaking_body bb  (cost=0.00..14333.83 rows=94183 width=811) (actual rows=94183 loops=1)
+               Buffers: shared hit=405 read=12987
+               I/O Timings: shared read=28.865
+         ->  Hash  (cost=14414.30..14414.30 rows=94330 width=112) (actual rows=94183 loops=1)
+               Buckets: 65536  Batches: 2  Memory Usage: 7227kB
+               Buffers: shared hit=444 read=13027, temp written=772
+               I/O Timings: shared read=17.270, temp write=12.273
+               ->  Seq Scan on bekendmaking b  (cost=0.00..14414.30 rows=94330 width=112) (actual rows=94183 loops=1)
+                     Buffers: shared hit=444 read=13027
+                     I/O Timings: shared read=17.270
+ Planning:
+   Buffers: shared hit=18
+ Planning Time: 0.239 ms
+ Execution Time: 9933.320 ms
+(21 rows)
+
+==== 5 detoast scaling: 1 / 2 / 4 references to body_text, no regex
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=14804.75..14804.76 rows=1 width=8) (actual rows=1 loops=1)
+   Buffers: shared hit=83449 read=12955
+   I/O Timings: shared read=24.949
+   ->  Seq Scan on bekendmaking_body bb  (cost=0.00..14333.83 rows=94183 width=796) (actual rows=94183 loops=1)
+         Buffers: shared hit=437 read=12955
+         I/O Timings: shared read=24.949
+ Planning:
+   Buffers: shared hit=3
+ Planning Time: 0.057 ms
+ Execution Time: 410.911 ms
+(10 rows)
+
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=16452.95..16452.96 rows=1 width=32) (actual rows=1 loops=1)
+   Buffers: shared hit=166493 read=12923
+   I/O Timings: shared read=20.454
+   ->  Seq Scan on bekendmaking_body bb  (cost=0.00..14333.83 rows=94183 width=796) (actual rows=94183 loops=1)
+         Buffers: shared hit=469 read=12923
+         I/O Timings: shared read=20.454
+ Planning:
+   Buffers: shared hit=3
+ Planning Time: 0.090 ms
+ Execution Time: 559.704 ms
+(10 rows)
+
+==== 6 4 references, each a regexp_match (4 detoasts + 4 regexes)
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=16217.49..16217.50 rows=1 width=32) (actual rows=1 loops=1)
+   Buffers: shared hit=332549 read=12891
+   I/O Timings: shared read=28.232
+   ->  Seq Scan on bekendmaking_body bb  (cost=0.00..14333.83 rows=94183 width=796) (actual rows=94183 loops=1)
+         Buffers: shared hit=501 read=12891
+         I/O Timings: shared read=28.232
+ Planning Time: 0.045 ms
+ Execution Time: 2957.189 ms
+(8 rows)
+

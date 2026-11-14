@@ -159,16 +159,26 @@ async def background_similarity(conn, sql: str, args) -> float | None:
 # The vector is passed as a parameter, never interpolated: it is 768 floats and the planner
 # caches one query text per shape. `plan_cache_mode=force_custom_plan` (set in db.py, and
 # load-bearing for the spatial parameter) keeps that from becoming a generic plan.
-# RANK FIRST, THEN DECORATE. The ordering of these two steps is worth a paragraph because
-# getting it wrong cost 4.5 s a query and the EXPLAIN named the culprit exactly.
+# RANK FIRST, THEN DECORATE. The ranking touches only `bekendmaking_embedding` and the cheap
+# filter columns and takes its LIMIT; the body/noise joins run against the rows left.
 #
-# `bekendmaking_activity` is a VIEW: `activity_text` is reassembled by six regexes over
-# `body_text` every time a row is read. Joining it alongside the ranking meant running those
-# regexes over every candidate — 45,000 bodies — to produce a snippet for the twenty rows that
-# survive. The vector sort itself measured 787 ms; the view was the rest.
+# CORRECTED 2026-11-14, AND THE CORRECTION IS THE USEFUL PART. This block used to say that the
+# shape below confined `bekendmaking_activity` to the surviving rows. It did not. The planner
+# put that view on the PROBE side of a hash built from the already-LIMITed ranked rows, so all
+# 94,183 view rows were projected to decorate 20, and the query took 1,778-2,040 ms warm while
+# the HNSW scan inside it was 0.76-1.13 ms. A CTE plus a LIMIT expresses an intention; it does
+# not constrain the planner. The numbers this block carried were stale too: "45,000 bodies" and
+# "the vector sort itself measured 787 ms".
 #
-# So the ranking touches only `bekendmaking_embedding` and the cheap filter columns, takes its
-# LIMIT, and the expensive view and the body/noise joins run against the handful of rows left.
+# Fixed upstream instead of here, in 0027: `activity_text` is now a stored column rather than
+# six regexes evaluated per read, so the join is a lookup and the plan no longer matters. Same
+# query: 1.9-5.7 ms, and the view's output is byte-identical over all 94,183 rows (md5
+# c221dcb413bbc2f90d601eefa53246be before and after). Ledger claim 17, falsifier verdict 14;
+# evidence in docs/pg-notes/raw/notices-{ranking-explain,view-decomposition,ranking-falsify}.txt.
+#
+# The lesson is not about SQL. The intent above was correct and lived in a comment, so nothing
+# noticed when the planner stopped honouring it. `scripts/verify_plans.py` now asserts it:
+# the plan must not seq-scan `bekendmaking_body`, and 20 rows must not cost 50,000 buffers.
 _RANK_CORE = """
 ranked AS (
     SELECT e.identifier, e.embedding <=> $1::vector AS distance

@@ -1,0 +1,34 @@
+{"ts": "2026-11-14T11:24:15Z", "level": "INFO", "logger": "db", "request_id": "-", "message": "db connected"}
+{"ts": "2026-11-14T11:24:19Z", "level": "INFO", "logger": "domain.search", "request_id": "-", "message": "loading query encoder", "model": "intfloat/multilingual-e5-base"}
+{"ts": "2026-11-14T11:24:23Z", "level": "INFO", "logger": "domain.search", "request_id": "-", "message": "query encoder ready", "model": "intfloat/multilingual-e5-base", "dim": 768}
+{"ts": "2026-11-14T11:24:26Z", "level": "INFO", "logger": "domain.search", "request_id": "-", "message": "\u2190 search", "shape": "corpus", "q": "\u9644\u8fd1\u6709\u4ec0\u4e48\u4f1a\u5435\u7684\u5de5\u7a0b", "scanned": 20, "returned": 20, "weaker": 0, "background": 0.7555688202492089, "top": 0.8348}
+plan_cache_mode on a pooled connection: force_custom_plan
+[1] as shipped        rows=20 ms=['1804', '1786', '1840', '1809', '1782']
+[2] scalar subquery   rows=20 ms=['4.8', '3.8', '3.3', '3.6', '3.5']
+[3] same id set=True  same order=False  ties=6
+{"ts": "2026-11-14T11:24:37Z", "level": "INFO", "logger": "client.ors", "request_id": "-", "message": "\u2192 isochrone", "ors_profile": "foot-hiking", "lng": 4.9003, "lat": 52.3791, "minutes": 10}
+{"ts": "2026-11-14T11:24:37Z", "level": "INFO", "logger": "client.ors", "request_id": "-", "message": "\u2190 isochrone", "features": 1}
+{"ts": "2026-11-14T11:24:39Z", "level": "INFO", "logger": "domain.search", "request_id": "-", "message": "\u2190 search", "shape": "isochrone", "q": "\u9644\u8fd1\u6709\u4ec0\u4e48\u4f1a\u5435\u7684\u5de5\u7a0b", "scanned": 20, "returned": 0, "weaker": 20, "background": 0.7615251596999453, "top": 0.8067}
+[4] spatial branch    shape=isochrone rows=20 ms=['1835', '1832', '1849']
+{"ts": "2026-11-14T11:24:46Z", "level": "INFO", "logger": "domain.search", "request_id": "-", "message": "\u2190 search", "shape": "corpus", "q": "\u9644\u8fd1\u6709\u4ec0\u4e48\u4f1a\u5435\u7684\u5de5\u7a0b", "scanned": 1, "returned": 1, "weaker": 0, "background": 0.7555688202492089, "top": 0.8348}
+[5] limit=1                          rows= 1 ms=['1786', '1782', '1782'] body_seq_scan=True Buffers: shared hit=662980 read=26098
+[6] limit=1                          default= 1 iterative_scan= 1
+{"ts": "2026-11-14T11:24:57Z", "level": "INFO", "logger": "domain.search", "request_id": "-", "message": "\u2190 search", "shape": "corpus", "q": "\u9644\u8fd1\u6709\u4ec0\u4e48\u4f1a\u5435\u7684\u5de5\u7a0b", "scanned": 5, "returned": 5, "weaker": 0, "background": 0.7555688202492089, "top": 0.8348}
+[5] limit=5                          rows= 5 ms=['1778', '1779', '1780'] body_seq_scan=True Buffers: shared hit=662966 read=26229
+[6] limit=5                          default= 5 iterative_scan= 5
+{"ts": "2026-11-14T11:25:08Z", "level": "INFO", "logger": "domain.search", "request_id": "-", "message": "\u2190 search", "shape": "corpus", "q": "\u9644\u8fd1\u6709\u4ec0\u4e48\u4f1a\u5435\u7684\u5de5\u7a0b", "scanned": 20, "returned": 20, "weaker": 0, "background": 0.7555688202492089, "top": 0.8348}
+[5] limit=20                         rows=20 ms=['1806', '1782', '1829'] body_seq_scan=True Buffers: shared hit=663445 read=26214
+[6] limit=20                         default=20 iterative_scan=20
+{"ts": "2026-11-14T11:25:19Z", "level": "INFO", "logger": "domain.search", "request_id": "-", "message": "\u2190 search", "shape": "corpus", "q": "\u9644\u8fd1\u6709\u4ec0\u4e48\u4f1a\u5435\u7684\u5de5\u7a0b", "scanned": 50, "returned": 50, "weaker": 0, "background": 0.7555688202492089, "top": 0.8348}
+[5] limit=50                         rows=50 ms=['1789', '1806', '1809'] body_seq_scan=True Buffers: shared hit=664437 read=26153
+[6] limit=50                         default=50 iterative_scan=50
+{"ts": "2026-11-14T11:25:30Z", "level": "INFO", "logger": "domain.search", "request_id": "-", "message": "\u2190 search", "shape": "corpus", "q": "\u9644\u8fd1\u6709\u4ec0\u4e48\u4f1a\u5435\u7684\u5de5\u7a0b", "scanned": 3, "returned": 3, "weaker": 0, "background": 0.7555688202492089, "top": 0.8348}
+[5] doc_type=evenementenvergunning   rows= 3 ms=['1782', '1805', '1779'] body_seq_scan=True Buffers: shared hit=663242 read=26149
+[6] doc_type=evenementenvergunning   default= 3 iterative_scan=20
+{"ts": "2026-11-14T11:25:41Z", "level": "INFO", "logger": "domain.search", "request_id": "-", "message": "\u2190 search", "shape": "corpus", "q": "\u9644\u8fd1\u6709\u4ec0\u4e48\u4f1a\u5435\u7684\u5de5\u7a0b", "scanned": 1, "returned": 1, "weaker": 0, "background": 0.7555688202492089, "top": 0.8081}
+[5] window=1 week                    rows= 1 ms=['1813', '1810', '1782'] body_seq_scan=True Buffers: shared hit=663195 read=26153
+[6] window=1 week                    default= 1 iterative_scan=20
+{"ts": "2026-11-14T11:25:51Z", "level": "INFO", "logger": "domain.search", "request_id": "-", "message": "\u2190 search", "shape": "corpus", "q": "muziekfestival", "scanned": 20, "returned": 20, "weaker": 0, "background": 0.7806014083301529, "top": 0.9139}
+[5] query=muziekfestival (nl)        rows=20 ms=['1826', '1792', '1778'] body_seq_scan=True Buffers: shared hit=663247 read=26153
+[6] query=muziekfestival (nl)        default=20 iterative_scan=20
+{"ts": "2026-11-14T11:26:00Z", "level": "INFO", "logger": "db", "request_id": "-", "message": "db closed"}

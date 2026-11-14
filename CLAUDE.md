@@ -305,7 +305,9 @@ as `cache.py` degrades when Upstash is unconfigured. The reason used to be that 
 no Postgres; the deploy stack ships one, so the guard is now about running the API against a
 partial environment rather than about a deployment that cannot have a database. Current tables: `municipality` (stage 0); `etl_run`,
 `poi_category`, `poi_category_rule`, `poi`, `poi_import` (stage 1); `bekendmaking`,
-`bekendmaking_locatie` (official announcements, loaded by `scripts/import_bekendmaking.py`); `claim`, `evidence`, `verdict`, `world_facet`, `world_snapshot`, `verdict_world`, `topic` (0021-0026 — the measurement ledger, see below; nothing in `api/` reads them). `geocode_cache` is also
+`bekendmaking_locatie` (official announcements, loaded by `scripts/import_bekendmaking.py`),
+`bekendmaking_activity_text` (0027 — `activity_text` derived once instead of per read, filled by
+`scripts/derive_activity.py`; `bekendmaking_activity_pending` is what has not been derived yet); `claim`, `evidence`, `verdict`, `world_facet`, `world_snapshot`, `verdict_world`, `topic` (0021-0026 — the measurement ledger, see below; nothing in `api/` reads them). `geocode_cache` is also
 still there but no longer read or written — its only caller was the housing geocoder.
 
 A refactor is in progress — see `docs/architecture-refactor-plan.md` (structure) and
@@ -910,14 +912,25 @@ distribution) and the `Agent` cases in `.claude/hooks/test_guard.py`.
   while the housing subsystem itself was removed 2026-10-28). Eight further remote branches are
   0 commits ahead of `main` and fully merged. None has been deleted — **owner: unassigned.**
 - No rate limiting; upstream quotas are the only backpressure.
-- **`/search/notices` spends ~2.0 s in one query, and that is 95% of the endpoint.** Measured
-  2026-11-14 by wrapping `_fetch` and `background_similarity` on the real call path: total
-  2,018–3,250 ms = encode 56–66 + **ranking 1,953–2,729** + baseline 44–494 + rest ~21. The
-  ranking query's own comment records the vector sort at **787 ms**, so it is ~2.5x that now
-  and nothing re-measured it. It is `await`ed, so it does **not** block the event loop — but at
-  2 s a query, `DB_POOL_MAX_SIZE=10` is ten concurrent searches from exhaustion. Wants an
-  `EXPLAIN (ANALYZE, BUFFERS)` and a falsifier pass before anyone concludes why. **Owner:
-  unassigned.**
+- **Fixed 2026-11-14 in 0027, and the diagnosis is worth more than the fix.** `/search/notices`
+  spent 1,778–2,040 ms warm in one query — 95% of the endpoint — and the HNSW scan inside it was
+  **0.76–1.13 ms**. The planner put `bekendmaking_activity` on the *probe* side of a hash built
+  from the already-LIMITed ranked rows, so all 94,183 view rows were projected to decorate 20.
+  `service.py`'s own comment said that could not happen: **a CTE plus a LIMIT expresses an
+  intention, it does not constrain the planner.** Controls (falsifier verdict 14 on ledger claim
+  17): the same join with no view expression evaluated is 9–12 ms, so it was the projection, not
+  the join or the I/O; cost is per *referenced view column*, not per row read — adding
+  `activity_src` doubled it; and `body_text` was detoasted **8 times per row** (661,518 buffer
+  hits = 8 × 83,289), of which the six regexes are ~61% and TOAST decompression ~29%, so no
+  cleverer regex could go below the detoast floor. Invariant over limit 1/5/20/50, a `doc_type`
+  filter, a one-week window, a Dutch query and the isochrone branch — a query returning 1 row
+  cost what one returning 50 did. Fixed **upstream, not in the SQL**: 0027 stores the text.
+  Same query now 1.9–5.7 ms, view output byte-identical (md5
+  `c221dcb413bbc2f90d601eefa53246be`). `scripts/verify_plans.py` asserts the plan so the next
+  regression is loud. **The fix's own numbers have not been through `falsifier`** — ledger claim
+  18, `falsified: false`.
+- `background_similarity` is now the largest SQL term in that endpoint at 29–38 ms. Not a
+  problem; recorded so the next person does not re-measure the thing that was already fixed.
 - The blocking half of that endpoint is fixed: `encoder.encode()` is a torch forward pass and
   was called directly from `async def`, and the ~440 MB model was loaded inside the first
   request. Measured 2026-11-14: **9.76 s to load plus 925 ms for the first forward pass**, all

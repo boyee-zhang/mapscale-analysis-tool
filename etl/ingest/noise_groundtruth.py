@@ -24,10 +24,13 @@ import sys
 
 import asyncpg
 
-# Through api.main.db rather than os.getenv, so this script reads .env the way every other
-# script in the repo does. Reading the environment directly made it work only in a shell that
-# happened to export DATABASE_URL, which is not how the rest of the project is run.
-from api.main.db import DATABASE_URL
+# Through core.db rather than os.getenv, so this reads .env the way every other module under
+# etl/ does. Reading the environment directly made it work only in a shell that happened to
+# export DATABASE_URL, which is not how the rest of the project is run. It imported this from
+# api.main.db until 2026-11-14 -- right instinct, wrong target, and one less etl -> api edge.
+from ..core.db import dsn as _dsn
+
+DATABASE_URL = _dsn(required=False)
 
 NOTES = pathlib.Path(__file__).resolve().parents[2] / "docs" / "pg-notes"
 

@@ -27,15 +27,15 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import pathlib
 
 import asyncpg
-from dotenv import dotenv_values
+from ..core import db
 
 from etl.derive.event_dates_rules import extract
 
-ROOT = pathlib.Path(__file__).resolve().parents[2]
-DATABASE_URL = dotenv_values(ROOT / ".env").get("DATABASE_URL")
+# core.db: an exported DATABASE_URL now wins over .env, which `dotenv_values` used to
+# ignore. required=False because this is a module-level constant checked later.
+DATABASE_URL = db.dsn(required=False)
 
 # Scoped to event publications, and that is a correctness constraint rather than a speed one.
 # The extractor was built and measured on `evenementenvergunning` bodies only. An

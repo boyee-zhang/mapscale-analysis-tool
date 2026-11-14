@@ -39,10 +39,9 @@ import urllib.request
 from pathlib import Path
 
 import asyncpg
-from dotenv import load_dotenv
+from ..core import db
 
 ROOT = Path(__file__).resolve().parents[2]
-load_dotenv(ROOT / ".env")
 
 VERDICTS = ("DESTROYED", "SURVIVED", "REFUSED")
 
@@ -422,7 +421,9 @@ def build_parser():
 
 async def main():
     args = build_parser().parse_args()
-    dsn = os.getenv("DATABASE_URL")
+    # Its own message rather than core.db's: for the ledger, no database is not a missing
+    # setting, it is a reason not to measure anything yet.
+    dsn = db.dsn(required=False)
     if not dsn:
         raise SystemExit("DATABASE_URL is not set. Nothing can be recorded, so nothing "
                          "should be measured yet.")

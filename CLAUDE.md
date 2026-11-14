@@ -28,6 +28,7 @@ this repo holds no LLM client of its own.
 ```
 api/            the HTTP service (see Backend layout below)
 etl/            everything that moves or derives data, by what it does:
+  core/           the shared spine: db.py (one DSN), runs.py (the etl_run lifecycle)
   ingest/         external source -> a store
   derive/         a store -> the same store
   verify/         asserts invariants, writes nothing durable
@@ -35,6 +36,32 @@ etl/            everything that moves or derives data, by what it does:
   experiments/    frozen one-off measurements, kept for provenance
 tools/          not ETL: migrate.py, loadtest.py, fanout.py, and the three shell scripts
 ```
+
+**`etl/core/db.py` is the only way to find the database.** There used to be three, and they
+were not equivalent: `load_dotenv + os.getenv` (process env wins) in 9 files,
+`dotenv_values(ROOT/".env")` (process env **ignored**) in 5, and a bare `os.environ` in 4
+experiments. Exporting `DATABASE_URL` and running one of the middle five silently used `.env`
+instead, so two scripts in one shell could talk to two different databases. **Importing
+`core.db` loads `.env`**, which is why ETL modules import it before any `from api.main…`
+import: `api/main/config.py` calls a bare `load_dotenv()` that resolves against the working
+directory, and `core.db`'s is anchored to the repo root.
+
+**`etl/core/runs.py` owns the `etl_run` lifecycle** — claim / succeed / fail — which the three
+importers each wrote out separately. It deliberately does **not** own the transaction:
+`ingest/poi.py` writes its success row inside `conn.transaction()` together with the merge and
+the soft delete so the count and the data commit as one, and a helper that opened its own
+transaction would have taken that choice away. `claim()` raises `SystemExit` on a unique
+violation because the only way it can fail is a second concurrent import of the same source,
+and that is not something to resolve automatically.
+
+**Two things were deliberately NOT extracted**, because extracting them would have been a
+rewrite rather than a move:
+- *a shared HTTP client.* `UA` is defined in exactly one of the five fetchers and the others
+  send no User-Agent at all. Unifying it would add a header to four scripts' outbound
+  requests, which is a behaviour change in the one direction a refactor must not take.
+- *a shared argparse spine.* The CLIs' flags genuinely differ (`--limit`, `--dry-run`,
+  `--refresh`, `--family`, `--status`, `--concurrency`), and a common parser would mean
+  standardising them, i.e. changing every command's interface.
 
 **`etl/` is a package and is run with `-m`, from the repo root**:
 `python -m etl.ingest.bekendmaking`, `python -m etl.derive.activity`,
@@ -225,7 +252,10 @@ is 50 requests/day/endpoint and the `cycling-*` graphs answer 200 while being br
 ORS_API_KEY=                   # required for isochrone + directions
 ORS_BASE_URL=                  # optional; defaults to the public host. See docs/ors-self-host.md
 TOMTOM_API_KEY=                # required for traffic
-DATABASE_URL=                  # optional; omit to run without Postgres (see below)
+DATABASE_URL=                  # optional; omit to run without Postgres (see below).
+                               # An EXPORTED value wins over this file for everything under
+                               # etl/ — see etl/core/db.py. Five scripts used to ignore the
+                               # environment and read only .env; that asymmetry is gone.
 DB_POOL_MAX_SIZE=              # optional, default 10. An env var so it can be VARIED while
                                # measuring — that is the only way to tell "the pool is the
                                # wall" from "the pool is merely full". Measured: it is not.

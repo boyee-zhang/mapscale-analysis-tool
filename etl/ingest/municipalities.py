@@ -11,15 +11,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
-from pathlib import Path
 
 import asyncpg
 import httpx
-from dotenv import load_dotenv
-
-ROOT = Path(__file__).resolve().parents[2]
-load_dotenv(ROOT / ".env")
+# core.db FIRST: importing it loads .env from the repo root, while api.main.config does a
+# bare load_dotenv() that resolves against the working directory instead.
+from ..core import db
 
 from api.main.upstream.pdok import WFS_BASE, WFS_PARAMS  # noqa: E402
 
@@ -34,9 +31,7 @@ SET name = EXCLUDED.name, geom = EXCLUDED.geom, fetched_at = now()
 
 
 async def main() -> None:
-    dsn = os.getenv("DATABASE_URL")
-    if not dsn:
-        raise SystemExit("DATABASE_URL is not set")
+    dsn = db.dsn()
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         resp = await client.get(WFS_BASE, params=WFS_PARAMS)

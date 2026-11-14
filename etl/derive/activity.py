@@ -39,15 +39,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import os
 import time
-from pathlib import Path
 
 import asyncpg
-from dotenv import load_dotenv
-
-ROOT = Path(__file__).resolve().parents[2]
-load_dotenv(ROOT / ".env")
+from ..core import db
 
 from etl.derive.activity_rules import PENDING, current_rule, derive  # noqa: E402
 
@@ -68,9 +63,7 @@ async def main() -> None:
                     help="skip REFRESH of the FTS materialized view")
     args = ap.parse_args()
 
-    dsn = os.getenv("DATABASE_URL")
-    if not dsn:
-        raise SystemExit("DATABASE_URL is not set")
+    dsn = db.dsn()
     conn = await asyncpg.connect(dsn)
     try:
         for r in await status(conn):

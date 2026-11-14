@@ -23,15 +23,10 @@ destroyed the claim that 0027 was complete:
 from __future__ import annotations
 
 import asyncio
-import os
 import sys
-from pathlib import Path
 
 import asyncpg
-from dotenv import load_dotenv
-
-ROOT = Path(__file__).resolve().parents[2]
-load_dotenv(ROOT / ".env")
+from ..core import db
 
 from etl.derive.activity_rules import PENDING, current_rule, derive  # noqa: E402
 from etl.ledger.claims import digest_of, probe_corpus  # noqa: E402
@@ -576,9 +571,7 @@ CASES = [imported_row_is_derived_in_the_same_transaction,
 
 
 async def main() -> int:
-    dsn = os.getenv("DATABASE_URL")
-    if not dsn:
-        raise SystemExit("DATABASE_URL is not set")
+    dsn = db.dsn()
     conn = await asyncpg.connect(dsn)
     bad = 0
     try:

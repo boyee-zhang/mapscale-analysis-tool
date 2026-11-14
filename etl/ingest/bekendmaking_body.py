@@ -22,19 +22,14 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import os
 import re
 import sys
 import xml.etree.ElementTree as ET
 from datetime import date, time
-from pathlib import Path
 
 import asyncpg
 import httpx
-from dotenv import load_dotenv
-
-ROOT = Path(__file__).resolve().parents[2]
-load_dotenv(ROOT / ".env")
+from ..core import db, runs
 
 # The derivation itself stays in SQL; this only says WHICH rows and WHEN. See
 # etl/derive/activity_rules.py for why there is no second copy of the patterns here.
@@ -44,7 +39,6 @@ DOC = "https://zoek.officielebekendmakingen.nl/{}.xml"
 CONCURRENCY = 4          # a public government endpoint, not ours; see --concurrency
 UA = "mapscale-research/0.1 (personal project; CC0 open data)"
 
-_CLAIM_RUN = "INSERT INTO etl_run (source, note) VALUES ($1, $2) RETURNING id"
 
 # `fetched_at` is deliberately absent from the IS DISTINCT FROM comparison. It changes on
 # every run by definition, so including it would rewrite every tuple on a no-op re-run and
@@ -291,9 +285,7 @@ async def main() -> int:
     p.add_argument("--concurrency", type=int, default=CONCURRENCY)
     args = p.parse_args()
 
-    dsn = os.getenv("DATABASE_URL")
-    if not dsn:
-        raise SystemExit("DATABASE_URL is not set")
+    dsn = db.dsn()
 
     if args.retry:
         where = ("b.identifier IN (SELECT identifier FROM bekendmaking_body "
@@ -316,10 +308,7 @@ async def main() -> int:
             return 0
 
         source = f"bekendmaking_body:{args.family}"
-        try:
-            run_id = await conn.fetchval(_CLAIM_RUN, source, f"{len(idents)} queued")
-        except asyncpg.UniqueViolationError:
-            raise SystemExit(f"an import of {source} is already running") from None
+        run_id = await runs.claim(conn, source, f"{len(idents)} queued")
         print(f"etl_run {run_id} claimed")
 
         stats: dict[str, int] = {}
@@ -358,10 +347,8 @@ async def main() -> int:
             # nothing is a failure that would otherwise look like a success.
             left = await conn.fetchval(
                 "SELECT count(*) FROM bekendmaking_activity_pending")
-            await conn.execute(
-                "UPDATE etl_run SET status='succeeded', finished_at=now(), row_count=$2, "
-                "note=$3 WHERE id=$1", run_id, len(idents),
-                f"{stats!r} derived={derived} pending_after={left}")
+            await runs.succeed(conn, run_id, len(idents),
+                               note=f"{stats!r} derived={derived} pending_after={left}")
             print(f"{ins} inserted, {upd} updated, {derived} activity row(s) derived, "
                   f"{left} still pending")
             if left:
@@ -369,9 +356,7 @@ async def main() -> int:
                       "etl/derive/activity.py -- an underived row reads activity_text='' "
                       "and is absent from the FTS index.", file=sys.stderr)
         except Exception as e:
-            await conn.execute(
-                "UPDATE etl_run SET status='failed', finished_at=now(), note=$2 WHERE id=$1",
-                run_id, f"{type(e).__name__}: {e}")
+            await runs.fail_from(conn, run_id, e)
             raise
 
         print(f"\nINSERT {ins}, UPDATE {upd}, unchanged {len(idents) - ins - upd}")

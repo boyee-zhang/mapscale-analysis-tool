@@ -25,7 +25,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -33,10 +32,7 @@ import asyncpg
 import osmium
 import osmium.filter
 import osmium.geom
-from dotenv import load_dotenv
-
-ROOT = Path(__file__).resolve().parents[2]
-load_dotenv(ROOT / ".env")
+from ..core import db, runs
 
 # Rows per COPY. Large enough that round-trips are irrelevant, small enough that the
 # batch and its JSON stay well inside memory on a full-country run.
@@ -47,16 +43,6 @@ BATCH_SIZE = 50_000
 # download as a mass delete would permanently poison the table.
 SENTINEL_MIN_RATIO = 0.5
 
-_CLAIM_RUN = """
-INSERT INTO etl_run (source, note) VALUES ($1, $2) RETURNING id
-"""
-
-_LAST_GOOD = """
-SELECT row_count FROM etl_run
-WHERE source = $1 AND status = 'succeeded' AND row_count IS NOT NULL
-ORDER BY started_at DESC
-LIMIT 1
-"""
 
 # Interpretation of the staged bytes happens here, in SQL, rather than in Python:
 # SRID assignment, reduction to a point, and category assignment are all things we want
@@ -194,9 +180,7 @@ async def main() -> None:
     if not args.pbf.is_file():
         raise SystemExit(f"no such file: {args.pbf}")
 
-    dsn = os.getenv("DATABASE_URL")
-    if not dsn:
-        raise SystemExit("DATABASE_URL is not set")
+    dsn = db.dsn()
 
     source = _source_name(args.pbf)
     conn = await asyncpg.connect(dsn)
@@ -211,10 +195,7 @@ async def main() -> None:
 
         # Committed on its own so the partial unique index really does exclude a second
         # concurrent run rather than just a second transaction in this process.
-        try:
-            run_id = await conn.fetchval(_CLAIM_RUN, source, str(args.pbf))
-        except asyncpg.UniqueViolationError:
-            raise SystemExit(f"an import of {source} is already running") from None
+        run_id = await runs.claim(conn, source, str(args.pbf))
         print(f"etl_run {run_id} claimed")
 
         try:
@@ -235,14 +216,10 @@ async def main() -> None:
             print(f"staged {staged} objects, {stats['no_geometry']} without geometry")
             await conn.execute("CREATE INDEX poi_import_key ON poi_import (osm_type, osm_id)")
 
-            previous = await conn.fetchval(_LAST_GOOD, source)
+            previous = await runs.last_good_row_count(conn, source)
             if previous and staged < previous * SENTINEL_MIN_RATIO:
                 note = f"sentinel: staged {staged} vs {previous} last run"
-                await conn.execute(
-                    "UPDATE etl_run SET status = 'failed', finished_at = now(), note = $2 WHERE id = $1",
-                    run_id,
-                    note,
-                )
+                await runs.fail(conn, run_id, note)
                 raise SystemExit(f"{note} — refusing to write a diff")
 
             async with conn.transaction():
@@ -250,19 +227,11 @@ async def main() -> None:
                 extent = await conn.fetchrow(_STAGED_EXTENT)
                 deleted = await conn.execute(_SOFT_DELETE, *extent)
                 live = await conn.fetchval("SELECT count(*) FROM poi WHERE deleted_at IS NULL")
-                await conn.execute(
-                    "UPDATE etl_run SET status = 'succeeded', finished_at = now(), row_count = $2 WHERE id = $1",
-                    run_id,
-                    staged,
-                )
+                await runs.succeed(conn, run_id, staged)
         except SystemExit:
             raise
         except Exception as e:
-            await conn.execute(
-                "UPDATE etl_run SET status = 'failed', finished_at = now(), note = $2 WHERE id = $1",
-                run_id,
-                f"{type(e).__name__}: {e}",
-            )
+            await runs.fail_from(conn, run_id, e)
             raise
 
         print(f"merge {merged}, soft delete {deleted}")

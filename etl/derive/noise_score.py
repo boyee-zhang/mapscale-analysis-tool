@@ -58,7 +58,7 @@ from datetime import datetime, timezone
 
 import asyncpg
 import numpy as np
-from dotenv import dotenv_values
+from ..core import db
 from sentence_transformers import SentenceTransformer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import average_precision_score, roc_auc_score
@@ -72,7 +72,9 @@ from sklearn.metrics import average_precision_score, roc_auc_score
 # beside the API here. Keep them apart while only this batch job needs it; merge them the day
 # the API itself embeds queries.
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-DATABASE_URL = dotenv_values(ROOT / ".env").get("DATABASE_URL")
+# core.db: an exported DATABASE_URL now wins over .env, which `dotenv_values` used to
+# ignore. required=False because this is a module-level constant checked later.
+DATABASE_URL = db.dsn(required=False)
 
 MODEL = "intfloat/multilingual-e5-base"
 VERSION = "meta_emb_v1"

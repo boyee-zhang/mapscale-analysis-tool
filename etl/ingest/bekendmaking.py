@@ -18,24 +18,15 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import os
 import re
 import sys
 import xml.etree.ElementTree as ET
 from datetime import date, timedelta
 
-from pathlib import Path
 
 import asyncpg
 import httpx
-from dotenv import load_dotenv
-
-# import_poi.py does this and this script did not, so it only ran in a shell that had
-# already exported DATABASE_URL — which is how the first two imports happened to work and
-# why the third exited with "DATABASE_URL is not set". Scripts in the same directory must
-# bootstrap the same way or the one that works teaches the wrong habit.
-ROOT = Path(__file__).resolve().parents[2]
-load_dotenv(ROOT / ".env")
+from ..core import db, runs
 
 SRU = "https://repository.overheid.nl/sru"
 # MEASURED 2026-11-04, correcting a comment that said 100 was "the service's own maximum":
@@ -63,7 +54,6 @@ PAGE = 1000
 # 9900 is kept as the ceiling because it is below it with room to spare.
 PAGE_CEILING = 9900
 
-_CLAIM_RUN = "INSERT INTO etl_run (source, note) VALUES ($1, $2) RETURNING id"
 
 # ON CONFLICT DO UPDATE ... WHERE the row actually differs. Without the WHERE, a re-run of an
 # overlapping date range rewrites every tuple and doubles the heap for no change — the same
@@ -389,19 +379,14 @@ async def main() -> None:
     p.add_argument("--max", type=int, default=0, help="stop after N records (0 = all)")
     args = p.parse_args()
 
-    dsn = os.getenv("DATABASE_URL")
-    if not dsn:
-        raise SystemExit("DATABASE_URL is not set")
+    dsn = db.dsn()
 
     cql = _scope_cql(args) + f' and dt.date>="{args.date_from}"'
     source = (f"bekendmaking:type={args.doc_type}" if args.doc_type
               else f"bekendmaking:{args.gemeente or args.rd}")
     conn = await asyncpg.connect(dsn)
     try:
-        try:
-            run_id = await conn.fetchval(_CLAIM_RUN, source, cql)
-        except asyncpg.UniqueViolationError:
-            raise SystemExit(f"an import of {source} is already running") from None
+        run_id = await runs.claim(conn, source, cql)
         print(f"etl_run {run_id} claimed\n  {cql}")
 
         seen = locs = skipped = 0
@@ -419,9 +404,7 @@ async def main() -> None:
                     # Release the etl_run claim rather than leaving it open: the partial
                     # unique index is predicated on `finished_at IS NULL`, so an abandoned
                     # row would block the real import that follows.
-                    await conn.execute(
-                        "UPDATE etl_run SET status='succeeded', finished_at=now(), "
-                        "row_count=0, note='plan-only' WHERE id=$1", run_id)
+                    await runs.succeed(conn, run_id, 0, note="plan-only")
                     return
                 for wcql, wtotal in plan:
                     n, m, bad = await _import_window(client, conn, run_id, wcql, wtotal, seen, grand)
@@ -430,15 +413,9 @@ async def main() -> None:
                     skipped += bad
                     if args.max and seen >= args.max:
                         break
-            await conn.execute(
-                "UPDATE etl_run SET status='succeeded', finished_at=now(), row_count=$2 WHERE id=$1",
-                run_id, seen,
-            )
+            await runs.succeed(conn, run_id, seen)
         except Exception as e:
-            await conn.execute(
-                "UPDATE etl_run SET status='failed', finished_at=now(), note=$2 WHERE id=$1",
-                run_id, f"{type(e).__name__}: {e}",
-            )
+            await runs.fail_from(conn, run_id, e)
             raise
 
         live = await conn.fetchval("SELECT count(*) FROM bekendmaking")

@@ -30,16 +30,16 @@ from __future__ import annotations
 import argparse
 import asyncio
 import hashlib
-import pathlib
 import sys
 from datetime import datetime, timezone
 
 import asyncpg
-from dotenv import dotenv_values
+from ..core import db
 from sentence_transformers import SentenceTransformer
 
-ROOT = pathlib.Path(__file__).resolve().parents[2]
-DATABASE_URL = dotenv_values(ROOT / ".env").get("DATABASE_URL")
+# core.db: an exported DATABASE_URL now wins over .env, which `dotenv_values` used to
+# ignore. required=False because this is a module-level constant checked later.
+DATABASE_URL = db.dsn(required=False)
 
 MODEL = "intfloat/multilingual-e5-base"
 MAX_CHARS = 1800

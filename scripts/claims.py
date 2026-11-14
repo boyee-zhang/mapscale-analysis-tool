@@ -117,13 +117,41 @@ def probe_paths(paths: list[str]) -> dict:
 
 
 async def probe_corpus(conn) -> dict:
-    """Row counts plus a content digest, so two different imports of the same size differ."""
+    """Row counts plus content digests, so two different imports of the same size differ.
+
+    DERIVED STATE IS IN HERE, not just source tables, and that was a real hole: falsifier
+    verdict 15 on claim 18 showed this probe reading only `bekendmaking` and
+    `bekendmaking_locatie` while `bekendmaking_activity` flipped from real text to '' --
+
+        populated: n=1 md5=265f5ff9650e1f81…  view_text='Objectvergunning | het plaatsen…'
+        emptied  : n=1 md5=265f5ff9650e1f81…  view_text=''
+
+    identical digests either side. A measurement anchored to `corpus` could have its premise
+    destroyed with the verdict still reading "current", which is 0022's lesson restated: a
+    difference that matters has to be a visible difference.
+
+    The activity digest covers identifier, rule_version AND the derived content, ordered by
+    identifier (the primary key, so the order is total and deterministic). `activity_src` goes
+    in as `::text` rather than `array_to_string`: the latter renders `{}` and `{""}` both as
+    the empty string, which is a collision the falsifier found in an earlier fingerprint of
+    mine. `string_agg` over zero rows is NULL, so an empty table digests differently from a
+    populated one rather than erroring -- which is what makes the emptied case detectable.
+    """
     row = await conn.fetchrow("""
         SELECT count(*) AS n, md5(string_agg(identifier, ',' ORDER BY identifier)) AS d
         FROM bekendmaking""")
     loc = await conn.fetchval("SELECT count(*) FROM bekendmaking_locatie")
+    act = await conn.fetchrow("""
+        SELECT count(*) AS n,
+               md5(string_agg(identifier || E'\x01' || rule_version::text || E'\x01'
+                              || activity_text || E'\x01' || activity_src::text,
+                              E'\x02' ORDER BY identifier)) AS d
+        FROM bekendmaking_activity_text""")
+    pending = await conn.fetchval("SELECT count(*) FROM bekendmaking_activity_pending")
     return {"bekendmaking_rows": row["n"], "bekendmaking_ids_md5": row["d"],
-            "bekendmaking_locatie_rows": loc}
+            "bekendmaking_locatie_rows": loc,
+            "activity_count": act["n"], "activity_digest": act["d"],
+            "activity_pending_count": pending}
 
 
 def probe_graph() -> dict:

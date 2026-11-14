@@ -154,7 +154,7 @@ first. The doc records the first, wrong conclusion too.
 Full-surface measurement (2026-10-29, warm, generator ceiling 5,290 req/s): `/health`
 **4,346 req/s**, `/traffic/tile-url` 3,062, `/pois` 844 deduplicated and 445 when every
 request is distinct, `/directions` 431, `/isochrone` 410, `/bekendmakingen` 142,
-`/bulk_directions` 65. Carry forward the **per-core** costs, not the peaks: 0.67 / 3.55 /
+`/bulk_directions` 65 (removed 2026-11-14). Carry forward the **per-core** costs, not the peaks: 0.67 / 3.55 /
 7.22 ms of CPU per request for `/health` / `/pois` / `/bekendmakingen`, i.e. 1,498 / 282 /
 138 req/s on one dedicated core. Three traps the sweep found: **more workers made
 `/bekendmakingen` slower** (142 on 2 workers, 119 on 6 — twelve hungry processes on eight
@@ -325,11 +325,11 @@ All under the `/api/main` prefix.
 | `/bekendmakingen` | GET | `bekendmaking` tables + ORS for the shape | — |
 | `/region` | GET | PDOK reverse | 7d |
 | `/directions` | GET | ORS | — |
-| `/bulk_directions` | GET | ORS (`asyncio.gather`) | — |
 | `/traffic/tile-url` | GET | — (static URL) | — |
 | `/traffic/flow` | GET | TomTom Flow | 5m |
 | `/traffic/incidents` | GET | TomTom Incidents | 5m |
 | `/search` | GET | ES → PDOK → Nominatim | — |
+| `/search/notices` | GET | pgvector over `bekendmaking_embedding` + optional isochrone | — |
 
 Cache keys are `{feature}:{param}:{param}:…`, e.g. `iso:{lng}:{lat}:{minutes}:{profile}`.
 The `(lng, lat, minutes, profile)` shape goes through `cache.geo_cache_key()` — `/pois` reads
@@ -861,7 +861,11 @@ distribution) and the `Agent` cases in `.claude/hooks/test_guard.py`.
   status codes, one cause; do not debug them as three problems. Quota is counted per endpoint,
   and **403 responses carry no `x-ratelimit-*` headers**, so reading the remaining quota
   requires probing an endpoint that still works. `docs/ors-self-host.md` is the way out.
-- `/traffic/flow` has an `api.js` method but no caller; `/bulk_directions` has no frontend method.
+- `/traffic/flow` has an `api.js` method but no caller. **`/bulk_directions` was removed
+  2026-11-14**: it had no caller in `frontend/src/` at all, and an unbounded `targets` list
+  made one unauthenticated request able to exhaust the 50/day ORS `/directions` quota. The
+  idea it was for — real network distance to every POI in the isochrone, rather than the
+  straight-line filter — is still worth having; it needs a cap and a caller, not a revert.
 - Traffic data in the AI service is a PV27 (North Holland) provincial proxy applied to **every**
   municipality; results for other provinces are not location-specific.
 - CI only lints `api/`, so violations elsewhere are invisible: `ruff check tests/` reports 3

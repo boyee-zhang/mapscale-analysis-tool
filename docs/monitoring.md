@@ -352,7 +352,7 @@ sequentially instead. The other seven are served entirely by this machine.
 | `/directions` | 431 | 1 | 8 | — | ORS |
 | `/isochrone` | 410 | 1 | 8 | — | ORS |
 | `/bekendmakingen` | 142 | **2** | 64 | 7.22 ms | Postgres query, then machine contention |
-| `/bulk_directions` | 65 | 1 | 8 | — | 5 ORS routes per request |
+| `/bulk_directions` | 65 | 1 | 8 | — | 5 ORS routes per request; endpoint removed 2026-11-14 |
 
 `/health` and `/traffic/tile-url` landing within 4% of each other is not a coincidence to
 explain away: both are handlers with no upstream, so both hit the same FastAPI + uvicorn wall.

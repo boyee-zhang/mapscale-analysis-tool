@@ -59,8 +59,6 @@ SCENARIOS = {
     ),
     # One ORS route. No frontend caller today, but it is exposed, so it is measured.
     "directions": lambda i, vary: (f"{BASE}/directions", _route(i, vary)),
-    # 5 ORS routes behind one request via asyncio.gather — the fan-out amplifier.
-    "bulk_directions": lambda i, vary: (f"{BASE}/bulk_directions", _bulk(i, vary)),
 
     # --- THIRD PARTY: every request leaves this machine for a service we do not own.
     # Saturating these measures THEIR rate limiter and burns quota or abuses a free
@@ -94,15 +92,6 @@ def _route(i: int, vary: bool) -> dict:
             "end_lng": round(lng + 0.004 + d, 6), "end_lat": round(lat + 0.003, 6),
             "mode": "walking"}
 
-
-def _bulk(i: int, vary: bool) -> dict:
-    """Five targets around the start — the same shape the map would ask for."""
-    lng, lat = CENTRES[i % len(CENTRES)] if vary else CENTRES[0]
-    d = (i % 23) * 0.0004 if vary else 0.0
-    targets = ";".join(
-        f"{round(lng + 0.003 * k + d, 6)},{round(lat + 0.002 * k, 6)}" for k in range(1, 6))
-    return {"start_lng": round(lng, 6), "start_lat": round(lat, 6),
-            "targets": targets, "mode": "walking"}
 
 
 def _geo(i: int, vary: bool, extra: dict) -> dict:

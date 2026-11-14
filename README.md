@@ -181,7 +181,7 @@ All under `/api/main`.
 | `/pois` | `poi` table (Overpass fallback) | 6h on the Overpass path only |
 | `/bekendmakingen` | `bekendmaking` tables, clipped to the isochrone | — |
 | `/region` | PDOK reverse | 7d |
-| `/directions`, `/bulk_directions` | ORS | — |
+| `/directions` | ORS | — |
 | `/traffic/tile-url`, `/traffic/flow`, `/traffic/incidents` | TomTom | 5m |
 | `/search` | ES → PDOK → Nominatim | — |
 

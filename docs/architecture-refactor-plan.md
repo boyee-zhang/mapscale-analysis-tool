@@ -153,7 +153,7 @@ PDOK 是典型案例:它一个上游服务承担 4 种语义(反向地理编码�
 |---|---|
 | `/isochrone` | ✅ 逻辑在 `domains/geo/service.py`,`routers/isochrone.py` 是薄调用层 |
 | `/pois` | ✅ 同上,且已切到 Postgres `ST_Contains` |
-| `/directions` `/bulk_directions` | ⬜ 仍是原 router |
+| `/directions` | ⬜ 仍是原 router |
 | `/region` | ⬜ 仍是原 router |
 | `/traffic/*` | ⬜ 仍是原 router |
 

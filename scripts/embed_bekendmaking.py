@@ -31,6 +31,7 @@ import argparse
 import asyncio
 import hashlib
 import pathlib
+import sys
 from datetime import datetime, timezone
 
 import asyncpg
@@ -45,11 +46,22 @@ MAX_CHARS = 1800
 PASSAGE_PREFIX = "passage: "
 BATCH = 64
 
+# `activity_derived` is checked EXPLICITLY, not left to the `<> ''` filter.
+#
+# The filter already excluded undelivered rows, but by accident and indistinguishably from the
+# rows 0015 legitimately derives to '' (no body, no title). Two different reasons to skip a
+# publication were collapsing into one silent number. Naming the condition means an undelivered
+# corpus is reported rather than embedded as nothing -- 0029 added the flag for exactly this.
 SELECT_ALL = """
 SELECT a.identifier, a.activity_text
 FROM bekendmaking_activity a
-WHERE a.activity_text <> ''
+WHERE a.activity_derived AND a.activity_text <> ''
 ORDER BY a.identifier
+"""
+
+# Counted and reported separately: these are not "nothing to say", they are "not asked yet".
+COUNT_UNDERIVED = """
+SELECT count(*) FROM bekendmaking_activity WHERE NOT activity_derived
 """
 
 UPSERT = """
@@ -103,6 +115,11 @@ async def main() -> int:
                   "any FTS-vs-vector comparison is no longer single-axis", flush=True)
 
         rows = await conn.fetch(SELECT_ALL)
+        underived = await conn.fetchval(COUNT_UNDERIVED)
+        if underived:
+            print(f"WARNING: {underived} publication(s) have no derived activity_text and are "
+                  f"NOT being embedded. Run scripts/derive_activity.py first; embedding a "
+                  f"partially derived corpus silently under-indexes it.", file=sys.stderr)
         have = {r["identifier"]: (r["model"], r["text_sha1"]) for r in await conn.fetch(
             "SELECT identifier, model, text_sha1 FROM bekendmaking_embedding")}
         todo = []

@@ -34,7 +34,12 @@ import httpx
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 load_dotenv(ROOT / ".env")
+
+# The derivation itself stays in SQL; this only says WHICH rows and WHEN. See
+# scripts/activity_rules.py for why there is no second copy of the patterns here.
+from scripts.activity_rules import current_rule, derive  # noqa: E402
 
 DOC = "https://zoek.officielebekendmakingen.nl/{}.xml"
 CONCURRENCY = 4          # a public government endpoint, not ours; see --concurrency
@@ -319,29 +324,51 @@ async def main() -> int:
         print(f"etl_run {run_id} claimed")
 
         stats: dict[str, int] = {}
-        ins = upd = 0
+        ins = upd = derived = 0
+        # Resolved once, before any fetching: a missing or unregistered rule must
+        # stop the run here, not after 94,183 bodies are stored underived.
+        rule = await current_rule(conn)
         try:
             sem = asyncio.Semaphore(args.concurrency)
             async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
                 for i in range(0, len(idents), 200):
                     chunk = idents[i:i + 200]
                     rows = await asyncio.gather(*(_one(client, sem, x) for x in chunk))
-                    for ident, row in zip(chunk, rows):
-                        stats[row["status"]] = stats.get(row["status"], 0) + 1
-                        r = await conn.fetchval(
-                            _UPSERT, ident, row["status"], row.get("start_date"),
-                            row.get("end_date"), row.get("start_time"), row.get("end_time"),
-                            row.get("period_raw"), row.get("visitors_peak"),
-                            row.get("body_text"), run_id,
-                        )
-                        if r is True:
-                            ins += 1
-                        elif r is False:
-                            upd += 1
+                    # ONE TRANSACTION PER CHUNK, and the activity derivation is inside it.
+                    # A committed body therefore always has committed activity_text: there is
+                    # no window in which bekendmaking_activity returns '' for a row that has
+                    # a body, which is the defect verdict 15 found in 0027 (the in-migration
+                    # backfill closed that window for existing rows and left it open for every
+                    # future import, because nothing called the derive step).
+                    async with conn.transaction():
+                        for ident, row in zip(chunk, rows):
+                            stats[row["status"]] = stats.get(row["status"], 0) + 1
+                            r = await conn.fetchval(
+                                _UPSERT, ident, row["status"], row.get("start_date"),
+                                row.get("end_date"), row.get("start_time"), row.get("end_time"),
+                                row.get("period_raw"), row.get("visitors_peak"),
+                                row.get("body_text"), run_id,
+                            )
+                            if r is True:
+                                ins += 1
+                            elif r is False:
+                                upd += 1
+                        derived += await derive(conn, chunk, rule)
                     print(f"  {min(i + 200, len(idents))}/{len(idents)}  {stats}", flush=True)
+            # The derive count goes in the run note. A run that stored bodies and derived
+            # nothing is a failure that would otherwise look like a success.
+            left = await conn.fetchval(
+                "SELECT count(*) FROM bekendmaking_activity_pending")
             await conn.execute(
                 "UPDATE etl_run SET status='succeeded', finished_at=now(), row_count=$2, "
-                "note=$3 WHERE id=$1", run_id, len(idents), repr(stats))
+                "note=$3 WHERE id=$1", run_id, len(idents),
+                f"{stats!r} derived={derived} pending_after={left}")
+            print(f"{ins} inserted, {upd} updated, {derived} activity row(s) derived, "
+                  f"{left} still pending")
+            if left:
+                print("WARNING: rows remain in bekendmaking_activity_pending. Run "
+                      "scripts/derive_activity.py -- an underived row reads activity_text='' "
+                      "and is absent from the FTS index.", file=sys.stderr)
         except Exception as e:
             await conn.execute(
                 "UPDATE etl_run SET status='failed', finished_at=now(), note=$2 WHERE id=$1",

@@ -1,0 +1,82 @@
+=== 2026-11-14T16:58:16Z  HEAD=5786276  dirty=6 ===
+
+### verify_activity.py (24 cases)
+  ok   the_input_fingerprints_cannot_be_written_by_hand           both refused: generated always
+  ok   a_title_change_moves_the_corpus_probe                      pending 0 -> 1, digest d9eafe9dc922 -> 698f0d65b738
+
+ALL PASS
+
+### verify_ledger.py
+  ok   the default anchor set is in the table, not in the script BEGIN / corpus,graph / ROLLBACK
+
+ALL PASS
+
+### verify_plans.py
+=== /search/notices, corpus-wide === (1,791 buffers)
+  ok   never seq-scans bekendmaking_body
+  ok   ...nor bekendmaking
+  ok   buffers stay under 50,000 (was 661,886 before 0027)
+  ok   the HNSW index answers the ordering
+=== /search/notices, isochrone === (15,739 buffers)
+  ok   never seq-scans bekendmaking_body
+  ok   ...nor bekendmaking
+  ok   buffers stay under 50,000 (was 661,886 before 0027)
+  ok   the spatial hit set is materialised before the vector work
+  ok   the vector sort is over the hit set, not the corpus
+ALL PASS
+
+### pytest tests/unit
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+93 passed, 1 warning in 0.57s
+
+### test_guard.py
+
+ALL PASS
+
+### ruff (api + touched scripts)
+All checks passed!
+
+### derive_activity.py --status
+nothing to derive (rule_version 1, extractor view bekendmaking_activity_derive, inputs bekendmaking_activity_source)
+
+### read view fingerprint (must stay c221dcb413bbc2f90d601eefa53246be)
+72aac8449f8e28ce3b62d09d5e2e1d19
+pending: 0
+
+### read view fingerprint -- THE EXPRESSION, recorded, because the first attempt at this
+### check used activity_src::text instead of array_to_string and read as a mismatch:
+###   md5(string_agg(identifier||E'\x01'||activity_text||E'\x01'
+###                  ||coalesce(array_to_string(activity_src,','),''), E'\x02'
+###                  ORDER BY identifier)) FROM bekendmaking_activity
+  fingerprint        c221dcb413bbc2f90d601eefa53246be
+  recorded in 0027   c221dcb413bbc2f90d601eefa53246be
+  byte-identical     True
+  pending            0
+  source_fp NULL     0
+
+### empty database, 0001..0032
+applying 0032_pending_view_reads_the_source_once.sql
+applied 32 migration(s)
+  activity_rule      {'version': 1, 'extractor': 'derive_view_v1', 'source_view': 'source_view_v1'}
+  pending view cols  ['identifier', 'why', 'rule_version', 'source_fp', 'current_source_fp', 'body_etl_run']
+  generated cols     [('bekendmaking', 'title_fp'), ('bekendmaking_body', 'body_text_fp')]
+  pending rows       0
+  source view rows   0
+
+### the real importer against that fresh database
+
+348 publications processed (0 unparseable), 838 location rows written
+bekendmaking: 348 rows, bekendmaking_locatie: 837 rows
+3 inserted, 0 updated, 3 activity row(s) derived, 345 still pending
+
+INSERT 3, UPDATE 0, unchanged 0
+statuses: {'no_period': 3}
+  File "<string>", line 13
+    await c.execute("UPDATE bekendmaking SET title = title || ' GEWIJZIGD' WHERE identifier = \", ident)
+                    ^
+SyntaxError: unterminated string literal (detected at line 13)
+  pubs/bodies/derived/pending: 348 3 3 345
+  pending by reason: {'never_derived': 345}
+  every derived row has a source_fp: True
+  title change on a REAL imported row (gmb-2026-257440): why=source_changed
+    stored text is still 'Toestemming voor herinrichting van de openbare r'

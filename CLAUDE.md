@@ -310,7 +310,7 @@ partial environment rather than about a deployment that cannot have a database. 
 `scripts/import_bekendmaking_body.py` in the body's own transaction and by
 `scripts/derive_activity.py` for re-derives; `bekendmaking_activity_pending` is what has not been
 derived yet), `activity_rule` (0030 — which extraction is current, read by both the pending view
-and `scripts/activity_rules.py`); `claim`, `evidence`, `verdict`, `world_facet`, `world_snapshot`, `verdict_world`, `topic` (0021-0026 — the measurement ledger, see below; nothing in `api/` reads them). `geocode_cache` is also
+and `scripts/activity_rules.py`; 0031 adds `source_view`, so one row names both the transformation and its input set), `bekendmaking_activity_source` (0031 — the declared input set of the derive, as one fingerprint per publication, over the STORED generated columns `bekendmaking.title_fp` and `bekendmaking_body.body_text_fp`); `claim`, `evidence`, `verdict`, `world_facet`, `world_snapshot`, `verdict_world`, `topic` (0021-0026 — the measurement ledger, see below; nothing in `api/` reads them). `geocode_cache` is also
 still there but no longer read or written — its only caller was the housing geocoder.
 
 A refactor is in progress — see `docs/architecture-refactor-plan.md` (structure) and
@@ -966,21 +966,50 @@ distribution) and the `Agent` cases in `.claude/hooks/test_guard.py`.
   that followed is the cost 0025 already records for widening a snapshot, and it is honest:
   claim 17 says "the ~2.0 s is X" and there is no ~2.0 s any more, so stale is the correct
   reading. **Owner: unassigned** — re-validating claim 17 means re-measuring something that no
-  longer exists, so the likelier disposition is to supersede it with claim 18's successor.
-- **The derive has two inputs and only one is monitored — `falsifier` DESTROYED claim 23 over it
-  (verdict 16).** `bekendmaking_activity_derive` reads `bb.body_text` **and `b.title`**, and
-  **32,329 of 94,183 rows (34.3%) derive their `activity_text` from the title alone**
-  (`activity_src = '{}'`). Only the body is watched: the pending view compares `body_etl_run` and
-  `rule_version` and never mentions `title`. `scripts/import_bekendmaking.py` upserts
-  `ON CONFLICT … SET title = EXCLUDED.title`, and **108 rows have already taken that branch**. So a
-  title change leaves all three new surfaces reporting clean at once: `bekendmaking_activity_pending`
-  = 0, the importer's `pending_after=0` success signal intact, and the `corpus` digest byte-identical
-  (`c9849a28c6e31295 -> c9849a28c6e31295`) — the same premise-destruction 0027's entry above
-  records, narrowed from "the whole table" to "one of two inputs", not closed. The fix is a signal
-  for `bekendmaking`'s own content (store and compare `last_changed_run` the way `body_etl_run` is
-  compared): a new migration plus `activity_rules.PENDING` and the pending view. **Owner:
-  unassigned.** Evidence: `docs/pg-notes/raw/activity-fixes-falsify.txt`,
-  `docs/pg-notes/scripts/activity_fixes_falsify.py`.
+  longer exists, so the likelier disposition is to supersede it with claim 18's successor. Note what the probe
+  still cannot see on its own: it detects a title change only because `activity_pending_count`
+  is sourced from the pending view, so the view being right is what makes the probe right —
+  asserted in `a_title_change_moves_the_corpus_probe` rather than assumed.
+- **Fixed 2026-11-14 in 0031/0032: staleness is a fingerprint over the declared input set, not
+  a list of watched fields.** `falsifier` DESTROYED claim 23 (verdict 16) because
+  `bekendmaking_activity_derive` reads `bb.body_text` **and `b.title`** while only the body was
+  watched — and **32,329 of 94,183 rows (34.3%) derive their `activity_text` from the title
+  alone**, with `scripts/import_bekendmaking.py` upserting `ON CONFLICT … SET title =
+  EXCLUDED.title`, a branch **108 rows had already taken**. A title change left all three
+  surfaces reporting clean at once: pending 0, the importer's `pending_after=0`, and the
+  `corpus` digest byte-identical (`c9849a28c6e31295 -> c9849a28c6e31295`).
+  **The obvious patch was rejected.** Comparing `bekendmaking.last_changed_run` would have been
+  a third hand-maintained sentinel that fails identically the next time the extraction reads
+  something new. 0031 instead declares the input set as a view,
+  `bekendmaking_activity_source`, and stores its `source_fp` on the derived row. Adding an
+  input changes that view, which changes every fingerprint, which makes every row pending —
+  there is nothing left to remember.
+  Three things make it hold rather than merely be intended:
+  - **The inputs hash themselves.** `title_fp` and `body_text_fp` are STORED generated columns
+    (`md5(text)` is IMMUTABLE), so no writer can forget to maintain them, and the pending check
+    compares two 32-byte strings instead of detoasting `body_text` — which would have
+    reintroduced 29% of the cost 0027 removed.
+  - **`scripts/verify_activity.py` asserts the input set from the catalog**, not from a list in
+    the file: `pg_depend` gives the columns the derive view actually reads, the generation
+    expressions give the `title → title_fp` correspondence, and the case fails if the derive
+    grows an input the fingerprint does not hash. Its must-fail control injects
+    `b.abstract` into the derive view and asserts the check refuses — 0026 is in this repo
+    because 0025 shipped a CHECK that could not reject anything.
+  - **NULL means pending, not fresh.** 0031's backfill records a fingerprint only for rows
+    whose stored text still equals what the current inputs produce; anything else keeps NULL
+    and stays pending. Backfilling unconditionally would have declared every already-stale row
+    fresh, in the migration that exists to fix that. Measured: all 94,183 rows matched, 0 left
+    NULL.
+  Verified: 24 cases in `scripts/verify_activity.py`, an empty-database apply of 0001..0032,
+  and a real `import_bekendmaking.py` + `import_bekendmaking_body.py` run on a fresh database
+  where a title change on an imported row reports `why=source_changed`. The read view's output
+  is unchanged (md5 `c221dcb413bbc2f90d601eefa53246be`).
+  **Two costs, stated.** A fingerprint over inputs over-reports: a title change on a row whose
+  output cannot depend on the title still goes pending, converging on the next derive — the
+  visible direction, which this file requires. And `body_etl_run` leaves the staleness test, so
+  a re-fetch returning byte-identical text no longer re-derives; that makes the owed full
+  `--refetch` much cheaper. **The 0031/0032 numbers have not been through `falsifier`** —
+  ledger claim 27, no verdict yet.
 - **The in-transaction derive is true but asserted by nothing.** Moving the `derive()` call one
   dedent **outside** `async with conn.transaction():` in `scripts/import_bekendmaking_body.py`
   reintroduces exactly the defect verdict 15 named, and **all six cited commands stay green** —

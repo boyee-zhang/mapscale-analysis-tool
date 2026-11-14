@@ -16,11 +16,18 @@ WHAT MAKES A ROW PENDING, and why neither test needs to read `body_text`:
     same row through `activity_rule_current()`, so the view and this script cannot disagree
     about what is current. 0027 had the number in both places and the first bump made them
     contradict each other permanently.
-  * `body_etl_run` differs from `bekendmaking_body.etl_run` -- the body was re-fetched.
+  * `source_fp` differs from `bekendmaking_activity_source.source_fp` -- one of the fields the
+    extraction READS has changed. 0031 made this one test instead of one per field, because
+    the per-field version was already wrong: it watched `body_etl_run` and not `title`, while
+    34.3% of rows derive from the title alone and the importer overwrites titles (falsifier
+    verdict 16 on ledger claim 23). A fingerprint over the declared input set cannot be
+    out of date with respect to the extraction without every row going pending.
 
-A digest of `body_text` would be the obvious staleness test and is the wrong one: deciding
-whether it changed would mean decompressing the 72 MB TOAST relation, which is 29% of the cost
-0027 removed. The run id is already there and is an integer.
+Neither test reads `body_text`. Hashing it here would mean decompressing the TOAST relation,
+29% of the cost 0027 removed -- so the hash is a STORED generated column, computed once on
+write, and this check compares two 32-byte strings. `body_etl_run` is still recorded as
+provenance; it is no longer what decides, which is why a re-fetch returning byte-identical
+text no longer re-derives the row.
 
 THE PATTERNS ARE NOT IN THIS FILE. They are in the `bekendmaking_activity_derive` view, which
 is the same expression text 0015 shipped. 0015 declined to materialise partly because a column
@@ -74,13 +81,14 @@ async def main() -> None:
             print(f"  pending  {r['why']:14} {r['n']:,}")
 
         rule = await current_rule(conn)
-        version, view = rule
-        ids = [r["identifier"] for r in await conn.fetch(PENDING, version)]
+        ids = [r["identifier"] for r in await conn.fetch(PENDING, rule.version)]
         if not ids:
-            print(f"nothing to derive (rule_version {version}, extractor view {view})")
+            print(f"nothing to derive (rule_version {rule.version}, extractor view "
+                  f"{rule.derive_view}, inputs {rule.source_view})")
             return
         if args.status:
-            print(f"{len(ids):,} row(s) would be derived at rule_version {version} ({view})")
+            print(f"{len(ids):,} row(s) would be derived at rule_version {rule.version} "
+                  f"({rule.derive_view} over {rule.source_view})")
             return
 
         t0, changed = time.perf_counter(), 0

@@ -1,0 +1,49 @@
+40 queries, model intfloat/multilingual-e5-base, max_tokens 512, 1978 distractors (the MDE is computed per endpoint below, not carried as a constant)
+
+arm       POOL    MINI  dis/10
+act      0.669   0.667    0.10
+body     0.757   0.295    3.77
+
+paired per-query difference, body - act, 20,000 bootstrap resamples, 95% CI
+  the MEAN is reported beside the MEDIAN and the sign test on purpose: they disagree,
+  and three of the forty queries carry most of the mean.
+  pool  mean +0.088  median +0.000  [-0.000, +0.185]  BELOW MDE     W/L/T 18/19/3
+        MDE of THESE differences at n=40: 0.133 (sd 0.302)   sign test p=1.000   top-3 wins are 76% of the total
+        bootstrap lower bound > 0 in 64% of 200 RNG seeds -- a sign that depends on the seed is not a direction
+  mini  mean -0.372  median -0.397  [-0.468, -0.269]  SIGNIFICANT   W/L/T 2/35/3  <- WITHDRAWN: penalises out-of-pool hits; descriptive only
+        MDE of THESE differences at n=40: 0.145 (sd 0.326)   sign test p=0.000   top-3 wins are -7% of the total
+
+mean rank inside the pool (0 = first; negative delta = ranked higher).
+  `chance` is a uniformly random permutation of the same pool, 50 seeds: an arm with
+  NO information. The subgroups come from the control arm's own top-10, so chance is
+  not zero -- it is the floor/ceiling of the definition.
+  subgroup                      n    act   body   delta  chance  vs chance
+  MISSED by production vec    242  17.50  12.92   -4.58   -4.08      -0.51
+  FOUND by production vec     199   4.21   8.36   +4.15   +8.93      -4.78
+  n is (query, document) PAIRS across 40 queries, not independent observations: one
+  query contributes up to 10 of them, so a plain mean understates the spread.
+
+same cut, split by whether the body was TRUNCATED at 512 tokens
+  (chance = the same null permutation; the whole/truncated gap is NOT distinguishable from zero)
+  MISSED  whole      n= 183 in 34 queries  chance  -3.78  act 17.47  body 13.52  delta -3.95
+  MISSED  truncated  n=  59 in 15 queries  chance  -5.00  act 17.61  body 11.05  delta -6.56
+  FOUND   whole      n= 166 in 38 queries  chance  +9.27  act  3.92  body  8.07  delta +4.16
+  FOUND   truncated  n=  33 in 14 queries  chance  +7.22  act  5.70  body  9.82  delta +4.12
+
+=== controls that can FAIL ===
+  IDENTITY  body:=act gives +0.000000000000, and the recomputed real headline +0.088293 matches +0.088293  ok
+  MUTATION  rotated body = +0.041 against the real +0.088, moved 0.047 > 0.033  ok
+  RANDOM    shuffled pool nDCG@10 = 0.546 against act 0.669 / body 0.757  ok
+  MONOTONE  act: mini 0.667 <= pool 0.669  ok
+  MONOTONE  body: mini 0.295 <= pool 0.757  ok
+
+ALL CONTROLS PASS
+
+GATE (positive with a 95% CI excluding 0 on the POOL endpoint): NOT PASSED
+  MEASURED: no detectable effect on this endpoint. Mean below the MDE, median 0.000,
+            sign test p=1.00, and 76% of the mean from 3 of 40 queries.
+  UNTESTED: this endpoint ranks only the pool, built from the four OLD arms, so a
+            correct document only this arm finds cannot appear in it. That is a
+            reason the endpoint under-credits, NOT evidence that it did -- settling
+            it means judging the body arm's out-of-pool hits.
+  286 queries would be needed to resolve a 0.05 difference at this variance

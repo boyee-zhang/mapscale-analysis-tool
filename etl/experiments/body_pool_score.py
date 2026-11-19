@@ -84,14 +84,26 @@ def main() -> int:
     raw = json.loads((OUT / "judgeset-raw.json").read_text())
     fresh_in = json.loads(pathlib.Path(args.judgments).read_text())
 
+    # `null` is the skeleton's "not graded yet", and it is counted rather than coerced: int(None)
+    # would crash here, but a 0 would be worse -- it is a real grade meaning "a different
+    # subject", so a silent default would score every unjudged candidate as irrelevant, which is
+    # precisely the pool-bias failure this whole exercise exists to remove.
     fresh: dict[str, dict[str, int]] = {}
+    blank = 0
     for k, v in fresh_in.items():
-        if isinstance(v, dict):
-            fresh.setdefault(k, {}).update({d: int(g) for d, g in v.items()})
-        else:
-            q, d = k.split("\t")
-            fresh.setdefault(q, {})[d] = int(v)
-    print(f"{sum(len(v) for v in fresh.values())} grades in this session's file")
+        items = v.items() if isinstance(v, dict) else [(k.split("\t")[1], v)]
+        q = k if isinstance(v, dict) else k.split("\t")[0]
+        for d, g in items:
+            if g is None or g == "":
+                blank += 1
+            else:
+                fresh.setdefault(q, {})[d] = int(g)
+    graded = sum(len(v) for v in fresh.values())
+    print(f"{graded} grades in this session's file, {blank} still null")
+    if blank:
+        raise SystemExit(f"{blank} of {graded + blank} candidates are not graded. Fill every "
+                         f"null with 0, 1 or 2 -- a partial sheet scores the rest as 0, which "
+                         f"is a real grade and would under-report every arm.")
 
     # ---- CALIBRATION, before anything is scored.
     drift = []

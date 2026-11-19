@@ -293,11 +293,27 @@ async def main() -> int:
     (OUT / "bodypool-judge_sheet.json").write_text(json.dumps(sheet, ensure_ascii=False, indent=1))
     (OUT / "bodypool-calibration_key.json").write_text(json.dumps(key, ensure_ascii=False, indent=1))
 
+    # The answer file, pre-keyed with nulls in the sheet's own order, so judging is replacing a
+    # null with 0/1/2 rather than retyping 390 identifiers. It is NOT overwritten once it has a
+    # grade in it: regenerating the sheet is cheap and idempotent, and silently resetting a
+    # session's work to null would be the most expensive bug this script could have.
+    ans = OUT / "bodypool-judgments.json"
+    skeleton = {s_["query"]: {c["id"]: None for c in s_["candidates"]} for s_ in sheet}
+    if ans.exists():
+        prev = json.loads(ans.read_text())
+        filled = sum(1 for v in prev.values() for g in v.values() if g is not None)
+        if filled:
+            print(f"{ans.name} already holds {filled} grades -- left untouched")
+        else:
+            ans.write_text(json.dumps(skeleton, ensure_ascii=False, indent=1))
+    else:
+        ans.write_text(json.dumps(skeleton, ensure_ascii=False, indent=1))
+
     total = sum(len(s["candidates"]) for s in sheet)
     print(f"\nsheet: {total} items over {len(sheet)} queries "
           f"({len(new_pairs)} to judge + {len(calib)} calibration)")
     print(f"wrote bodypool-arm.json, bodypool-judge_sheet.json, "
-          f"bodypool-calibration_key.json to {OUT}")
+          f"bodypool-calibration_key.json, bodypool-judgments.json to {OUT}")
     return 0
 
 

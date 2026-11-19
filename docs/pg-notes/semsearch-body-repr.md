@@ -231,3 +231,29 @@ Two things to know before reading the scores afterwards:
   `body_pool_score.py` checks them **before** it scores anything and exits rather than
   reporting if fewer than 7 of 10 agree or any item moves two grades, because a drifted judge
   produces numbers that look exactly like real ones.
+
+### How the 380 are answered, and the two controls that guard the answer file
+
+`bodypool-judgments.json` is written pre-keyed with `null` in the sheet's own order, so judging
+is replacing a null with `0`/`1`/`2` rather than retyping 390 identifiers. Re-running
+`body_pool.py` is idempotent — the sheet's md5 is unchanged across a regeneration
+(`e81429f447eaf4d7cdc4313dd5898785`) — and it will **not** overwrite an answer file that already
+holds a grade.
+
+The rubric is the one fixed before the first candidate of the 2026-11-13 session was read
+(`semsearch-judgeset.md`), including the rule added during that session (`intrekking` is `1`,
+not `2`). Applying a different rule here would make the 10 calibration items measure the rule
+rather than the judge.
+
+Both guards were sabotage-tested rather than asserted, because 0026 is in this repo because
+0025 shipped a CHECK that could not reject anything:
+
+- **A null is not a 0.** `int(None)` would crash, but coercing to `0` would be worse: `0` is a
+  real grade meaning "a different subject", so a partial sheet would score every ungraded
+  candidate as irrelevant — the exact pool-bias failure this exercise removes. The scorer counts
+  nulls and exits: `390 of 390 candidates are not graded`.
+- **Calibration refuses, with exit 1.** Flipping the 10 recorded grades by two levels gives
+  `CALIBRATION FAILED: the two judging sessions are not one instrument`; leaving them intact
+  reports `CALIBRATION 10/10 exact agreement with 2026-11-13` and proceeds. The synthetic file
+  used for that test is random grades in the scratchpad, not judgments, and the numbers it
+  produced are meaningless by construction — it tested the plumbing and the gate, nothing else.

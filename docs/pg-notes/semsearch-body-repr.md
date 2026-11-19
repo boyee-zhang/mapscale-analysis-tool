@@ -162,3 +162,72 @@ those documents — the depth-50 pool extension this work has already priced at 
 **Owner: unassigned**, pending that judging.
 
 Not done: a ledger claim and verdict for this run.
+
+---
+
+## The pool extension this note asked for, built 2026-11-19 (NOT YET JUDGED)
+
+The disposition above says the recall question is answerable only by judging the documents the
+body arm surfaces from outside the pool. That instrument now exists:
+`etl/experiments/body_pool.py` (build) and `body_pool_score.py` (score, after judging).
+
+What it cost, measured rather than estimated: **58 minutes at 26.6 docs/s on mps** for all
+94,183 bodies, into a gitignored `data/body_vectors.npz` of 295 MB. The plan's ~5 hours was
+extrapolated from the title-prefix arm's token count and was wrong by 5x. Nothing was built in
+the database — no migration, no HNSW index, no change under `api/` — so this step did not need
+the gate to have passed: 40 brute-force matmuls over 94,183 x 768 are milliseconds, and an
+approximate index would have folded its own recall loss into the arm's score, the reason
+`judgeset_pool.py` turns the index off.
+
+`judgeset_pool.py` is untouched. Re-running it needs a DEEPSEEK key and 40 LLM calls and would
+overwrite `judgeset-raw.json` / `judgeset-judge_sheet.json`, which are inside the `judgeset`
+path facet and pinned by `sha256` in `evidence` rows. This script only adds, into its own files.
+
+```
+body arm top-10 over the full corpus: 380 new (query, document) pairs, 20 already judged
+C1 cached vector vs re-encoded, n=32: min cosine 1.000000
+C4 vs production vec top-10: 0/40 identical, mean overlap 0.28/10
+C3 sheet fields: doc_type, gemeente, id, n, text, title -- no grade, score, rank or arm
+sheet: 390 items over 40 queries (380 to judge + 10 calibration)
+```
+
+**The two arms' top-10s are 97% disjoint** (mean overlap 0.28 of 10), which is why reranking a
+pool built without this arm could not see it, and is the quantity the Phase 0 gate was blind to
+by construction.
+
+Three structural checks, run so that a confound is not discovered after judging. None of them
+is a relevance judgement, deliberately — characterising these candidates before the judge sees
+them would prime the judging, and the judge is the instrument:
+
+```
+corpus median body length 1771
+vec   n=400  body len median 1133  p10 373  p90 2418  34 gemeente  7 doc_type
+body  n=400  body len median  804  p10  64  p90 3779  59 gemeente  11 doc_type
+```
+
+- **No long-document bias.** The obvious confound for an arm that reads 452 tokens instead of
+  23 is that it would favour long documents. It does the opposite: its candidates' median body
+  length is 804 characters against the production arm's 1,133 and the corpus's 1,771.
+- **It is less concentrated, not more.** 59 municipalities against 34, 11 doc_types against 7,
+  and Amsterdam is 109 of its 400 slots against the production arm's 201. The composition also
+  shifts from `omgevingsvergunning` (197 -> 92) toward `evenementenvergunning` (119 -> 214).
+- **The fallback fires once.** 1 of 324 distinct candidates has an empty body and is therefore
+  the activity summary in disguise; corpus-wide only 5 of 94,183 rows have no body. In the gate
+  it fired 0 times, so this is the first run where the number is not zero.
+
+**None of this has been through `falsifier`,** and none of it is a performance claim: they are
+counts from `bodypool-arm.json` and one SQL query. The conclusion they are there to support —
+whether the body arm gains or loses recall — does not exist yet, because the 380 pairs are
+unjudged. **Owner: the judging is the user's.**
+
+Two things to know before reading the scores afterwards:
+
+- **Enlarging the pool lowers every arm's nDCG@10**, including the production arm's, whose
+  top-10 does not change. The denominator is the ideal ranking over everything known relevant,
+  and judging adds known-relevant documents. The 0.669 above and whatever `vec` scores next are
+  **not comparable**: only the paired difference within one run is.
+- **The 10 calibration items are a control that can fail.** They were judged on 2026-11-13 and
+  are mixed into this sheet in the identical field shape, grades held in a separate file.
+  `body_pool_score.py` checks them **before** it scores anything and exits rather than
+  reporting if fewer than 7 of 10 agree or any item moves two grades, because a drifted judge
+  produces numbers that look exactly like real ones.

@@ -1046,6 +1046,28 @@ distribution) and the `Agent` cases in `.claude/hooks/test_guard.py`.
   `feature/housing-layer` (`fix: move curl_cffi to requirements.txt for Vercel deployment`,
   while the housing subsystem itself was removed 2026-10-28). Eight further remote branches are
   0 commits ahead of `main` and fully merged. None has been deleted — **owner: unassigned.**
+- **A judging harness that truncates is part of the instrument.** Measured 2026-11-21: the
+  body-representation judge sheet carried `activity_text[:300]` and the viewing script cut again
+  at 150, and because the body arm prefers documents with longer summaries the cut fell on
+  **52.6% of its candidates against 1.0% of the control's**. The success predicate had stopped
+  being "this publication is about the thing asked" and become "its first 150 characters say
+  so" — which is the *control* arm's own retrieval input. `falsifier` DESTROYED the result on
+  it. `etl/experiments/body_pool.py` now puts the whole summary on the sheet; nothing stops the
+  next scratch viewer from truncating again. See `docs/pg-notes/semsearch-body-repr.md`.
+  **Owner: unassigned.**
+- **A raw output file under `docs/pg-notes/raw/` is append-only in practice, and nothing
+  enforces it.** Re-running an archive step over a path an `evidence` row pins by `sha256`
+  leaves the record reading as unsupported — evidence 26 and 29 on claim 33 are in that state
+  now, on purpose and recorded. A re-run should get a new name. **Owner: unassigned.**
+- **`--skip-control` on `etl/experiments/body_pool.py` used to move the calibration draw**,
+  because one `random.Random` fed both `control_alignment`'s 32-sample and the calibration
+  sample. A run whose only purpose was to archive a build log redrew the ten reference pairs to
+  a disjoint ungraded set 30 seconds after the score was archived, and the scoring command then
+  refused. Fixed three ways (one generator per consumer seeded from a tag; the key is an input
+  once grades exist; the key and the sheet are write-protected like the answer file). **This is
+  the same bug family as `body_repr_score.py`'s `boot()`, which is the second time a shared
+  mutating RNG produced a wrong result in this work** — if a script draws for two purposes, seed
+  two generators.
 - No rate limiting; upstream quotas are the only backpressure.
 - **Fixed 2026-11-14 in 0027, and the diagnosis is worth more than the fix.** `/search/notices`
   spent 1,778–2,040 ms warm in one query — 95% of the endpoint — and the HNSW scan inside it was

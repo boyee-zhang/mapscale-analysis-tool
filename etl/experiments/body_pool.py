@@ -61,6 +61,7 @@ CACHE = ROOT / "data" / "body_vectors.npz"   # data/ is gitignored; 289 MB
 MAX_TOKENS = 512
 BATCH = 64
 POOL_DEPTH = 10          # the same depth judgeset_pool.py pooled its four arms at
+CONTROL_BAND = (10, 15)  # the production arm's ranks 11-15, as blinding AND as a control
 CALIBRATION = 10
 SEED = 20261119
 
@@ -196,12 +197,29 @@ async def main() -> int:
     # The 40 queries come from the judgments file, not from judgeset_pool.QUERIES: that is the
     # set that was actually judged, and importing that module would require a DEEPSEEK key.
     judged = json.loads((OUT / "judgeset-judgments.json").read_text())
+    raw = json.loads((OUT / "judgeset-raw.json").read_text())
     queries = list(judged)[: args.limit] if args.limit else list(judged)
     print(f"{len(queries)} queries, {sum(len(v) for v in judged.values())} existing judgments")
 
-    rng = random.Random(SEED)
+    # ONE GENERATOR PER CONSUMER, SEEDED FROM A TAG, and this is the second time in this
+    # experiment that a shared mutating `random.Random` has produced a wrong result.
+    #
+    # `body_repr_score.py`'s `boot()` was the first: three calls drew from different positions
+    # of one stream, so the headline's interval and the gate's came from different samples and
+    # contradicted each other. Here it was worse than contradictory. `control_alignment`
+    # consumes `rng.sample(range(94183), 32)`, so `--skip-control` did not skip a check -- it
+    # shifted every later draw, including the calibration sample, to ten DIFFERENT pairs with
+    # zero overlap and none of them graded. A run whose only purpose was to archive the build
+    # log therefore destroyed the reference grades the result is checked against, 30 seconds
+    # after the score was archived, and the cited scoring command then refused outright.
+    #
+    # `falsifier` found that, not a test. The structural fix is that no consumer can move
+    # another, so a flag cannot reach the sampling at all.
+    rng_ctl = random.Random(f"{SEED}:control")
+    rng_cal = random.Random(f"{SEED}:calibration")
+    rng_sheet = random.Random(f"{SEED}:sheet")
     if not args.skip_control:
-        control_alignment(ids, vectors, texts, rng)
+        control_alignment(ids, vectors, texts, rng_ctl)
 
     from api.main.domains.search.encoder import QUERY_PREFIX
     model = load_model()
@@ -222,13 +240,37 @@ async def main() -> int:
     print(f"body arm top-{POOL_DEPTH}: {len(new_pairs)} new (query, document) pairs, "
           f"{overlap} already judged (cached, free)")
 
+    # ---- THE CONTROL ARM, and the two reasons it is not optional.
+    #
+    # BLINDING. The 2026-11-13 sheet was the shuffled union of four arms, so position carried
+    # no provenance. A sheet that is 380 body-arm candidates plus 10 calibration items is 97%
+    # one arm: the judge knows, of any item, which system produced it, and the judge here is
+    # not independent of that system. Mixing in the production arm's ranks 11-15 makes the
+    # provenance of an individual item genuinely unknown. Random corpus documents would also
+    # have blinded the SHEET and not the JUDGE -- they are obvious on sight, so the judge would
+    # re-identify them and with them everything else.
+    #
+    # A CONTROL THAT CAN FAIL. The finding this sheet exists to test is "the body arm surfaces
+    # relevant documents from outside the depth-10 pool". The competing explanation is that
+    # ANY arm's next few ranks do, i.e. that depth 10 is simply shallow and the representation
+    # has nothing to do with it. Ranks 11-15 of the production arm measure exactly that, and
+    # if they are relevant at the same rate then the body arm's out-of-pool rate says nothing
+    # about the body. Without this, the number has no denominator to be compared against --
+    # which is the shape of mistake `falsifier` has already destroyed twice in this work.
+    lo, hi = CONTROL_BAND
+    control = {r["query"]: r["arms"]["vec"][lo:hi] for r in raw["queries"]}
+    ctl_pairs = [(q, d) for q in queries for d in control.get(q, [])
+                 if d not in judged.get(q, {})]
+    ctl_both = [(q, d) for q, d in ctl_pairs if d in arm[q]]
+    print(f"control: production vec ranks {lo + 1}-{hi}, {len(ctl_pairs)} unjudged pairs, "
+          f"{len(ctl_both)} of them also in the body arm top-{POOL_DEPTH}")
+
     # C2: a "new" pair that is already judged would be paid for twice and would also silently
     # overwrite a grade from the earlier session.
     assert not [p for p in new_pairs if p[1] in judged.get(p[0], {})], "C2: pair already judged"
 
     # C4: the arm must actually differ from the production arm, or there is nothing to judge
     # and the 38x finding was an artefact of the mini-corpus.
-    raw = json.loads((OUT / "judgeset-raw.json").read_text())
     prod = {r["query"]: r["arms"]["vec"][:POOL_DEPTH] for r in raw["queries"]}
     same = [q for q in queries if arm[q] == prod.get(q)]
     ov = [len(set(arm[q]) & set(prod.get(q, []))) for q in queries]
@@ -243,14 +285,30 @@ async def main() -> int:
     by_grade: dict[int, list[tuple[str, str]]] = {0: [], 1: [], 2: []}
     for q in queries:
         for d, g in judged[q].items():
-            if d not in arm[q]:
+            if d not in arm[q] and d not in control.get(q, []):
                 by_grade[int(g)].append((q, d))
     want = {2: 4, 1: 3, 0: 3}
-    calib = [p for g, k in want.items() for p in rng.sample(by_grade[g], min(k, len(by_grade[g])))]
+    # Once judging has begun the key is an INPUT, not an output: it is the reference the new
+    # grades are checked against, so redrawing it silently replaces the control with ten pairs
+    # the judge never saw. Re-using the recorded draw is what makes the comparison survive a
+    # rebuild at all.
+    prev_key = OUT / "bodypool-calibration_key.json"
+    ans_path = OUT / "bodypool-judgments.json"
+    graded = 0
+    if ans_path.exists():
+        graded = sum(1 for v in json.loads(ans_path.read_text()).values()
+                     for g in v.values() if g is not None)
+    if prev_key.exists() and graded:
+        calib = [tuple(k.split("\t")) for k in json.loads(prev_key.read_text())]
+        print(f"calibration: re-using the recorded draw of {len(calib)} pairs "
+              f"({prev_key.name} is an input once grades exist)")
+    else:
+        calib = [p for g, k in want.items()
+                 for p in rng_cal.sample(by_grade[g], min(k, len(by_grade[g])))]
     print(f"calibration: {len(calib)} already-judged pairs "
           f"({ {g: sum(1 for q, d in calib if int(judged[q][d]) == g) for g in (0, 1, 2)} })")
 
-    wanted = sorted({d for _, d in new_pairs + calib})
+    wanted = sorted({d for _, d in new_pairs + ctl_pairs + calib})
     conn = await asyncpg.connect(db.dsn())
     try:
         display = {r["identifier"]: dict(r) for r in await conn.fetch(DISPLAY, wanted)}
@@ -262,15 +320,27 @@ async def main() -> int:
 
     sheet, key = [], {}
     for q in queries:
-        items = [d for qq, d in new_pairs if qq == q] + [d for qq, d in calib if qq == q]
+        items = list(dict.fromkeys(
+            [d for qq, d in new_pairs if qq == q] + [d for qq, d in ctl_pairs if qq == q]
+            + [d for qq, d in calib if qq == q]))
         if not items:
             continue
-        rng.shuffle(items)
+        rng_sheet.shuffle(items)
         sheet.append({"query": q, "candidates": [{
             "n": i + 1, "id": d,
             "title": display[d]["title"], "doc_type": display[d]["doc_type"],
             "gemeente": display[d]["gemeente"],
-            "text": display[d]["activity_text"][:300],
+            # THE WHOLE SUMMARY, NOT A PREFIX, and this is the defect `falsifier` destroyed the
+            # first result on. A 300-character cut fell on 25.8% of the body arm's candidates
+            # and 0.0% of the control's -- because the body arm prefers documents with longer
+            # summaries -- so the success predicate stopped being "this publication is about
+            # the thing asked" and became "its first 300 characters say so", which is the
+            # CONTROL arm's own retrieval input. The viewing script then cut again at 150,
+            # taking it to 52.6% against 1.0%; a judging harness that truncates is part of the
+            # instrument even when it lives in a scratch file. Measured cost after re-grading
+            # all 206 affected items with the full summary: 6 of 200 body-arm grades moved and
+            # 0 of 2 control grades, headline -0.093 -> -0.085, every rank statistic unchanged.
+            "text": display[d]["activity_text"],
         } for i, d in enumerate(items)]})
         for qq, d in calib:
             if qq == q:
@@ -288,10 +358,26 @@ async def main() -> int:
     (OUT / "bodypool-arm.json").write_text(json.dumps(
         {"model": MODEL, "max_tokens": MAX_TOKENS, "pool_depth": POOL_DEPTH, "seed": SEED,
          "corpus_size": len(ids), "arm": arm,
-         "new_pairs": new_pairs, "overlap_with_judged": overlap,
+         "control_band": list(CONTROL_BAND), "control": control,
+         "new_pairs": new_pairs, "control_pairs": ctl_pairs,
+         "control_in_body_arm": ctl_both, "overlap_with_judged": overlap,
          "prod_overlap_mean": float(np.mean(ov))}, ensure_ascii=False, indent=1))
-    (OUT / "bodypool-judge_sheet.json").write_text(json.dumps(sheet, ensure_ascii=False, indent=1))
-    (OUT / "bodypool-calibration_key.json").write_text(json.dumps(key, ensure_ascii=False, indent=1))
+    # The sheet and the key are protected exactly as the answer file is, and for a stronger
+    # reason: the answer file holds the grades, but the SHEET is the only record of what the
+    # judge was shown and the KEY is the reference those grades are checked against. Protecting
+    # the grades while leaving the other two rewritable is protecting the cheapest of the three.
+    # The 52.6%-against-1.0% display defect is a measured quantity that lives in the sheet;
+    # `falsifier` could only confirm it by going round the overwritten file to the database,
+    # which works solely while `activity_text` is unchanged -- and that is derived state the
+    # corpus probe watches precisely because it moves.
+    for name, payload in (("bodypool-judge_sheet.json", sheet),
+                          ("bodypool-calibration_key.json", key)):
+        dest = OUT / name
+        if dest.exists() and graded:
+            print(f"{name} left untouched -- {graded} grades exist, so it is a record, "
+                  f"not an output")
+            continue
+        dest.write_text(json.dumps(payload, ensure_ascii=False, indent=1))
 
     # The answer file, pre-keyed with nulls in the sheet's own order, so judging is replacing a
     # null with 0/1/2 rather than retyping 390 identifiers. It is NOT overwritten once it has a
@@ -311,9 +397,10 @@ async def main() -> int:
 
     total = sum(len(s["candidates"]) for s in sheet)
     print(f"\nsheet: {total} items over {len(sheet)} queries "
-          f"({len(new_pairs)} to judge + {len(calib)} calibration)")
-    print(f"wrote bodypool-arm.json, bodypool-judge_sheet.json, "
-          f"bodypool-calibration_key.json, bodypool-judgments.json to {OUT}")
+          f"({len(new_pairs)} body + {len(ctl_pairs)} control "
+          f"- {len(ctl_both)} shared + {len(calib)} calibration)")
+    print(f"wrote bodypool-arm.json to {OUT} (the sheet, the key and the answer file are "
+          f"{'records and were left alone' if graded else 'freshly written'})")
     return 0
 
 

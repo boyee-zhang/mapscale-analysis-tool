@@ -257,3 +257,225 @@ Both guards were sabotage-tested rather than asserted, because 0026 is in this r
   reports `CALIBRATION 10/10 exact agreement with 2026-11-13` and proceeds. The synthetic file
   used for that test is random grades in the scratchpad, not judgments, and the numbers it
   produced are meaningless by construction — it tested the plumbing and the gate, nothing else.
+
+---
+
+# The judged answer, 2026-11-21: the body representation is WORSE, and both of my instruments were broken first
+
+585 items judged (380 body arm + 199 control - 4 shared + 10 calibration). `falsifier` DESTROYED
+the result twice. Both times the retrieval was sound and reproducible and the **instrument** was
+the thing at fault, and both faults were mine.
+
+## What may be carried, and what may not
+
+```
+arm        nDCG@10  (pool-complete, 40 queries, pool 1,085 -> 1,660)
+vec        0.589
+body       0.504
+
+paired  mean -0.085  median -0.130  [-0.192, +0.031]  BELOW MDE  W/L/T 11/26/3
+        MDE of THESE differences at n=40: 0.161 (sd 0.363)   sign test p=0.020
+
+body arm top-10 (new)              n=380  relevant 240 (63.2%)
+production vec ranks 11-15 (new)   n=199  relevant 137 (68.8%)
+```
+
+**Only the sign and the median survive.** Not the mean, not the pair, not `p=0.020`, not "it
+gains no recall" — see the `SCOPE` below for the measurement behind each refusal. The rank-level
+evidence is what is solid, and it is a much larger margin than anything the paired nDCG argues
+about: **body precision@rank-1 is 47.5% against the production arm's 77.5%**, and the body arm's
+precision *rises* across its own top-10 (ranks 1-5 60.5%, 6-10 67.5%) where the production arm's
+falls (73.0%, 66.0%). Its score ordering carries little relevance signal inside its own top ten.
+
+**Phase 0's 38x is dead as evidence about the representation.** 199 of 200 of the production
+arm's own ranks 11-15 lay outside the 1,085-judgment pool — 99.5%. Depth-10 pool shallowness is
+a fact about the pool, and any arm's next few ranks would have shown it. Without the control
+band mixed into this sheet I would have reported 62.1% out-of-pool relevance as a win.
+
+## Defect 1: the judging display was cut asymmetrically, against the arm under test
+
+The sheet carried `activity_text[:300]`; the viewing script then cut again at 150, and that is
+what was actually read.
+
+```
+cut at 150: body 200/380 (52.6%)  calib 4/10 (40.0%)  ctl 2/195 (1.0%)
+cut at 300: body  98/380 (25.8%)  calib 3/10 (30.0%)  ctl 0/195 (0.0%)
+```
+
+The body arm prefers documents with longer summaries, so the success predicate stopped being
+"this publication is about the thing asked" and became "its first 150 characters say so" —
+which is **the control arm's own retrieval input**. A judging harness that truncates is part of
+the instrument even when it lives in a scratch file.
+
+Fixed by re-grading **all 206 affected items** (not a sample), blind, own seed, no arm, no rank
+and not the previous grade shown, from the full `activity_text` — deliberately **not** the body,
+because showing it credits what the rubric forbids crediting and would make the calibration
+items a different task.
+
+```
+body   re-graded  200  changed   6 (3.0%)  net +8
+ctl    re-graded    2  changed   0 (0.0%)  net +0
+calib  re-graded    4  changed   1 (25.0%)  net +1
+headline -0.093 -> -0.085; not one rank statistic moved
+```
+
+`falsifier` built the control I said I lacked — 40 blind re-grades of *untruncated* items —
+and it clears me of the obvious worry and convicts me of a subtler one: inter-judge
+disagreement is **15% on body items and 20% on control items** (z=-0.416, p=0.677), so there is
+no upward drift hiding in "re-grade only the truncated ones", and equally the six changes are
+well inside label noise. They are a correction of a known defect, not a detected signal.
+
+**The residue it found is the part my fix cannot reach.** Of its 20 sampled body-arm zeros, 2
+are documents whose subject is absent from `activity_text` **altogether** and present only in
+the body: `gmb-2026-216076`'s full summary ends at `De aanvraag betreft:` — colon, nothing after
+it — while the 933-character body names a triathlon championship; `gmb-2026-412602`'s is a title
+plus `Algemene informatie` while its 1,080-character body names a Chinese Mid-Autumn festival.
+The rubric's "graded on its title alone ... 'might be relevant if I could see inside it' is not
+partial relevance" **requires** both to be 0. At that measured 10% the mean is -0.062; at the
+top of its interval, -0.019. So the rubric that keeps the comparison honest also handicaps the
+treatment, and that is not fixable inside this instrument — it is a different instrument.
+
+## Defect 2: archiving the build log destroyed the evidence chain
+
+Worse than the first, and entirely structural. `rng = random.Random(SEED)` was shared;
+`control_alignment` consumes `rng.sample(range(94183), 32)`; so `--skip-control` did not skip a
+check, it **shifted every later draw**. The run whose only purpose was to archive the build log
+redrew the ten calibration pairs to a disjoint set with none of them graded — 30 seconds after
+the score was archived — and the cited scoring command then refused with `CALIBRATION FAILED`.
+The figures were reachable only under `--allow-drift`, and no committed or on-disk state
+reproduced them.
+
+That is the same bug family as `body_repr_score.py`'s `boot()` earlier in this work, where three
+calls drew from one mutating stream and the headline contradicted the gate. Twice now.
+
+Recovered, not reconstructed: running the build **without** `--skip-control` restores the
+original draw exactly, and all 10 calibration items are graded in both passes. Three fixes so it
+cannot recur:
+
+- **One generator per consumer, seeded from a tag** (`{SEED}:control`, `:calibration`,
+  `:sheet`), so no flag can reach the sampling.
+- **The key is an input once grades exist**, not an output. Redrawing it replaces the control
+  with ten pairs the judge never saw.
+- **The sheet and the key are write-protected like the answer file.** Protecting only the grades
+  was protecting the cheapest of the three: the sheet is the only record of what the judge was
+  shown, and the 52.6%-against-1.0% defect above is a measured quantity that lives in it.
+  `falsifier` could only confirm that defect by going round the overwritten file to the
+  database, which works solely while `activity_text` is unchanged — and that is derived state
+  `probe_corpus` watches precisely because it moves.
+
+Both are now in git, which they were not: the judged 585-item sheet existed in no commit.
+
+Verified: `--skip-control` and a full run both leave the key at md5
+`277431db256695706d57b2e72397e05a` and the sheet at `cd387f6291adebd76b43513f6c2cd482`, and the
+cited command reproduces without `--allow-drift`.
+
+## Calibration, stated rather than passed over
+
+**8/10**, not 9/10 — the re-grade moved one calibration item 1 -> 2, and 4 of the 10 were
+themselves truncated at 150. The control built to show the two judging sessions were one
+instrument was itself ~40-50% degraded by the display defect it was supposed to be blind to. At
+2 disagreements of 10, a true 30% per-item disagreement rate survives at p=0.383, and 8/10 is
+one item above the script's own `agree < 7` refusal threshold.
+
+## SCOPE (`falsifier`'s words, verbatim)
+
+> Measured 2026-11-21 on the 40-query judgeset over the 94,183-publication corpus
+> (`activity_derived AND activity_text <> ''`; population identical to
+> `bekendmaking_embedding` with 0 rows differing either way), `intfloat/multilingual-e5-base`,
+> exact non-ANN retrieval, depth-10 pooling, pool 1,085 -> 1,660 judgments, labels
+> `bodypool-judgments-v2.json` (the 206 items whose summary was cut at 150 characters re-graded
+> from the full summary): embedding `bekendmaking_body.body_text` truncated at 512 tokens
+> (binding on 43.9% of bodies; median body 456 tokens against 24 for
+> `"passage: " + activity_text[:1800]`) ranks WORSE than the production `activity_text`
+> representation. **Only the sign and the paired median may be carried: median -0.130, W/L/T
+> 11/26/3.** The sign is robust — negative in 2,000 of 2,000 reps of a label-resampling
+> bootstrap drawn from a measured inter-judge transition matrix (grade 1 is read as 0 by an
+> independent blind judge 33% of the time; grades 0 and 2 are 92% and 100% stable), negative
+> across leave-one-query-out (-0.112 … -0.067), and stronger under symmetric trimming
+> (3-trimmed -0.115 against a trimmed MDE of 0.111). **The mean -0.085 and the pair 0.504
+> against 0.589 may NOT be stated**, for three separately measured reasons: the mean is below
+> this set's own MDE of 0.161 and fails a sign-flip permutation test at p=0.145; label
+> resampling puts it at -0.076 [-0.106, -0.043]; and the corrected label set still scores as 0
+> the documents whose subject is absent from `activity_text` altogether and present only in the
+> body — 2 of 20 sampled body-arm zeros (10%, exact 95% CI 1.2%-31.7%), including a
+> 294-character summary that ends at "De aanvraag betreft:" with nothing after the colon — which
+> the rubric's "graded on its title alone" clause requires and the full-summary re-grade cannot
+> reach; upgrading those at the measured 10% gives -0.062 and at the top of their interval
+> -0.019. **"exact sign test p=0.020" may NOT be stated either**: under the same label
+> resampling its median is 0.065 and it clears 0.05 in 49.6% of reps, so it describes one
+> realisation of the labels, not the measurement (Wilcoxon p=0.038 is the same statistic's
+> edge). **"It gains no recall" is NOT established**: 63.2% against 68.8% out-of-pool relevance
+> and a paired per-query yield difference of -0.050 against the script's own MDE of 0.174; the
+> recall question is open, not answered negatively. What is established independently of the
+> paired nDCG and is a much larger margin: the body arm's precision@rank-1 is 47.5% against the
+> production arm's 77.5%, its precision rises across its own top-10 (ranks 1-5 60.5%, ranks
+> 6-10 67.5%) where the production arm's falls (73.0%, 66.0%), and its own ranks 1-5 are 58.2%
+> relevant against the control band's 68.8% (p=0.029) — so the body arm's score ordering carries
+> little relevance signal inside its own top ten. Also established mechanically, and not in
+> doubt: 199 of 200 of the production arm's own ranks 11-15 lay outside the 1,085-judgment pool,
+> so depth-10 pool shallowness is a fact about the pool and the earlier Phase 0 gate's 38x
+> out-of-pool promotion rate is not evidence about the body representation. The retrieval side
+> is sound and reproducible — all 40 queries' top-10 reproduce byte-identically from
+> `data/body_vectors.npz`, C1 re-run independently gives min cosine 1.000000 against a
+> one-row-roll sabotage control at 0.789584, and the arm is identical to the committed one.
+> **The evidence chain is not**: the calibration key was rewritten 30 seconds after the archived
+> score by `body_pool --skip-control` (shared `random.Random(20261119)`; skipping
+> `control_alignment`'s 32-sample shifts the calibration draw), to ten pairs with zero overlap
+> and none graded, so the cited scoring command refuses with `CALIBRATION FAILED` and the
+> archived figures are reachable only under `--allow-drift`; HEAD's copy of the key also leaves
+> 2 of 10 ungraded, so no committed or on-disk state reproduces either 0.496 or 0.504; the
+> 585-item judge sheet that documents the 52.6%/1.0% display defect was overwritten in the same
+> run and exists in no commit (HEAD's copy is a 390-item pre-control-arm build), and its cut
+> rates could only be reconstructed from `bekendmaking_search_text`, which works solely while
+> `activity_text` is unchanged; and `migrations/0034_bodypool_facet.sql`, applied, pins
+> `bodypool-calibration_key.json` with the comment "if these move, the two sessions are not one
+> instrument and the comparison is not either" while also pinning `body_pool.py`, which
+> unconditionally rewrites that file and `bodypool-arm.json` on every run. Until a calibration
+> key is restored that the v2 grades actually cover, this result is a direction supported by
+> rank-level evidence, not a recorded measurement.
+
+The last sentence is the condition this note was held against: the key is restored, the v2
+grades cover all 10 of its pairs, and the cited command reproduces without `--allow-drift`. The
+`SCOPE`'s other refusals stand as written.
+
+## Disposition
+
+- **Phase 1 does not start, and now for a measured reason rather than a null one.** The gate
+  found no difference; the judged comparison finds the body representation ranks worse, in a
+  direction robust to label resampling, leave-one-out and trimming.
+- **The recall question is still open.** It was not answered negatively. Answering it needs
+  relevance labelled from the body, which is a different instrument: the calibration items were
+  judged summary-only on 2026-11-13, so a body-visible session would have to redraw them first.
+- **The 23-token summary is not the bottleneck it looked like.** `MAX_CHARS = 1800` never bites
+  at a median of 24 tokens, and the body does not beat it. What the rank-level numbers point at
+  instead is that e5 embeddings of a 456-token Dutch administrative body do not order Chinese
+  queries' results well — precision@1 47.5% against 77.5%, rising rather than falling across
+  its own top-10. **Owner: unassigned.**
+- **All 40 queries are still Chinese and every document Dutch.** Unchanged from the gate, and
+  it bounds everything above.
+
+Ledger: claim 33, verdict recorded against `corpus,judgeset,bodypool` (0034 declares the last).
+Raw: `raw/bodypool-{build,score,score-v2,yield,yield-v2}.txt`,
+`raw/bodypool-regrade_grades.json`, `raw/bodypool_{yield,regrade_build}.py`.
+
+### Two evidence rows are stale, and that is the third instance of one lesson
+
+```
+evidence 26  STALE  bodypool-build.txt     <- the --skip-control run that broke the key
+evidence 29  STALE  bodypool-yield.txt     <- re-archived when the yield script took an argument
+evidence 27,28,30,31,32,33  ok
+```
+
+I re-archived over both files after fixing the defects, so the `sha256` in `evidence` no longer
+matches the bytes at the path — exactly what §1b says that digest exists to catch: "a path with
+no digest still points at something afterwards, so the record reads as supported when the bytes
+are gone." Here the digest did its job and the record reads as *unsupported*, which is correct.
+The run evidence 26 describes is the one that destroyed the calibration key; its output is gone,
+and evidence 33 is the same command after the fix.
+
+**Three instances of one lesson in one session, each a layer further out.** A shared
+`random.Random` across three `boot()` calls (contradictory intervals). A shared
+`random.Random` across the control and calibration draws (a flag silently redrew the control).
+And now: re-running an archive step over the file a recorded digest points at. The fix for the
+first two is in the code; the fix for the third is that **a raw output file is append-only in
+practice — a re-run gets a new name, not the old one.** Not enforced. **Owner: unassigned.**

@@ -1,0 +1,7 @@
+labels: docs/pg-notes/bodypool-judgments.json
+OUT-OF-POOL YIELD -- the control is the second line
+body arm top-10 (new)              n= 380  relevant  236 (62.1%)  grade2  158 (41.6%)
+production vec ranks 11-15 (new)   n= 199  relevant  137 (68.8%)  grade2   95 (47.7%)
+
+paired per-query yield difference (body - control): mean -0.060  median -0.061  n=40  MDE 0.176 (sd 0.397)
+W/L/T 11/21/8
